@@ -1,0 +1,10 @@
+*~
+logs/*
+devel/*
+*.log
+node_modules
+bower_components
+npm-debug.log
+
+
+
