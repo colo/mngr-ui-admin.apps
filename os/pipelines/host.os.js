@@ -46,7 +46,7 @@ module.exports = function(conn, io){
   	input: [
   		{
   			poll: {
-  				// suspended: true,//start suspended
+  				suspended: true,//start suspended
   				id: "input.os",
   				conn: [
             Object.merge(

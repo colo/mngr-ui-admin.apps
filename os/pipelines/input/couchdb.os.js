@@ -9,9 +9,11 @@ module.exports = new Class({
 
   paths: /^os.*/,
 
+
   options: {
     paths: [],
     stat_host: null,
+    range_path: undefined,
 
     path_key: null,
     path_start_key: null,
@@ -27,54 +29,12 @@ module.exports = new Class({
 
 		requests : {
       range: [
-        // {
-				// 	sort_by_host: function(req, next, app){
-        //
-        //
-        //     if(app.options.stat_host){
-        //       // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
-        //       // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
-        //
-        //       /**
-        //       * limit for 'os',
-        //       * unlimit for 'munin'
-        //       */
-        //
-        //       // Array.each(app.options.paths, function(path){
-        //
-        //         // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-        //         //   //console.log('couchdb.os path', path)
-        //         let end = (req.opt.range.end != null) ?  req.opt.range.end : Date.now()
-        //         //console.log('sort_by_host range',req.opt.range.start, end)
-        //
-        //           app.view({
-      	// 						uri: app.options.db,
-        //             args: [
-        //               'sort',
-        //               'by_host',
-        //               {
-        // 								// startkey: [start_key, app.options.stat_host, "periodical",Date.now() + 0],
-        // 								// endkey: [end_key, app.options.stat_host, "periodical", Date.now() - 1000],
-        //                 startkey: [app.options.stat_host, "periodical",end],
-        // 								endkey: [app.options.stat_host, "periodical", req.opt.range.start],
-        //                 // limit: 1,
-        // 								descending: true,
-        // 								inclusive_end: true,
-        // 								include_docs: true
-        // 							}
-        //
-        //             ]
-      	// 					})
-        //         // }
-        //       // })
-        //     }
-        //
-				// 	}
-				// }
 
 				{
 					sort_by_path: function(req, next, app){
-            //console.log('SORT_BY_PATH RANGE', app.options.paths)
+            console.log('SORT_BY_PATH RANGE', app.options.stat_host, req)
+            let path = req.path
+            let range = req.opt.range
 
             if(app.options.stat_host){
               // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
@@ -82,14 +42,16 @@ module.exports = new Class({
 
 
               // let CHUNK = 60000
-              let end = (req.opt.range.end != null) ?  req.opt.range.end : Date.now()
-              // let start = ((end - CHUNK) < req.opt.range.start) ? req.opt.range.start : end - CHUNK
-              let start = req.opt.range.start
+              let end = (range.end != null) ?  range.end : Date.now()
+              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
+              let start = range.start
+
+
 
               // do {
 
-                Array.each(app.options.paths, function(path){
-                  if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
+                // Array.each(app.options.paths, function(path){
+                  // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
 
                     // //console.log('couchdb.os range', path)
 
@@ -100,9 +62,9 @@ module.exports = new Class({
                           'sort',
                           'by_path',
                           {
-            								// startkey: [start_key, app.options.stat_host, "periodical", req.opt.range.start],
-            								// endkey: [end_key, app.options.stat_host, "periodical",req.opt.range.end],
-                            // startkey: [path, app.options.stat_host, "periodical", req.opt.range.start],
+            								// startkey: [start_key, app.options.stat_host, "periodical", range.start],
+            								// endkey: [end_key, app.options.stat_host, "periodical",range.end],
+                            // startkey: [path, app.options.stat_host, "periodical", range.start],
                             startkey: [path, app.options.stat_host, "periodical", start],
             								endkey: [path, app.options.stat_host, "periodical",end],
 
@@ -111,14 +73,14 @@ module.exports = new Class({
             							}
                         ]
           						})
-                  }
+                  // }
 
-                }.bind(app))
+                // }.bind(app))
               //
               //   start -= CHUNK
               //   end -= CHUNK
               // }
-              // while(start > req.opt.range.start)
+              // while(start > range.start)
 
             }
 
@@ -245,7 +207,7 @@ module.exports = new Class({
   },
 
   view: function(err, resp, view){
-		console.log('this.view ', resp.rows.length, view.options.args);
+		// console.log('this.view ', resp.rows.length, view.options.args);
 
 		if(err){
 			//////////////console.log('this.sort_by_path error %o', err);

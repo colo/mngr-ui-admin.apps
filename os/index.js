@@ -35,6 +35,12 @@ module.exports = new Class({
 					callbacks: ['host'],
 					// middlewares: [], //socket.use(fn)
 				}],
+        range: [{
+					// path: ':param',
+					// once: true, //socket.once
+					callbacks: ['range'],
+					// middlewares: [], //socket.use(fn)
+				}],
 			// 	// '*': [{// catch all
 			// 	// 	path: '',
 			// 	// 	callbacks: ['not_found_message'],
@@ -44,23 +50,43 @@ module.exports = new Class({
 		}
 	},
 
+  range: function(socket, next){
+    let {host, path, range} = arguments[2]
+
+		console.log('range...', host, range, path)
+		let pipeline = this.__get_pipeline(host)
+    // pipelines.input[0].options.range_path = path
+    // console.log(pipeline.inputs[0])
+    pipeline.fireEvent('onRange',{ Range: range.type+' '+ range.start +'-'+ range.end +'/*', path: path })
+
+    // socket.emit('host', {host: host, status: this.pipelines[host].input[0].suspended})
+
+		// this.io.to('root').emit('host', {host: host, status: 'ok'});
+		// next(socket)
+	},
+
 	host: function(socket, next){
     let host = arguments[2]
 		console.log('host...', arguments[2])
-		if(!this.pipelines[host]){
+		let pipeline = this.__get_pipeline(host)
+
+
+    socket.emit('host', {host: host, status: 'ok'})
+
+	},
+  __get_pipeline(host){
+
+    if(!this.pipelines[host]){
       let template = Object.clone(this.HostOSPipeline)
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
       template.input[0].poll.conn[0].id = template.input[0].poll.id
       this.pipelines[host] = new Pipeline(template)
-      this.pipelines[host].fireEvent('onResume')
+      // this.pipelines[host].fireEvent('onResume')
     }
 
-
-    socket.emit('host', {host: host, status: 'ok'});
-		// this.io.to('root').emit('host', {host: host, status: 'ok'});
-		// next(socket)
-	},
+    return this.pipelines[host]
+  },
 	// message: function(socket, next){
 	// 	console.log('message')
 	// 	socket.emit('response', 'some response')
@@ -104,7 +130,7 @@ module.exports = new Class({
 
     if(!this.HostOSPipeline)
       this.HostOSPipeline = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io)
-      
+
 		// console.log('suspended', this.io.connected)
 		if(!this.io.connected || Object.keys(this.io.connected).length == 0)
 			// this.pipeline.fireEvent('onResume')
