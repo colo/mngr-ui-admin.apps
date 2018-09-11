@@ -12,6 +12,14 @@ const ETC =  process.env.NODE_ENV === 'production'
 
 let Pipeline = require('js-pipeline')
 
+let uptime_chart = require('mngr-ui-admin-charts/os/uptime')
+let loadavg_chart = require('mngr-ui-admin-charts/os/loadavg')
+let cpus_times_chart = require('mngr-ui-admin-charts/os/cpus_times')
+let cpus_percentage_chart = require('mngr-ui-admin-charts/os/cpus_percentage')
+let freemem_chart = require('mngr-ui-admin-charts/os/freemem')
+let mounts_percentage_chart = require('mngr-ui-admin-charts/os/mounts_percentage')
+let blockdevices_stats_chart = require('mngr-ui-admin-charts/os/blockdevices_stats')
+let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces')
 
 module.exports = new Class({
   Extends: App,
@@ -29,6 +37,12 @@ module.exports = new Class({
 			// middlewares: [], //namespace.use(fn)
 			// rooms: ['root'], //atomatically join connected sockets to this rooms
 			routes: {
+        charts: [{
+					// path: ':param',
+					// once: true, //socket.once
+					callbacks: ['charts'],
+					// middlewares: [], //socket.use(fn)
+				}],
 				host: [{
 					// path: ':param',
 					// once: true, //socket.once
@@ -56,6 +70,24 @@ module.exports = new Class({
 		}
 	},
 
+  charts: function(socket, next){
+    let {host} = arguments[2]
+
+    socket.emit('charts', {
+      host: host,
+      charts: {
+        uptime: uptime_chart,
+        loadavg: loadavg_chart,
+        cpus_times: cpus_times_chart,
+        cpus_percentage : cpus_percentage_chart,
+        freemem : freemem_chart,
+        mounts_percentage : mounts_percentage_chart,
+        blockdevices_stats : blockdevices_stats_chart,
+        networkInterfaces : networkInterfaces_chart,
+      }
+    })
+
+	},
   range: function(socket, next){
     let {host, path, range} = arguments[2]
 
