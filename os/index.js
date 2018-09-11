@@ -41,6 +41,12 @@ module.exports = new Class({
 					callbacks: ['range'],
 					// middlewares: [], //socket.use(fn)
 				}],
+        periodical: [{
+					// path: ':param',
+					// once: true, //socket.once
+					callbacks: ['periodical'],
+					// middlewares: [], //socket.use(fn)
+				}],
 			// 	// '*': [{// catch all
 			// 	// 	path: '',
 			// 	// 	callbacks: ['not_found_message'],
@@ -53,51 +59,59 @@ module.exports = new Class({
   range: function(socket, next){
     let {host, path, range} = arguments[2]
 
-		console.log('range...', host, range, path)
+		// console.log('range...', host, range, path)
 		let pipeline = this.__get_pipeline(host)
     // pipelines.input[0].options.range_path = path
     // console.log(pipeline.inputs[0])
     pipeline.fireEvent('onRange',{ Range: range.type+' '+ range.start +'-'+ range.end +'/*', path: path })
 
-    // socket.emit('host', {host: host, status: this.pipelines[host].input[0].suspended})
+	},
+  periodical: function(socket, next){
+    let {host} = arguments[2]
 
-		// this.io.to('root').emit('host', {host: host, status: 'ok'});
-		// next(socket)
+		let pipeline = this.__get_pipeline(host, socket.id)
+
+    if(pipeline.inputs[0].options.suspended == true){
+      pipeline.fireEvent('onResume')
+      // pipeline.fireEvent('onSuspend')
+    }
+
+    // console.log('periodical', pipeline.inputs[0])
+    // pipeline.fireEvent('onResume')
+
 	},
 
 	host: function(socket, next){
     let host = arguments[2]
 		console.log('host...', arguments[2])
-		let pipeline = this.__get_pipeline(host)
+		let pipeline = this.__get_pipeline(host, socket.id)
 
 
     socket.emit('host', {host: host, status: 'ok'})
 
 	},
-  __get_pipeline(host){
+  __get_pipeline(host, id){
+    console.log('__get_pipeline', id)
 
     if(!this.pipelines[host]){
       let template = Object.clone(this.HostOSPipeline)
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
       template.input[0].poll.conn[0].id = template.input[0].poll.id
-      this.pipelines[host] = new Pipeline(template)
+      this.pipelines[host] = {
+        pipeline: new Pipeline(template),
+        ids: []
+      }
       // this.pipelines[host].fireEvent('onResume')
     }
 
-    return this.pipelines[host]
+    if(!this.pipelines[host].ids.contains(id))
+      this.pipelines[host].ids.push()
+
+    return this.pipelines[host].pipeline
   },
-	// message: function(socket, next){
-	// 	console.log('message')
-	// 	socket.emit('response', 'some response')
-  //
-	// 	// console.log(this.authorization)
-	// },
-	// not_found_message(socket, next){
-	// 	console.log('not_found_message')
-	// 	socket.emit('response', 'not found')
-	// },
-	get: function(req, resp){
+
+	// get: function(req, resp){
 		// resp.send(
 		// 	'<!doctype html><html><head><title>socket.io client test</title></head>'
 		// 	+'<body><script src="/socket.io/socket.io.js"></script>'
@@ -114,7 +128,7 @@ module.exports = new Class({
 		// 	+'</script>'
 		// 	+'</body></html>'
 		// )
-	},
+	// },
 
   initialize: function(options){
     this.parent(options)
@@ -139,7 +153,17 @@ module.exports = new Class({
 		// console.log('this.io.namespace.connected', Object.keys(this.io.connected))
     //
 		socket.on('disconnect', function () {
-			if(Object.keys(this.io.connected).length == 0)
+      Object.each(this.pipelines, function(pipe){
+        if(pipe.ids.contains(socket.id))
+          pipe.ids.erase(socket.id)
+
+        if(pipe.ids.empty()){
+          console.log('suspending...')
+          pipe.pipeline.fireEvent('onSuspend')
+        }
+
+      }.bind(this))
+			// if(Object.keys(this.io.connected).length == 0)
 				// this.pipeline.fireEvent('onSuspend')
 
 			console.log('disconnect this.io.namespace.connected', this.io.connected)

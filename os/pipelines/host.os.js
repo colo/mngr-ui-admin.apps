@@ -4,6 +4,8 @@ let cron = require ('node-cron')
 
 const InputPollerCouchDBOS = require ( './input/couchdb.os.js' )
 
+let data_to_tabular  = require( 'node-tabular-data' ).data_to_tabular
+
 let os = {
 	mounts: {
 		type: /ext.*/ //filter mounts
@@ -148,6 +150,11 @@ module.exports = function(conn, io){
 
   					}
 
+						// console.log('ROW DOC', row.doc)
+						// data_to_tabular([{timestamp: row.doc.metadata.timestamp, value: row.doc.data}], {}, 'some_name', function(name, data){
+						// 	console.log('ROW TABULAR', data)
+						// })
+
   					// Array.clean(docs)
 
   					if(index == docs.length -1 )
@@ -159,7 +166,7 @@ module.exports = function(conn, io){
   	],
   	output: [
   		function(payload){
-				io.emit('os', payload)
+				io.volatile.emit('os', payload)
 
   			// console.log('OUTPUT', payload)
   			// //console.log('output sizeof', sizeof(doc, doc))
