@@ -41,7 +41,7 @@ let os_filter = function(doc, opts, next, pipeline){
 	return doc
 }
 
-module.exports = function(conn, io){
+module.exports = function(conn, io, charts){
 	// console.log('IO', io)
 
   let conf = {
@@ -156,6 +156,9 @@ module.exports = function(conn, io){
 						// })
 
   					// Array.clean(docs)
+						if(charts){
+							console.log('charts', charts)
+						}
 
   					if(index == docs.length -1 )
   						pipeline.output({type: type, doc: docs})

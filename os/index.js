@@ -35,10 +35,18 @@ module.exports = new Class({
     loadavg: { name: 'os.loadavg', chart: loadavg_chart},
     cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
     cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
-    freemem : { name: 'os.freemem', chart: freemem_chart},
+    // freemem : { name: 'os.freemem', chart: freemem_chart},
     networkInterfaces : { name: 'os.networkInterfaces', chart: networkInterfaces_chart},
-    mounts_percentage : { name: 'os_mounts', chart: mounts_percentage_chart},
-    blockdevices_names : { name: 'os_blockdevices', chart: blockdevices_stats_chart},
+    // mounts_percentage : [
+    //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
+    //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
+    // ],
+    mounts_percentage : { name: 'os_mounts.0', chart: mounts_percentage_chart},
+    // blockdevices_names : [
+    //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
+    // ]
+    blockdevices_names : { name: 'os_blockdevices.sda', chart: blockdevices_stats_chart},
+
   },
 
 	options: {
@@ -83,6 +91,7 @@ module.exports = new Class({
 			}
 		}
 	},
+
   /**
   * from mngr-ui-admin-lte/chart.vue
   **/
@@ -133,6 +142,7 @@ module.exports = new Class({
           let prop_to_filter = Object.keys(filter)[0]
           let value_to_filter = filter[prop_to_filter]
 
+          // console.log('stat[0].value[prop_to_filter]', name, stat)
           if(
             stat[0].value[prop_to_filter]
             && value_to_filter.test(stat[0].value[prop_to_filter]) == true
@@ -255,8 +265,17 @@ module.exports = new Class({
 		console.log('host...', arguments[2])
 		let pipeline = this.__get_pipeline(host, socket.id)
 
-
-    socket.emit('host', {host: host, status: 'ok'})
+    if(this.stats){//stats processed already
+      socket.emit('host', {host: host, status: 'ok', charts: this.__charts})
+    }
+    else{
+      let send_charts = function(){
+        console.log('statsProcessed')
+        socket.emit('host', {host: host, status: 'ok', charts: this.__charts})
+        this.removeEvent('statsProcessed', send_charts)
+      }
+      this.addEvent('statsProcessed', send_charts.bind(this))
+    }
 
 	},
   __get_pipeline(host, id){
@@ -279,24 +298,29 @@ module.exports = new Class({
           // console.log('save_stats', payload)
           if(payload.type == 'periodical'){
             console.log('save_stats', payload.doc)
-            // Array.each(payload.doc, function(row){
-            //
-            // })
-            // this.stats = Array.clone(payload.doc)
+
             this.__process_os_doc(payload.doc, function(stats){
+              this.stats = stats
+
               Object.each(this.__charts, function(data, key){
-                let {name, chart} = data
-                let stat = undefined
-                if(name.indexOf('os.') > -1){
-                  let real_name = name.split('.')[1]
-                  stat = stats['os'][real_name]
+
+                if(Array.isArray(data)){
+                  Array.each(data, function(item){
+                    let {name, chart} = item
+                    let stat = this.__match_stats_name(stats, name)
+                    this.__process_stat(chart, name, stat)
+                  }.bind(this))
                 }
                 else{
-                  stat = stats[name]
+                  let {name, chart} = data
+                  let stat = this.__match_stats_name(stats, name)
+                  this.__process_stat(chart, name, stat)
                 }
 
-                this.__process_stat(chart, name, stat)
+
               }.bind(this))
+
+              this.fireEvent('statsProcessed')
             }.bind(this))
 
 
@@ -312,21 +336,31 @@ module.exports = new Class({
         * so capture the output once (and for one host, as all stats are the same)
         */
         this.pipelines[host].pipeline.addEvent('onSaveDoc', save_stats)
-
-
-
+        this.pipelines[host].pipeline.fireEvent('onOnce')
       }
 
-      // this.pipelines[host].fireEvent('onResume')
     }
 
     if(!this.pipelines[host].ids.contains(id))
       this.pipelines[host].ids.push()
 
-    // console.log(this.stats)
 
     return this.pipelines[host].pipeline
   },
+  __match_stats_name(stats, name){
+    let stat = undefined
+    if(name.indexOf('.') > -1){
+      let key = name.split('.')[0]
+      let rest = name.substring(name.indexOf('.')+1)
+      console.log('__match_stats_name', stats, name)
+      return this.__match_stats_name(stats[key], rest)
+      // stat = stats['os'][real_name]
+    }
+    else{
+      return stats[name]
+    }
+  },
+
 
 	// get: function(req, resp){
 		// resp.send(
@@ -360,7 +394,7 @@ module.exports = new Class({
 		this.parent(socket)
 
     if(!this.HostOSPipeline)
-      this.HostOSPipeline = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io)
+      this.HostOSPipeline = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io, this.__charts)
 
 		// console.log('suspended', this.io.connected)
 		if(!this.io.connected || Object.keys(this.io.connected).length == 0)

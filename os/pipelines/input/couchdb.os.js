@@ -28,6 +28,53 @@ module.exports = new Class({
     ],
 
 		requests : {
+      once: [
+        {
+          /**
+          * used to get stats on "init", process'em and process charts
+          **/
+					sort_by_host: function(req, next, app){
+            console.log('sort_by_host ONCE')
+
+            if(app.options.stat_host){
+              // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
+              // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
+
+              /**
+              * limit for 'os',
+              * unlimit for 'munin'
+              */
+
+              // Array.each(app.options.paths, function(path){
+
+                // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
+                //   //console.log('couchdb.os path', path)
+
+                  app.view({
+      							uri: app.options.db,
+                    args: [
+                      'sort',
+                      'by_host',
+                      {
+        								// startkey: [start_key, app.options.stat_host, "periodical",Date.now() + 0],
+        								// endkey: [end_key, app.options.stat_host, "periodical", Date.now() - 1000],
+                        startkey: [app.options.stat_host, "periodical",Date.now() + 0],
+        								endkey: [app.options.stat_host, "periodical", Date.now() - 1000],
+                        // limit: 1,
+        								descending: true,
+        								inclusive_end: true,
+        								include_docs: true
+        							}
+
+                    ]
+      						})
+                // }
+              // })
+            }
+
+					}
+				}
+      ],
       range: [
 
 				{
@@ -207,7 +254,7 @@ module.exports = new Class({
   },
 
   view: function(err, resp, view){
-		// console.log('this.view ', resp.rows.length, view.options.args);
+		console.log('this.view ', resp.rows.length, view.options.args);
 
 		if(err){
 			//////////////console.log('this.sort_by_path error %o', err);
