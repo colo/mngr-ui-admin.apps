@@ -12,6 +12,9 @@ const ETC =  process.env.NODE_ENV === 'production'
 
 let Pipeline = require('js-pipeline')
 
+let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
+let data_to_tabular  = require( 'node-tabular-data' ).data_to_tabular
+
 let uptime_chart = require('mngr-ui-admin-charts/os/uptime')
 let loadavg_chart = require('mngr-ui-admin-charts/os/loadavg')
 let cpus_times_chart = require('mngr-ui-admin-charts/os/cpus_times')
@@ -26,6 +29,17 @@ module.exports = new Class({
 
   HostOSPipeline: undefined,
   pipelines: {},
+  stats: undefined,
+  __charts: {
+    uptime: { name: 'os.uptime', chart: uptime_chart },
+    loadavg: { name: 'os.loadavg', chart: loadavg_chart},
+    cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
+    cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
+    freemem : { name: 'os.freemem', chart: freemem_chart},
+    networkInterfaces : { name: 'os.networkInterfaces', chart: networkInterfaces_chart},
+    mounts_percentage : { name: 'os_mounts', chart: mounts_percentage_chart},
+    blockdevices_names : { name: 'os_blockdevices', chart: blockdevices_stats_chart},
+  },
 
 	options: {
     id: 'os',
@@ -69,22 +83,145 @@ module.exports = new Class({
 			}
 		}
 	},
+  /**
+  * from mngr-ui-admin-lte/chart.vue
+  **/
+  __process_chart (chart, name, stat){
+    console.log('data_to_tabular', name, stat)
 
+    if(chart.init && typeOf(chart.init) == 'function')
+      chart.init(this, chart, name, stat, 'chart')
+
+    /**
+    * first update
+    **/
+    // if(this.stat.data.length > 0){
+
+      data_to_tabular(stat, chart, name, function (name, data){
+        console.log('data_to_tabular result', name, data)
+      })
+    // }
+
+    // this.__create_watcher(name, chart)
+
+  },
+  /**
+  * from mngr-ui-admin-lte/chart.vue
+  **/
+  __process_stat (chart, name, stat){
+    console.log('__process_stat', name, stat)
+    if(!Array.isArray(stat))
+      stat = [stat]
+
+
+    // if(Array.isArray(stat[0].value)){//like 'cpus'
+    //
+    //   this.__process_chart(
+    //     chart.pre_process(chart, name, stat),
+    //     name,
+    //     stat
+    //   )
+    //
+    // }
+    // else
+    if(isNaN(stat[0].value)){
+      //sdX.stats.
+
+      let filtered = false
+      if(chart.watch && chart.watch.filters){
+        Array.each(chart.watch.filters, function(filter){
+          let prop_to_filter = Object.keys(filter)[0]
+          let value_to_filter = filter[prop_to_filter]
+
+          if(
+            stat[0].value[prop_to_filter]
+            && value_to_filter.test(stat[0].value[prop_to_filter]) == true
+          ){
+            filtered = true
+          }
+
+        })
+      }
+      else{
+        filtered = true
+      }
+
+      if(filtered == true){
+
+        chart = chart.pre_process(chart, name, stat)
+
+        // chart.label = this.__process_chart_label(chart, name, stat) || name
+        // let chart_name = this.__process_chart_name(chart, stat) || name
+
+        this.__process_chart(chart, name, stat)
+      }
+
+    }
+    else{
+
+      // chart.label = this.__process_chart_label(chart, name, stat) || name
+      // let chart_name = this.__process_chart_name(chart, stat) || name
+
+      this.__process_chart(
+        chart.pre_process(chart, name, stat),
+        name,
+        stat
+      )
+    }
+
+  },
+  /**
+  * from mngr-ui-admin-lte/host.vue
+  **/
+  __process_os_doc: function(doc, cb){
+
+    let paths = {}
+
+    if(Array.isArray(doc)){
+      Array.each(doc, function(row){
+
+        // if(row.doc != null && row.doc.metadata.host == this.host){
+        if(row.doc != null){
+          let {keys, path, host} = extract_data_os(row.doc)
+
+          // console.log('ROW', keys, path)
+
+          if(!paths[path])
+            paths[path] = {}
+
+
+          Object.each(keys, function(data, key){
+            // //console.log('ROW', key, data)
+            if(!paths[path][key])
+              paths[path][key] = []
+
+            paths[path][key].push(data)
+          })
+        }
+      })
+    }
+    else if(doc.metadata.host == this.host){
+      let {keys, path, host} = extract_data_os(doc)
+      if(!paths[path])
+        paths[path] = {}
+
+      paths[path] = keys
+    }
+
+    cb(paths)
+
+
+  },
+
+  /**
+  *
+  **/
   charts: function(socket, next){
     let {host} = arguments[2]
 
     socket.emit('charts', {
       host: host,
-      charts: {
-        uptime: uptime_chart,
-        loadavg: loadavg_chart,
-        cpus_times: cpus_times_chart,
-        cpus_percentage : cpus_percentage_chart,
-        freemem : freemem_chart,
-        mounts_percentage : mounts_percentage_chart,
-        blockdevices_stats : blockdevices_stats_chart,
-        networkInterfaces : networkInterfaces_chart,
-      }
+      charts: this.__charts
     })
 
 	},
@@ -134,11 +271,59 @@ module.exports = new Class({
         pipeline: new Pipeline(template),
         ids: []
       }
+
+
+      if(!this.stats){
+        console.log('save_stats')
+        let save_stats = function (payload){
+          // console.log('save_stats', payload)
+          if(payload.type == 'periodical'){
+            console.log('save_stats', payload.doc)
+            // Array.each(payload.doc, function(row){
+            //
+            // })
+            // this.stats = Array.clone(payload.doc)
+            this.__process_os_doc(payload.doc, function(stats){
+              Object.each(this.__charts, function(data, key){
+                let {name, chart} = data
+                let stat = undefined
+                if(name.indexOf('os.') > -1){
+                  let real_name = name.split('.')[1]
+                  stat = stats['os'][real_name]
+                }
+                else{
+                  stat = stats[name]
+                }
+
+                this.__process_stat(chart, name, stat)
+              }.bind(this))
+            }.bind(this))
+
+
+
+            /**
+            * once we get the desire stats, remove event
+            **/
+            this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
+          }
+        }.bind(this)
+        /**
+        * onSaveDoc is exec when the input fires 'onPeriodicalDoc'
+        * so capture the output once (and for one host, as all stats are the same)
+        */
+        this.pipelines[host].pipeline.addEvent('onSaveDoc', save_stats)
+
+
+
+      }
+
       // this.pipelines[host].fireEvent('onResume')
     }
 
     if(!this.pipelines[host].ids.contains(id))
       this.pipelines[host].ids.push()
+
+    // console.log(this.stats)
 
     return this.pipelines[host].pipeline
   },
