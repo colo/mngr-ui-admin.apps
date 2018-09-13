@@ -105,12 +105,12 @@ module.exports = new Class({
     * first update
     **/
     // if(this.stat.data.length > 0){
-
-      data_to_tabular(stat, chart, name, function (name, data){
-        console.log('data_to_tabular result', name, data)
-      })
+    //
+    //   data_to_tabular(stat, chart, name, function (name, data){
+    //     console.log('data_to_tabular result', name, data)
+    //   })
     // }
-
+    //
     // this.__create_watcher(name, chart)
 
   },
@@ -118,7 +118,7 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_stat (chart, name, stat){
-    console.log('__process_stat', name, stat)
+    console.log('__process_stat', chart, name, stat)
     if(!Array.isArray(stat))
       stat = [stat]
 
@@ -293,14 +293,18 @@ module.exports = new Class({
 
 
       if(!this.stats){
-        console.log('save_stats')
+        // console.log('save_stats')
+        // console.log('CHARTS', this.__charts['uptime'].name)
         let save_stats = function (payload){
           // console.log('save_stats', payload)
           if(payload.type == 'periodical'){
-            console.log('save_stats', payload.doc)
+            // console.log('save_stats', payload.doc)
+
 
             this.__process_os_doc(payload.doc, function(stats){
               this.stats = stats
+
+
 
               Object.each(this.__charts, function(data, key){
 
