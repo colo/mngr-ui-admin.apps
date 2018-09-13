@@ -93,21 +93,79 @@ let __process_os_doc = function(doc, cb){
 
 }
 
+// let __match_stats_name = function(stats, name){
+// 	let stat = undefined
+// 	if(stats){
+// 		if(name.indexOf('.') > -1){
+// 			let key = name.split('.')[0]
+// 			let rest = name.substring(name.indexOf('.')+1)
+// 			// console.log('__match_stats_name', stats, name)
+// 			return __match_stats_name(stats[key], rest)
+// 			// stat = stats['os'][real_name]
+// 		}
+// 		else{
+// 			return stats[name]
+// 		}
+// 	}
+// 	return undefined
+// }
+
 let __match_stats_name = function(stats, name){
-	let stat = undefined
+	let stat = {}
 	if(stats){
 		if(name.indexOf('.') > -1){
 			let key = name.split('.')[0]
 			let rest = name.substring(name.indexOf('.')+1)
 			// console.log('__match_stats_name', stats, name)
-			return __match_stats_name(stats[key], rest)
-			// stat = stats['os'][real_name]
+			let matched = __match_stats_name(stats[key], rest)
+			// let result = undefined
+			if(matched){
+				if(Array.isArray(matched)){
+					Array.each(matched, function(data, index){
+						stat[key+'_'+index] = data
+					})
+				}
+				else{
+					// result = {}
+					Object.each(matched, function(data, name){
+						stat[key+'_'+name] = data
+					})
+				}
+
+				return stat
+			}
+			else{
+				return undefined
+			}
 		}
 		else{
-			return stats[name]
+			if(name == '%d'){//we want one stat per index
+				// name = name.replace('%d')
+				stat = []
+				Array.each(stats, function(data, index){
+					stat[index] = data
+				})
+			}
+			else if(name == '%s'){//we want one stat per key
+				// name = name.replace('.%s')
+				// console.log()
+				Object.each(stats, function(data, key){
+					stat[key] = data
+				})
+			}
+			else{
+				stat[name] = stats[name]
+			}
+
+			return stat
 		}
+
 	}
-	return undefined
+	else{
+		return undefined
+	}
+
+
 }
 
 module.exports = function(conn, io, charts){
@@ -242,35 +300,78 @@ module.exports = function(conn, io, charts){
 					console.log('charts', charts['uptime'].name, payload.doc)
 
 					__process_os_doc(payload.doc, function(stats){
-						let buffer_output = {}
+						let buffer_output = undefined
+
+						// console.log('OUTPUT', stats)
 
 						Object.each(charts, function(data, key){
 
-							if(Array.isArray(data)){
-								Array.each(data, function(item){
-									let {name, chart} = item
-									let stat = __match_stats_name(stats, name)
-									this.__process_stat(chart, name, stat)
-								}.bind(this))
+							let {name, chart} = data
+							let matched = __match_stats_name(stats, name)
+							// if(Array.isArray(matched)){
+							// 	Array.each(matched, function(data){
+							// 		// this.__process_stat(chart, data.name, data.stat)
+							// 		if(stat)
+							// 			data_to_tabular(data.stat, chart, data.name, function(name, data){
+							// 				// console.log('OUTPUT', name, data)
+							// 				buffer_output[name] = data
+							// 			})
+							// 	})
+							// }
+							// else{
+							if(matched){
+								buffer_output = {}
+								Object.each(matched, function(stat, name){
+									// this.__process_stat(chart, name, stat)
+									if(stat){
+										console.log('OUTPUT', name, stat)
+										data_to_tabular(stat, chart, name, function(name, data){
+											// console.log('OUTPUT', name, data)
+											buffer_output[name] = data
+										})
+									}
+
+								})
 							}
-							else{
-								let {name, chart} = data
-								let stat = __match_stats_name(stats, name)
-								// this.__process_stat(chart, name, stat)
 
-								if(stat)
-									data_to_tabular(stat, chart, name, function(name, data){
-										// console.log('OUTPUT', name, data)
-										buffer_output[name] = data
-									})
+							// }
 
-
-							}
+							// if(Array.isArray(data)){
+							// 	Array.each(data, function(item){
+							// 		let {name, chart} = item
+							// 		let stat = __match_stats_name(stats, name)
+							// 		this.__process_stat(chart, name, stat)
+							// 	}.bind(this))
+							// }
+							// else{
+							// 	let {name, chart} = data
+							// 	let stat = __match_stats_name(stats, name)
+							// 	// this.__process_stat(chart, name, stat)
+              //
+							// 	if(stat)
+							// 		data_to_tabular(stat, chart, name, function(name, data){
+							// 			// console.log('OUTPUT', name, data)
+							// 			buffer_output[name] = data
+							// 		})
+              //
+              //
+							// }
 
 
 						}.bind(this))
-						console.log('OUTPUT', buffer_output)
-						io.emit('os', {type: payload.type, doc: buffer_output, tabular: true})
+
+						if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
+							io.emit('os', {
+								type: payload.type,
+								doc: {
+									metadata: {
+										host: payload.doc[0].doc.metadata.host
+									},
+									data: buffer_output
+								},
+								tabular: true
+							})
+						}
 						// this.fireEvent('statsProcessed')
 					}.bind(this))
 				}

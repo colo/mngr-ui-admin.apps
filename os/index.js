@@ -36,16 +36,16 @@ module.exports = new Class({
     cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
     cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
     // freemem : { name: 'os.freemem', chart: freemem_chart},
-    networkInterfaces : { name: 'os.networkInterfaces', chart: networkInterfaces_chart},
+    // networkInterfaces : { name: 'os.networkInterfaces.%d', chart: networkInterfaces_chart},
     // mounts_percentage : [
     //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
     //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
     // ],
-    mounts_percentage : { name: 'os_mounts.0', chart: mounts_percentage_chart},
+    mounts_percentage : { name: 'os_mounts.%s', chart: mounts_percentage_chart},
     // blockdevices_names : [
     //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
     // ]
-    blockdevices_names : { name: 'os_blockdevices.sda', chart: blockdevices_stats_chart},
+    blockdevices_names : { name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
 
   },
 
@@ -308,18 +308,25 @@ module.exports = new Class({
 
               Object.each(this.__charts, function(data, key){
 
-                if(Array.isArray(data)){
-                  Array.each(data, function(item){
-                    let {name, chart} = item
-                    let stat = this.__match_stats_name(stats, name)
-                    this.__process_stat(chart, name, stat)
-                  }.bind(this))
-                }
-                else{
+                  if(stats.os && stats.os.networkInterfaces)
+                    console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
+
                   let {name, chart} = data
-                  let stat = this.__match_stats_name(stats, name)
-                  this.__process_stat(chart, name, stat)
-                }
+                  let matched = this.__match_stats_name(stats, name)
+
+                  // console.log('MATCHED', matched)
+                  // if(Array.isArray(matched)){
+                  //   Array.each(matched, function(data){
+                  //     this.__process_stat(chart, data.name, data.stat)
+                  //   }.bind(this))
+                  // }
+                  // else{
+                    Object.each(matched, function(stat, name){
+                      this.__process_stat(chart, name, stat)
+                    }.bind(this))
+
+                  // }
+                // }
 
 
               }.bind(this))
@@ -352,17 +359,61 @@ module.exports = new Class({
     return this.pipelines[host].pipeline
   },
   __match_stats_name(stats, name){
-    let stat = undefined
-    if(name.indexOf('.') > -1){
-      let key = name.split('.')[0]
-      let rest = name.substring(name.indexOf('.')+1)
-      console.log('__match_stats_name', stats, name)
-      return this.__match_stats_name(stats[key], rest)
-      // stat = stats['os'][real_name]
+    let stat = {}
+    if(stats){
+      if(name.indexOf('.') > -1){
+        let key = name.split('.')[0]
+        let rest = name.substring(name.indexOf('.')+1)
+        // console.log('__match_stats_name', stats, name)
+        let matched = this.__match_stats_name(stats[key], rest)
+    		// let result = undefined
+        if(matched){
+      		if(Array.isArray(matched)){
+      			Array.each(matched, function(data, index){
+      				stat[key+'_'+index] = data
+      			})
+      		}
+      		else{
+      			// result = {}
+      			Object.each(matched, function(data, name){
+      				stat[key+'_'+name] = data
+      			})
+      		}
+
+      		return stat
+        }
+        else{
+          return undefined
+        }
+      }
+      else{
+        if(name == '%d'){//we want one stat per index
+          // name = name.replace('%d')
+          stat = []
+          Array.each(stats, function(data, index){
+            stat[index] = data
+          })
+        }
+        else if(name == '%s'){//we want one stat per key
+          // name = name.replace('.%s')
+          // console.log()
+          Object.each(stats, function(data, key){
+            stat[key] = data
+          })
+        }
+        else{
+          stat[name] = stats[name]
+        }
+
+        return stat
+      }
+
     }
     else{
-      return stats[name]
+      return undefined
     }
+
+
   },
 
 
