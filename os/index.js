@@ -45,7 +45,7 @@ module.exports = new Class({
     // blockdevices_names : [
     //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
     // ]
-    blockdevices_names : { name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
+    blockdevices_stats : { name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
 
   },
 

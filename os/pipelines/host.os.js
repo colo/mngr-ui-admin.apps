@@ -303,7 +303,7 @@ module.exports = function(conn, io, charts){
 						let buffer_output = undefined
 
 						// console.log('OUTPUT', stats)
-
+						let counter = 0
 						Object.each(charts, function(data, key){
 
 							let {name, chart} = data
@@ -320,58 +320,44 @@ module.exports = function(conn, io, charts){
 							// }
 							// else{
 							if(matched){
-								buffer_output = {}
+								if(!buffer_output) buffer_output = {}
+								if(!buffer_output[key]) buffer_output[key] = {}
+
 								Object.each(matched, function(stat, name){
 									// this.__process_stat(chart, name, stat)
 									if(stat){
-										console.log('OUTPUT', name, stat)
+										// console.log('OUTPUT', name, stat)
 										data_to_tabular(stat, chart, name, function(name, data){
-											// console.log('OUTPUT', name, data)
-											buffer_output[name] = data
+											// console.log('OUTPUT data_to_tabular', name, data)
+											buffer_output[key][name] = data
+
 										})
 									}
 
 								})
 							}
 
-							// }
+							
+							if(counter == Object.getLength(charts) -1){
+								console.log('OUTPUT data_to_tabular', buffer_output)
+								if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
+									io.emit('os', {
+										type: payload.type,
+										doc: {
+											metadata: {
+												host: payload.doc[0].doc.metadata.host
+											},
+											data: buffer_output
+										},
+										tabular: true
+									})
+								}
+							}
 
-							// if(Array.isArray(data)){
-							// 	Array.each(data, function(item){
-							// 		let {name, chart} = item
-							// 		let stat = __match_stats_name(stats, name)
-							// 		this.__process_stat(chart, name, stat)
-							// 	}.bind(this))
-							// }
-							// else{
-							// 	let {name, chart} = data
-							// 	let stat = __match_stats_name(stats, name)
-							// 	// this.__process_stat(chart, name, stat)
-              //
-							// 	if(stat)
-							// 		data_to_tabular(stat, chart, name, function(name, data){
-							// 			// console.log('OUTPUT', name, data)
-							// 			buffer_output[name] = data
-							// 		})
-              //
-              //
-							// }
-
-
+							counter++
 						}.bind(this))
 
-						if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
-							io.emit('os', {
-								type: payload.type,
-								doc: {
-									metadata: {
-										host: payload.doc[0].doc.metadata.host
-									},
-									data: buffer_output
-								},
-								tabular: true
-							})
-						}
+
 						// this.fireEvent('statsProcessed')
 					}.bind(this))
 				}
