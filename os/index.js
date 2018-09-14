@@ -96,7 +96,7 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_chart (chart, name, stat){
-    console.log('data_to_tabular', name, stat)
+    //console.log('data_to_tabular', name, stat)
 
     if(chart.init && typeOf(chart.init) == 'function')
       chart.init(this, chart, name, stat, 'chart')
@@ -107,7 +107,7 @@ module.exports = new Class({
     // if(this.stat.data.length > 0){
     //
     //   data_to_tabular(stat, chart, name, function (name, data){
-    //     console.log('data_to_tabular result', name, data)
+    //     //console.log('data_to_tabular result', name, data)
     //   })
     // }
     //
@@ -118,7 +118,7 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_stat (chart, name, stat){
-    console.log('__process_stat', chart, name, stat)
+    //console.log('__process_stat', chart, name, stat)
     if(!Array.isArray(stat))
       stat = [stat]
 
@@ -142,7 +142,7 @@ module.exports = new Class({
           let prop_to_filter = Object.keys(filter)[0]
           let value_to_filter = filter[prop_to_filter]
 
-          // console.log('stat[0].value[prop_to_filter]', name, stat)
+          // //console.log('stat[0].value[prop_to_filter]', name, stat)
           if(
             stat[0].value[prop_to_filter]
             && value_to_filter.test(stat[0].value[prop_to_filter]) == true
@@ -194,14 +194,14 @@ module.exports = new Class({
         if(row.doc != null){
           let {keys, path, host} = extract_data_os(row.doc)
 
-          // console.log('ROW', keys, path)
+          // //console.log('ROW', keys, path)
 
           if(!paths[path])
             paths[path] = {}
 
 
           Object.each(keys, function(data, key){
-            // //console.log('ROW', key, data)
+            // ////console.log('ROW', key, data)
             if(!paths[path][key])
               paths[path][key] = []
 
@@ -238,10 +238,10 @@ module.exports = new Class({
   range: function(socket, next){
     let {host, path, range} = arguments[2]
 
-		// console.log('range...', host, range, path)
+		// //console.log('range...', host, range, path)
 		let pipeline = this.__get_pipeline(host)
     // pipelines.input[0].options.range_path = path
-    // console.log(pipeline.inputs[0])
+    // //console.log(pipeline.inputs[0])
     pipeline.fireEvent('onRange',{ Range: range.type+' '+ range.start +'-'+ range.end +'/*', path: path })
 
 	},
@@ -255,14 +255,14 @@ module.exports = new Class({
       // pipeline.fireEvent('onSuspend')
     }
 
-    // console.log('periodical', pipeline.inputs[0])
+    // //console.log('periodical', pipeline.inputs[0])
     // pipeline.fireEvent('onResume')
 
 	},
 
 	host: function(socket, next){
     let host = arguments[2]
-		console.log('host...', arguments[2])
+		//console.log('host...', arguments[2])
 		let pipeline = this.__get_pipeline(host, socket.id)
 
     if(this.stats){//stats processed already
@@ -270,7 +270,7 @@ module.exports = new Class({
     }
     else{
       let send_charts = function(){
-        console.log('statsProcessed')
+        //console.log('statsProcessed')
         socket.emit('host', {host: host, status: 'ok', charts: this.__charts})
         this.removeEvent('statsProcessed', send_charts)
       }
@@ -279,7 +279,7 @@ module.exports = new Class({
 
 	},
   __get_pipeline(host, id){
-    console.log('__get_pipeline', id)
+    //console.log('__get_pipeline', id)
 
     if(!this.pipelines[host]){
       let template = Object.clone(this.HostOSPipeline)
@@ -293,12 +293,12 @@ module.exports = new Class({
 
 
       if(!this.stats){
-        // console.log('save_stats')
-        // console.log('CHARTS', this.__charts['uptime'].name)
+        // //console.log('save_stats')
+        // //console.log('CHARTS', this.__charts['uptime'].name)
         let save_stats = function (payload){
-          // console.log('save_stats', payload)
+          // //console.log('save_stats', payload)
           if(payload.type == 'periodical'){
-            // console.log('save_stats', payload.doc)
+            // //console.log('save_stats', payload.doc)
 
 
             this.__process_os_doc(payload.doc, function(stats){
@@ -308,13 +308,13 @@ module.exports = new Class({
 
               Object.each(this.__charts, function(data, key){
 
-                  if(stats.os && stats.os.networkInterfaces)
-                    console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
+                  // if(stats.os && stats.os.networkInterfaces)
+                    //console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
 
                   let {name, chart} = data
                   let matched = this.__match_stats_name(stats, name)
 
-                  // console.log('MATCHED', matched)
+                  // //console.log('MATCHED', matched)
                   // if(Array.isArray(matched)){
                   //   Array.each(matched, function(data){
                   //     this.__process_stat(chart, data.name, data.stat)
@@ -353,8 +353,12 @@ module.exports = new Class({
     }
 
     if(!this.pipelines[host].ids.contains(id))
-      this.pipelines[host].ids.push()
+      this.pipelines[host].ids.push(id)
 
+    if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
+      this.pipelines[host].pipeline.fireEvent('onResume')
+      // pipeline.fireEvent('onSuspend')
+    }
 
     return this.pipelines[host].pipeline
   },
@@ -364,7 +368,7 @@ module.exports = new Class({
       if(name.indexOf('.') > -1){
         let key = name.split('.')[0]
         let rest = name.substring(name.indexOf('.')+1)
-        // console.log('__match_stats_name', stats, name)
+        // //console.log('__match_stats_name', stats, name)
         let matched = this.__match_stats_name(stats[key], rest)
     		// let result = undefined
         if(matched){
@@ -396,7 +400,7 @@ module.exports = new Class({
         }
         else if(name == '%s'){//we want one stat per key
           // name = name.replace('.%s')
-          // console.log()
+          // //console.log()
           Object.each(stats, function(data, key){
             stat[key] = data
           })
@@ -451,20 +455,28 @@ module.exports = new Class({
     if(!this.HostOSPipeline)
       this.HostOSPipeline = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io, this.__charts)
 
-		// console.log('suspended', this.io.connected)
-		if(!this.io.connected || Object.keys(this.io.connected).length == 0)
+		// //console.log('suspended', this.io.connected)
+		// if(!this.io.connected || Object.keys(this.io.connected).length == 0)
 			// this.pipeline.fireEvent('onResume')
 
     //
-		// console.log('this.io.namespace.connected', Object.keys(this.io.connected))
+		// //console.log('this.io.namespace.connected', Object.keys(this.io.connected))
     //
 		socket.on('disconnect', function () {
-      Object.each(this.pipelines, function(pipe){
-        if(pipe.ids.contains(socket.id))
-          pipe.ids.erase(socket.id)
 
-        if(pipe.ids.empty()){
-          console.log('suspending...')
+      console.log('disconnect this.io.namespace.connected', this.io.connected)
+
+
+      Object.each(this.pipelines, function(pipe){
+        if(pipe.ids.contains(socket.id)){
+          pipe.ids.erase(socket.id)
+          pipe.ids.clean()
+        }
+
+        console.log('suspending...', pipe.ids, pipe.ids.length)
+
+        if(pipe.ids.length == 0){
+          console.log('suspending...', pipe.ids)
           pipe.pipeline.fireEvent('onSuspend')
         }
 
@@ -472,7 +484,7 @@ module.exports = new Class({
 			// if(Object.keys(this.io.connected).length == 0)
 				// this.pipeline.fireEvent('onSuspend')
 
-			console.log('disconnect this.io.namespace.connected', this.io.connected)
+
 		}.bind(this));
 	},
 

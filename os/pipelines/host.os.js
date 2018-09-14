@@ -64,14 +64,14 @@ let __process_os_doc = function(doc, cb){
 			if(row.doc != null){
 				let {keys, path, host} = extract_data_os(row.doc)
 
-				// console.log('ROW', keys, path)
+				// //console.log('ROW', keys, path)
 
 				if(!paths[path])
 					paths[path] = {}
 
 
 				Object.each(keys, function(data, key){
-					// //console.log('ROW', key, data)
+					// ////console.log('ROW', key, data)
 					if(!paths[path][key])
 						paths[path][key] = []
 
@@ -99,7 +99,7 @@ let __process_os_doc = function(doc, cb){
 // 		if(name.indexOf('.') > -1){
 // 			let key = name.split('.')[0]
 // 			let rest = name.substring(name.indexOf('.')+1)
-// 			// console.log('__match_stats_name', stats, name)
+// 			// //console.log('__match_stats_name', stats, name)
 // 			return __match_stats_name(stats[key], rest)
 // 			// stat = stats['os'][real_name]
 // 		}
@@ -116,7 +116,7 @@ let __match_stats_name = function(stats, name){
 		if(name.indexOf('.') > -1){
 			let key = name.split('.')[0]
 			let rest = name.substring(name.indexOf('.')+1)
-			// console.log('__match_stats_name', stats, name)
+			// //console.log('__match_stats_name', stats, name)
 			let matched = __match_stats_name(stats[key], rest)
 			// let result = undefined
 			if(matched){
@@ -148,7 +148,7 @@ let __match_stats_name = function(stats, name){
 			}
 			else if(name == '%s'){//we want one stat per key
 				// name = name.replace('.%s')
-				// console.log()
+				// //console.log()
 				Object.each(stats, function(data, key){
 					stat[key] = data
 				})
@@ -169,13 +169,13 @@ let __match_stats_name = function(stats, name){
 }
 
 module.exports = function(conn, io, charts){
-	// console.log('IO', io)
+	// //console.log('IO', io)
 
   let conf = {
   	input: [
   		{
   			poll: {
-  				suspended: true,//start suspended
+  				// suspended: true,//start suspended
   				id: "input.os",
   				conn: [
             Object.merge(
@@ -193,7 +193,7 @@ module.exports = function(conn, io, charts){
   				},
   				// requests: {
       		// 	periodical: function(dispatch){
-  				// 		// ////////console.log('host periodical running')
+  				// 		// //////////console.log('host periodical running')
       		// 		return cron.schedule('* * * * * *', dispatch);//every second
       		// 	}
       		// },
@@ -204,9 +204,9 @@ module.exports = function(conn, io, charts){
   		// decompress,
   		function(docs, opts, next, pipeline){
         let { type, input, input_type, app } = opts
-  			// //console.log('sizeof', sizeof(docs), docs)
+  			// ////console.log('sizeof', sizeof(docs), docs)
 
-  			// ////console.log('host.template.filter', docs)
+  			// //////console.log('host.template.filter', docs)
         //
   			// let paths = /^os.*/
 
@@ -277,9 +277,9 @@ module.exports = function(conn, io, charts){
 
   					}
 
-						// console.log('ROW DOC', row.doc)
+						// //console.log('ROW DOC', row.doc)
 						// data_to_tabular([{timestamp: row.doc.metadata.timestamp, value: row.doc.data}], {}, 'some_name', function(name, data){
-						// 	console.log('ROW TABULAR', data)
+						// 	//console.log('ROW TABULAR', data)
 						// })
 
   					// Array.clean(docs)
@@ -297,12 +297,12 @@ module.exports = function(conn, io, charts){
 				io.volatile.emit('os', payload)
 
 				if(stats_init == true){
-					console.log('charts', charts['uptime'].name, payload.doc)
+					//console.log('charts', charts['uptime'].name, payload.doc)
 
 					__process_os_doc(payload.doc, function(stats){
 						let buffer_output = undefined
 
-						// console.log('OUTPUT', stats)
+						// //console.log('OUTPUT', stats)
 						let counter = 0
 						Object.each(charts, function(data, key){
 
@@ -313,7 +313,7 @@ module.exports = function(conn, io, charts){
 							// 		// this.__process_stat(chart, data.name, data.stat)
 							// 		if(stat)
 							// 			data_to_tabular(data.stat, chart, data.name, function(name, data){
-							// 				// console.log('OUTPUT', name, data)
+							// 				// //console.log('OUTPUT', name, data)
 							// 				buffer_output[name] = data
 							// 			})
 							// 	})
@@ -326,9 +326,9 @@ module.exports = function(conn, io, charts){
 								Object.each(matched, function(stat, name){
 									// this.__process_stat(chart, name, stat)
 									if(stat){
-										// console.log('OUTPUT', name, stat)
+										// //console.log('OUTPUT', name, stat)
 										data_to_tabular(stat, chart, name, function(name, data){
-											// console.log('OUTPUT data_to_tabular', name, data)
+											// //console.log('OUTPUT data_to_tabular', name, data)
 											buffer_output[key][name] = data
 
 										})
@@ -337,9 +337,9 @@ module.exports = function(conn, io, charts){
 								})
 							}
 
-							
+
 							if(counter == Object.getLength(charts) -1){
-								console.log('OUTPUT data_to_tabular', buffer_output)
+								//console.log('OUTPUT data_to_tabular', buffer_output)
 								if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
 									io.emit('os', {
 										type: payload.type,

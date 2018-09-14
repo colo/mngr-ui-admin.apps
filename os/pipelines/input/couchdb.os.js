@@ -34,7 +34,7 @@ module.exports = new Class({
           * used to get stats on "init", process'em and process charts
           **/
 					sort_by_host: function(req, next, app){
-            console.log('sort_by_host ONCE')
+            //console.log('sort_by_host ONCE')
 
             if(app.options.stat_host){
               // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
@@ -48,7 +48,7 @@ module.exports = new Class({
               // Array.each(app.options.paths, function(path){
 
                 // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-                //   //console.log('couchdb.os path', path)
+                //   ////console.log('couchdb.os path', path)
 
                   app.view({
       							uri: app.options.db,
@@ -79,7 +79,7 @@ module.exports = new Class({
 
 				{
 					sort_by_path: function(req, next, app){
-            console.log('SORT_BY_PATH RANGE', app.options.stat_host, req)
+            //console.log('SORT_BY_PATH RANGE', app.options.stat_host, req)
             let path = req.path
             let range = req.opt.range
 
@@ -100,7 +100,7 @@ module.exports = new Class({
                 // Array.each(app.options.paths, function(path){
                   // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
 
-                    // //console.log('couchdb.os range', path)
+                    // ////console.log('couchdb.os range', path)
 
                       // next(
                       app.view({
@@ -154,7 +154,7 @@ module.exports = new Class({
         //       Array.each(app.options.paths, function(path){
         //
         //         if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-        //           //console.log('couchdb.os path', path)
+        //           ////console.log('couchdb.os path', path)
         //
         //           app.view({
       	// 						uri: app.options.db,
@@ -195,7 +195,7 @@ module.exports = new Class({
               // Array.each(app.options.paths, function(path){
 
                 // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-                //   //console.log('couchdb.os path', path)
+                //   ////console.log('couchdb.os path', path)
 
                   app.view({
       							uri: app.options.db,
@@ -254,10 +254,10 @@ module.exports = new Class({
   },
 
   view: function(err, resp, view){
-		console.log('this.view ', resp.rows.length, view.options.args);
+		// console.log('this.view ', resp.rows.length, view.options.args);
 
 		if(err){
-			//////////////console.log('this.sort_by_path error %o', err);
+			////////////////console.log('this.sort_by_path error %o', err);
 
 		}
 		else{
@@ -266,12 +266,12 @@ module.exports = new Class({
           this.fireEvent('onPeriodicalDoc', [resp.rows, {type: 'periodical', input_type: this, app: null}]);
         }
         else if(resp.rows.length > 0){
-          //console.log('this.view ', resp.rows, view.options.args);
+          ////console.log('this.view ', resp.rows, view.options.args);
 
            this.fireEvent('onRangeDoc', [resp.rows, {type: 'range', input_type: this, app: null}]);
         }
         // else if(resp.rows.length > 1){//range docs
-        //   ////////console.log('range docs', resp)
+        //   //////////console.log('range docs', resp)
         //   this.fireEvent('onRangeDoc', [resp.rows, {type: 'range', input_type: this, app: null}]);
         //
         //
@@ -280,7 +280,7 @@ module.exports = new Class({
   			// 	this.fireEvent('onPeriodicalDoc', [resp.rows[0].doc, {type: 'periodical', input_type: this, app: null}]);
   			// }
         // else if(resp.rows.length > 0){//range docs
-        //   ////////console.log('range docs', resp)
+        //   //////////console.log('range docs', resp)
         //   this.fireEvent('onRangeDoc', [resp.rows, {type: 'range', input_type: this, app: null}]);
         //
         //
@@ -303,8 +303,14 @@ module.exports = new Class({
 
     options.paths = paths
 
-    ////////console.log('input.poller.couchdb.os', options)
+    //////////console.log('input.poller.couchdb.os', options)
 		this.parent(options);//override default options
+
+    // this.addEvent('onExit', function(){
+    //   console.log('EXITING...')
+    //
+    //   this.fireEvent('onSuspend')
+    // })
 
 		this.profile('root_init');//start profiling
 
