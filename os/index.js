@@ -59,12 +59,12 @@ module.exports = new Class({
 			// middlewares: [], //namespace.use(fn)
 			// rooms: ['root'], //atomatically join connected sockets to this rooms
 			routes: {
-        charts: [{
-					// path: ':param',
-					// once: true, //socket.once
-					callbacks: ['charts'],
-					// middlewares: [], //socket.use(fn)
-				}],
+        // charts: [{
+				// 	// path: ':param',
+				// 	// once: true, //socket.once
+				// 	callbacks: ['charts'],
+				// 	// middlewares: [], //socket.use(fn)
+				// }],
 				host: [{
 					// path: ':param',
 					// once: true, //socket.once
@@ -77,12 +77,12 @@ module.exports = new Class({
 					callbacks: ['range'],
 					// middlewares: [], //socket.use(fn)
 				}],
-        periodical: [{
-					// path: ':param',
-					// once: true, //socket.once
-					callbacks: ['periodical'],
-					// middlewares: [], //socket.use(fn)
-				}],
+        // periodical: [{
+				// 	// path: ':param',
+				// 	// once: true, //socket.once
+				// 	callbacks: ['periodical'],
+				// 	// middlewares: [], //socket.use(fn)
+				// }],
 			// 	// '*': [{// catch all
 			// 	// 	path: '',
 			// 	// 	callbacks: ['not_found_message'],
@@ -226,15 +226,15 @@ module.exports = new Class({
   /**
   *
   **/
-  charts: function(socket, next){
-    let {host} = arguments[2]
-
-    socket.emit('charts', {
-      host: host,
-      charts: this.__charts
-    })
-
-	},
+  // charts: function(socket, next){
+  //   let {host} = arguments[2]
+  //
+  //   socket.emit('charts', {
+  //     host: host,
+  //     charts: this.__charts
+  //   })
+  //
+	// },
   range: function(socket, next){
     let {host, path, range} = arguments[2]
 
@@ -245,20 +245,20 @@ module.exports = new Class({
     pipeline.fireEvent('onRange',{ Range: range.type+' '+ range.start +'-'+ range.end +'/*', path: path })
 
 	},
-  periodical: function(socket, next){
-    let {host} = arguments[2]
-
-		let pipeline = this.__get_pipeline(host, socket.id)
-
-    if(pipeline.inputs[0].options.suspended == true){
-      pipeline.fireEvent('onResume')
-      // pipeline.fireEvent('onSuspend')
-    }
-
-    // //console.log('periodical', pipeline.inputs[0])
-    // pipeline.fireEvent('onResume')
-
-	},
+  // periodical: function(socket, next){
+  //   let {host} = arguments[2]
+  //
+	// 	let pipeline = this.__get_pipeline(host, socket.id)
+  //
+  //   if(pipeline.inputs[0].options.suspended == true){
+  //     pipeline.fireEvent('onResume')
+  //     // pipeline.fireEvent('onSuspend')
+  //   }
+  //
+  //   // //console.log('periodical', pipeline.inputs[0])
+  //   // pipeline.fireEvent('onResume')
+  //
+	// },
 
 	host: function(socket, next){
     let host = arguments[2]
@@ -282,7 +282,8 @@ module.exports = new Class({
     //console.log('__get_pipeline', id)
 
     if(!this.pipelines[host]){
-      let template = Object.clone(this.HostOSPipeline)
+      // let template = Object.clone(this.HostOSPipeline)
+      let template = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io, this.__charts)
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
       template.input[0].poll.conn[0].id = template.input[0].poll.id
@@ -298,6 +299,7 @@ module.exports = new Class({
         let save_stats = function (payload){
           // //console.log('save_stats', payload)
           if(payload.type == 'periodical'){
+            let matched = undefined
             // //console.log('save_stats', payload.doc)
 
 
@@ -312,7 +314,7 @@ module.exports = new Class({
                     //console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
 
                   let {name, chart} = data
-                  let matched = this.__match_stats_name(stats, name)
+                  matched = this.__match_stats_name(stats, name)
 
                   // //console.log('MATCHED', matched)
                   // if(Array.isArray(matched)){
@@ -321,6 +323,7 @@ module.exports = new Class({
                   //   }.bind(this))
                   // }
                   // else{
+                  if(matched)
                     Object.each(matched, function(stat, name){
                       this.__process_stat(chart, name, stat)
                     }.bind(this))
@@ -339,7 +342,8 @@ module.exports = new Class({
             /**
             * once we get the desire stats, remove event
             **/
-            this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
+            if(matched)
+              this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
           }
         }.bind(this)
         /**
@@ -452,8 +456,8 @@ module.exports = new Class({
   socket: function(socket){
 		this.parent(socket)
 
-    if(!this.HostOSPipeline)
-      this.HostOSPipeline = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io, this.__charts)
+    // if(!this.HostOSPipeline)
+    //   this.HostOSPipeline = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io, this.__charts)
 
 		// //console.log('suspended', this.io.connected)
 		// if(!this.io.connected || Object.keys(this.io.connected).length == 0)
