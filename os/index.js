@@ -474,7 +474,7 @@ module.exports = new Class({
       Object.each(this.pipelines, function(pipe){
         if(pipe.ids.contains(socket.id)){
           pipe.ids.erase(socket.id)
-          pipe.ids.clean()
+          pipe.ids = pipe.ids.clean()
         }
 
         console.log('suspending...', pipe.ids, pipe.ids.length)
