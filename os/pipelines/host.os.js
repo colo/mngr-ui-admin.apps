@@ -254,10 +254,10 @@ module.exports = function(conn, io, charts){
   			Array.each(docs, function(row, index){
   				if(row.doc && row.doc.metadata && row.doc.metadata.path)
   					switch (row.doc.metadata.path) {
-  						// case 'os.procs':
-  						// 	// row.doc = mount_filter(row.doc)
-  						// 	delete docs[index]
-  						// 	break;
+  						case 'os.procs':
+  							// row.doc = mount_filter(row.doc)
+  							delete docs[index]
+								break;
 
   						case 'os.mounts':
   							row.doc = mount_filter(row.doc)
@@ -284,9 +284,10 @@ module.exports = function(conn, io, charts){
 
   					// Array.clean(docs)
 
-
-  					if(index == docs.length -1 )
+						if(index == docs.length -1 ){
+							docs = docs.clean()
   						pipeline.output({type: type, doc: docs})
+						}
   			})
 
   		},
