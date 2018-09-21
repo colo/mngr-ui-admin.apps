@@ -254,10 +254,10 @@ module.exports = function(conn, io, charts){
   			Array.each(docs, function(row, index){
   				if(row.doc && row.doc.metadata && row.doc.metadata.path)
   					switch (row.doc.metadata.path) {
-  						// case 'os.procs':
-  						// 	// row.doc = mount_filter(row.doc)
-  						// 	delete docs[index]
-  						// 	break;
+  						case 'os.procs':
+  							// row.doc = mount_filter(row.doc)
+  							delete docs[index]
+								break;
 
   						case 'os.mounts':
   							row.doc = mount_filter(row.doc)
@@ -284,9 +284,10 @@ module.exports = function(conn, io, charts){
 
   					// Array.clean(docs)
 
-
-  					if(index == docs.length -1 )
+						if(index == docs.length -1 ){
+							docs = docs.clean()
   						pipeline.output({type: type, doc: docs})
+						}
   			})
 
   		},
@@ -294,7 +295,7 @@ module.exports = function(conn, io, charts){
   	],
   	output: [
   		function(payload){
-				io.binary(false).volatile.emit('os', payload)
+				io.volatile.emit('os', payload)
 
 				if(stats_init == true){
 					//console.log('charts', charts['uptime'].name, payload.doc)
@@ -341,7 +342,7 @@ module.exports = function(conn, io, charts){
 							if(counter == Object.getLength(charts) -1){
 								//console.log('OUTPUT data_to_tabular', buffer_output)
 								if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
-									io.binary(false).emit('os', {
+									io.emit('os', {
 										type: payload.type,
 										doc: {
 											metadata: {
