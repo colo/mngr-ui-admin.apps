@@ -295,7 +295,7 @@ module.exports = function(conn, io, charts){
   	],
   	output: [
   		function(payload){
-				io.volatile.emit('os', payload)
+				io.binary(false).volatile.emit('os', payload)
 
 				if(stats_init == true){
 					//console.log('charts', charts['uptime'].name, payload.doc)
@@ -342,7 +342,7 @@ module.exports = function(conn, io, charts){
 							if(counter == Object.getLength(charts) -1){
 								//console.log('OUTPUT data_to_tabular', buffer_output)
 								if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
-									io.emit('os', {
+									io.binary(false).emit('os', {
 										type: payload.type,
 										doc: {
 											metadata: {

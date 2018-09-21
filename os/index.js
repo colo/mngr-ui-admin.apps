@@ -266,12 +266,12 @@ module.exports = new Class({
 		let pipeline = this.__get_pipeline(host, socket.id)
 
     if(this.stats){//stats processed already
-      socket.emit('host', {host: host, status: 'ok', charts: this.__charts})
+      socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.__charts})
     }
     else{
       let send_charts = function(){
         //console.log('statsProcessed')
-        socket.emit('host', {host: host, status: 'ok', charts: this.__charts})
+        socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.__charts})
         this.removeEvent('statsProcessed', send_charts)
       }
       this.addEvent('statsProcessed', send_charts.bind(this))
