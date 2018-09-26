@@ -481,7 +481,7 @@ module.exports = new Class({
 
         if(pipe.ids.length == 0){
           console.log('suspending...', pipe.ids)
-          pipe.pipeline.fireEvent('onSuspend')
+          // pipe.pipeline.fireEvent('onSuspend')
         }
 
       }.bind(this))
