@@ -308,7 +308,14 @@ module.exports = function(conn, io, charts){
 						Object.each(charts, function(data, key){
 
 							let {name, chart} = data
+							/**
+							* we will create an instance for each one, as charts like "blockdevices"
+							* hace static properties like "prev", and you may have multiple devices overriding it
+							**/
+							if(!data['_instances']) data['_instances'] = {}
+
 							let matched = __match_stats_name(stats, name)
+
 							// if(Array.isArray(matched)){
 							// 	Array.each(matched, function(data){
 							// 		// this.__process_stat(chart, data.name, data.stat)
@@ -321,17 +328,24 @@ module.exports = function(conn, io, charts){
 							// }
 							// else{
 							if(matched){
+
+								// console.log('MATCHED', matched)
+
 								if(!buffer_output) buffer_output = {}
 								if(!buffer_output[key]) buffer_output[key] = {}
 
 								Object.each(matched, function(stat, name){
+									/**
+									* create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
+									**/
+									if(!data['_instances'][name])
+										data['_instances'][name] = Object.clone(chart)
+
 									// this.__process_stat(chart, name, stat)
 									if(stat){
-										// //console.log('OUTPUT', name, stat)
-										data_to_tabular(stat, chart, name, function(name, data){
-											// //console.log('OUTPUT data_to_tabular', name, data)
+										// data_to_tabular(stat, chart, name, function(name, data){
+										data_to_tabular(stat, data['_instances'][name], name, function(name, data){
 											buffer_output[key][name] = data
-
 										})
 									}
 
