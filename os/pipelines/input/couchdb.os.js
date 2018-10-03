@@ -143,33 +143,34 @@ module.exports = new Class({
 			],
 			periodical: [
         /**
-        * peridically exec this view to keep it warm on couchdb/redis
+        * peridically exec this view to keep it warm on couchdb
         **/
         {
 					sort_by_path: function(req, next, app){
-            console.log('WARM SORT_BY_PATH RANGE', app.options.stat_host)
+            // console.log('WARM SORT_BY_PATH RANGE', app.options.stat_host)
             let path = 'os'
             // let range = req.opt.range
 
             if(app.options.stat_host){
-              // let end = Date.now()
-              // let start = end - 1000
+              let end = Date.now()
+              let start = end - 1000
 
                       // next(
-                      app.view({
-          							uri: app.options.db,
-                        args: [
-                          'sort',
-                          'by_path',
-                          {
-                            startkey: [path, app.options.stat_host, "periodical"],
-            								endkey: [path, app.options.stat_host, "periodical\ufff0"],
-
-            								inclusive_end: true,
-            								include_docs: false
-            							}
-                        ]
-          						})
+              app.view({
+  							uri: app.options.db,
+                args: [
+                  'sort',
+                  'by_path',
+                  {
+                    startkey: [path, app.options.stat_host, "periodical", start],
+    								endkey: [path, app.options.stat_host, "periodical", end],
+                    stale: "update_after",
+                    limit:1,
+    								inclusive_end: true,
+    								include_docs: false
+    							}
+                ]
+  						})
 
 
             }

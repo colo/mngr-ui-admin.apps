@@ -1,8 +1,8 @@
 'use strict'
 
-let cron = require ('node-cron')
-
 const InputPollerCouchDBOS = require ( './input/couchdb.os.js' )
+
+let cron = require('node-cron')
 
 // let data_to_tabular  = require( 'node-tabular-data' ).data_to_tabular
 
@@ -188,15 +188,15 @@ module.exports = function(conn, io, charts){
   				],
   				connect_retry_count: 5,
   				connect_retry_periodical: 1000,
-  				requests: {
-  					periodical: 1000,
-  				},
   				// requests: {
-      		// 	periodical: function(dispatch){
-  				// 		// //////////console.log('host periodical running')
-      		// 		return cron.schedule('* * * * * *', dispatch);//every second
-      		// 	}
-      		// },
+  				// 	periodical: 1000,
+  				// },
+  				requests: {
+      			periodical: function(dispatch){
+  						// //////////console.log('host periodical running')
+      				return cron.schedule('* * * * * *', dispatch);//every second
+      			}
+      		},
   			},
   		}
   	],
