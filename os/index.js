@@ -36,7 +36,7 @@ module.exports = new Class({
     cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
     cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
     // freemem : { name: 'os.freemem', chart: freemem_chart},
-    // networkInterfaces : { name: 'os.networkInterfaces.%d', chart: networkInterfaces_chart},
+    // networkInterfaces : { name: 'os.networkInterfaces', chart: networkInterfaces_chart},
     // mounts_percentage : [
     //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
     //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
@@ -316,7 +316,7 @@ module.exports = new Class({
                   let {name, chart} = data
                   matched = this.__match_stats_name(stats, name)
 
-                  // //console.log('MATCHED', matched)
+                  console.log('MATCHED', matched)
                   // if(Array.isArray(matched)){
                   //   Array.each(matched, function(data){
                   //     this.__process_stat(chart, data.name, data.stat)
@@ -367,32 +367,130 @@ module.exports = new Class({
     return this.pipelines[host].pipeline
   },
   __match_stats_name(stats, name){
-    let stat = {}
+    // if(name == 'os_blockdevices.%s' )
+    //   console.log('__match_stats_name', name, stats.os_blockdevices)
+    // if(name == 'os.networkInterfaces.0.value.%s.%s.%s' )
+    //   console.log('__match_stats_name', name, stats)
+    //
+    // if(name == 'networkInterfaces.0.value.%s.%s.%s' )
+    //   console.log('__match_stats_name', name, stats)
+    //
+    // if(name == '0.value.%s.%s.%s' )
+    //   console.log('__match_stats_name', name, stats)
+    //
+    // if(name == 'value.%s.%s.%s' )
+    //   console.log('__match_stats_name', name, stats)
+    //
+    // if(name == '%s.%s.%s' )
+    //   console.log('__match_stats_name', name, stats)
+    //
+    // if(name == '%s.%s' )
+    //   console.log('__match_stats_name', name, stats)
+    //
+    // if(name == '%s' )
+    //   console.log('__match_stats_name', name, stats)
+
+    let stat = undefined
     if(stats){
       if(name.indexOf('.') > -1){
         let key = name.split('.')[0]
         let rest = name.substring(name.indexOf('.')+1)
         // //console.log('__match_stats_name', stats, name)
-        let matched = this.__match_stats_name(stats[key], rest)
-    		// let result = undefined
-        if(matched){
-      		if(Array.isArray(matched)){
-      			Array.each(matched, function(data, index){
-      				stat[key+'_'+index] = data
-      			})
-      		}
-      		else{
-      			// result = {}
-      			Object.each(matched, function(data, name){
-      				stat[key+'_'+name] = data
-      			})
-      		}
 
-      		return stat
+        let parse_data = function(stat_data, stat_name){
+          let matched = this.__match_stats_name(stat_data, rest)
+
+
+          // if(name == '%s.%s.%s' ){
+          //   console.log('__match_stats_name', name, stat_data, matched)
+          // }
+          // if(rest.indexOf('%s') > -1)
+          //   console.log('__match_stats_name', name, stats, matched)
+
+          stat = {}
+          if(matched){
+            if(Array.isArray(matched)){
+              Array.each(matched, function(data, index){
+                stat[stat_name+'_'+index] = data
+              })
+            }
+            else{
+
+              // result = {}
+              // if(key == '%s'){
+              //   Object.each(matched, function(data, name){
+              // 		stat[key+'_'+name] = data
+              // 	})
+              // }
+              // else{
+                Object.each(matched, function(data, name){
+                  stat[name] = data
+                })
+              // }
+            }
+
+            // if(name == 'os.networkInterfaces.0.value.%s.%s.%s' ){
+            //   console.log('__match_stats_name', name)
+            //   // console.log(stat_data)
+            //   console.log(stat)
+            // }
+
+            return stat
+          }
+          else{
+            return undefined
+          }
+        }.bind(this)
+
+        if(key.indexOf('%') > -1){
+          stat = {}
+          Object.each(stats, function(stat_data, stat_name){
+            stat[stat_name] = parse_data(stat_data, stat_name)
+            // console.log('parsing....',stat)
+
+          })
+
+          return stat
         }
         else{
-          return undefined
+          // console.log('parsing....',parse_data(stats[key], key))
+          return parse_data(stats[key], key)
         }
+
+        // let matched = this.__match_stats_name(stats[key], rest)
+        //
+        // if(name == '%s.%s.%s' ){
+        //   console.log('__match_stats_name', name, stats, matched)
+        // }
+        // // if(rest.indexOf('%s') > -1)
+        // //   console.log('__match_stats_name', name, stats, matched)
+        //
+        // if(matched){
+      	// 	if(Array.isArray(matched)){
+      	// 		Array.each(matched, function(data, index){
+      	// 			stat[key+'_'+index] = data
+      	// 		})
+      	// 	}
+      	// 	else{
+        //
+      	// 		// result = {}
+        //     // if(key == '%s'){
+        //     //   Object.each(matched, function(data, name){
+        // 		// 		stat[key+'_'+name] = data
+        // 		// 	})
+        //     // }
+        //     // else{
+        // 			Object.each(matched, function(data, name){
+        // 				stat[key+'_'+name] = data
+        // 			})
+        //     // }
+      	// 	}
+        //
+      	// 	return stat
+        // }
+        // else{
+        //   return undefined
+        // }
       }
       else{
         if(name == '%d'){//we want one stat per index
@@ -403,13 +501,18 @@ module.exports = new Class({
           })
         }
         else if(name == '%s'){//we want one stat per key
+          stat = {}
           // name = name.replace('.%s')
           // //console.log()
+          // if(name == '%s')
+          //   console.log('stats', stats)
+
           Object.each(stats, function(data, key){
             stat[key] = data
           })
         }
         else{
+          stat = {}
           stat[name] = stats[name]
         }
 
