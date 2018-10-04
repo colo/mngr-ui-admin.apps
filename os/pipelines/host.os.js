@@ -344,8 +344,8 @@ module.exports = function(conn, io, charts){
 									// this.__process_stat(chart, name, stat)
 									if(stat){
 										// data_to_tabular(stat, chart, name, function(name, data){
-										data_to_tabular(stat, data['_instances'][name], name, function(name, data){
-											buffer_output[key][name] = data
+										data_to_tabular(stat, data['_instances'][name], name, function(name, to_buffer){
+											buffer_output[key][name] = to_buffer
 										})
 									}
 
