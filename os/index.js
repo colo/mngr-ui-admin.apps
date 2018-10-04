@@ -23,6 +23,7 @@ let freemem_chart = require('mngr-ui-admin-charts/os/freemem')
 let mounts_percentage_chart = require('mngr-ui-admin-charts/os/mounts_percentage')
 let blockdevices_stats_chart = require('mngr-ui-admin-charts/os/blockdevices_stats')
 let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces')
+let networkInterfaces_stats_chart = require('mngr-ui-admin-charts/os/networkInterfaces_stats')
 
 module.exports = new Class({
   Extends: App,
@@ -37,6 +38,7 @@ module.exports = new Class({
     cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
     // freemem : { name: 'os.freemem', chart: freemem_chart},
     // networkInterfaces : { name: 'os.networkInterfaces', chart: networkInterfaces_chart},
+    networkInterfaces_stats : { name: 'os_networkInterfaces_stats.%s', chart: networkInterfaces_stats_chart},
     // mounts_percentage : [
     //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
     //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
@@ -316,7 +318,7 @@ module.exports = new Class({
                   let {name, chart} = data
                   matched = this.__match_stats_name(stats, name)
 
-                  console.log('MATCHED', matched)
+                  console.log('MATCHED', name, matched)
                   // if(Array.isArray(matched)){
                   //   Array.each(matched, function(data){
                   //     this.__process_stat(chart, data.name, data.stat)
