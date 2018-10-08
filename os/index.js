@@ -30,7 +30,9 @@ module.exports = new Class({
 
   HostOSPipeline: undefined,
   pipelines: {},
-  stats: undefined,
+  stats: {},
+  charts:{},
+
   __charts: {
     uptime: { name: 'os.uptime', chart: uptime_chart },
     loadavg: { name: 'os.loadavg', chart: loadavg_chart},
@@ -51,11 +53,31 @@ module.exports = new Class({
 
   },
 
+
+
 	options: {
     id: 'os',
-    path: '/',
+    path: 'os',
 
     authorization: undefined,
+
+    params: {
+			host: /(.|\s)*\S(.|\s)*/,
+		},
+
+
+    api: {
+      // path: '/',
+			routes: {
+				get: [
+					{
+						path: ':host?',
+						callbacks: ['host'],
+						version: '',
+					},
+				],
+			},
+		},
 
 		io: {
 			// middlewares: [], //namespace.use(fn)
@@ -237,8 +259,43 @@ module.exports = new Class({
   //   })
   //
 	// },
-  range: function(socket, next){
-    let {host, path, range} = arguments[2]
+  _arguments: function(args, defined_params){
+		let req, resp, next, socket = undefined
+    // console.log(typeof args[0])
+		if(args[0]._readableState){//express
+			req = args[0]
+			resp = args[1]
+			next = args[2]
+		}
+		else{//socket.io
+			socket = args[0]
+			next = args[1]
+		}
+
+		let params = {}
+		if(typeof(req) != 'undefined'){
+			params = req.params
+		}
+		else{
+      // console.log('socket', args)
+      if(defined_params){
+        Array.each(defined_params, function(name, index){
+          params[name] = args[index + 2]
+        })
+      }
+      else{
+		     params = args[2]
+      }
+		}
+
+
+
+		return {req:req, resp:resp, socket:socket, next:next, params: params}
+	},
+
+  range: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['range'])
+    let {host, path, range} = params
 
 		// //console.log('range...', host, range, path)
 		let pipeline = this.__get_pipeline(host)
@@ -262,30 +319,77 @@ module.exports = new Class({
   //
 	// },
 
-	host: function(socket, next){
-    let host = arguments[2]
-		//console.log('host...', arguments[2])
-		let pipeline = this.__get_pipeline(host, socket.id)
-
-    if(this.stats){//stats processed already
-      socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.__charts})
+	host: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['host'])
+    let {host} = params
+    console.log('host...', params, host, this.stats[host])
+    // let host = arguments[2]
+    if(host === null || host === undefined){
+      if(resp){
+        resp.status(500).json({error: 'wrong host param', status: 500})
+      }
+      else{
+        socket.emit('host', {error: 'wrong host param', status: 500})
+      }
     }
     else{
-      let send_charts = function(){
-        //console.log('statsProcessed')
-        socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.__charts})
-        this.removeEvent('statsProcessed', send_charts)
+      let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
+
+      // if(this.stats[host] && Object.getLength(this.stats[host]) == 0){
+      //   if(resp){
+      //     resp.status(404).json({host: host, err: 'not found'})
+      //   }
+      //   else{
+      //     socket.binary(false).emit('host', {host: host, err: 'not found'})
+      //   }
+      // }
+      // else
+      if(this.stats[host] && Object.getLength(this.stats[host]) > 0){//stats processed already
+        console.log('this.stats[host]', this.stats[host])
+        if(resp){
+          resp.json({host: host, status: 'ok', charts: this.charts[host]})
+        }
+        else{
+          socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.charts[host]})
+        }
       }
-      this.addEvent('statsProcessed', send_charts.bind(this))
+      else{
+        let send_charts = function(){
+          if(this.stats[host] && Object.getLength(this.stats[host]) == 0){
+            if(resp){
+              resp.status(404).json({host: host, err: 'not found'})
+            }
+            else{
+              socket.binary(false).emit('host', {host: host, err: 'not found'})
+            }
+          }
+          else{
+            if(resp){
+              resp.json({host: host, status: 'ok', charts: this.charts[host]})
+            }
+            else{
+              socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.charts[host]})
+            }
+          }
+
+          this.removeEvent('statsProcessed', send_charts)
+        }.bind(this)
+
+        this.addEvent('statsProcessed', send_charts)
+      }
     }
+
 
 	},
   __get_pipeline(host, id){
-    //console.log('__get_pipeline', id)
+    console.log('__get_pipeline', host)
 
     if(!this.pipelines[host]){
       // let template = Object.clone(this.HostOSPipeline)
-      let template = require('./pipelines/host.os')(require(ETC+'default.conn.js'), this.io, this.__charts)
+      if(!this.charts[host])
+        this.charts[host] = {}
+
+      let template = require('./pipelines/host.os')(require(ETC+'default.conn.js')(), this.io, this.charts[host])
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
       template.input[0].poll.conn[0].id = template.input[0].poll.id
@@ -294,23 +398,34 @@ module.exports = new Class({
         ids: []
       }
 
+    }
 
-      if(!this.stats){
-        // //console.log('save_stats')
-        // //console.log('CHARTS', this.__charts['uptime'].name)
-        let save_stats = function (payload){
-          // //console.log('save_stats', payload)
-          if(payload.type == 'periodical'){
-            let matched = undefined
-            // //console.log('save_stats', payload.doc)
+    // console.log('this.stats[host]', this.stats[host])
+    if(!this.stats[host] || Object.getLength(this.stats[host]) == 0){
+      // //console.log('save_stats')
+      // //console.log('CHARTS', this.__charts['uptime'].name)
+      let save_stats = function (payload){
+        let {type, doc} = payload
+        // let { type, input, input_type, app } = opts
 
+        if(type == 'periodical'){
+          let matched = undefined
+          // console.log('save_stats', payload)
 
+          if(doc.length == 0){
+            console.log('save_stats', payload)
+
+            this.stats[host] = {}
+            this.charts[host] = {}
+            this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
+            this.fireEvent('statsProcessed')
+
+          }
+          else{
             this.__process_os_doc(payload.doc, function(stats){
-              this.stats = stats
-
-
-
-              Object.each(this.__charts, function(data, key){
+              this.stats[host] = stats
+              this.charts[host] = Object.clone(this.__charts)
+              Object.each(this.charts[host], function(data, key){
 
                   // if(stats.os && stats.os.networkInterfaces)
                     //console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
@@ -318,7 +433,7 @@ module.exports = new Class({
                   let {name, chart} = data
                   matched = this.__match_stats_name(stats, name)
 
-                  console.log('MATCHED', name, matched)
+                  // console.log('MATCHED', name, matched)
                   // if(Array.isArray(matched)){
                   //   Array.each(matched, function(data){
                   //     this.__process_stat(chart, data.name, data.stat)
@@ -344,26 +459,32 @@ module.exports = new Class({
             /**
             * once we get the desire stats, remove event
             **/
-            if(matched)
+            if(matched){
               this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
+              // this.pipelines[host].pipeline.removeEvent('onSaveMultipleDocs', save_stats)
+            }
           }
-        }.bind(this)
-        /**
-        * onSaveDoc is exec when the input fires 'onPeriodicalDoc'
-        * so capture the output once (and for one host, as all stats are the same)
-        */
-        this.pipelines[host].pipeline.addEvent('onSaveDoc', save_stats)
-        this.pipelines[host].pipeline.fireEvent('onOnce')
-      }
 
+        }
+      }.bind(this)
+      /**
+      * onSaveDoc is exec when the input fires 'onPeriodicalDoc'
+      * so capture the output once (and for one host, as all stats are the same)
+      */
+      console.log('firing...', host)
+      this.pipelines[host].pipeline.addEvent('onSaveDoc', save_stats)
+      // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
+      this.pipelines[host].pipeline.fireEvent('onOnce')
     }
 
-    if(!this.pipelines[host].ids.contains(id))
-      this.pipelines[host].ids.push(id)
+    if(id){
+      if(!this.pipelines[host].ids.contains(id))
+        this.pipelines[host].ids.push(id)
 
-    if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
-      this.pipelines[host].pipeline.fireEvent('onResume')
-      // pipeline.fireEvent('onSuspend')
+      if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
+        this.pipelines[host].pipeline.fireEvent('onResume')
+        // pipeline.fireEvent('onSuspend')
+      }
     }
 
     return this.pipelines[host].pipeline
@@ -530,26 +651,7 @@ module.exports = new Class({
   },
 
 
-	// get: function(req, resp){
-		// resp.send(
-		// 	'<!doctype html><html><head><title>socket.io client test</title></head>'
-		// 	+'<body><script src="/socket.io/socket.io.js"></script>'
-		// 	+'<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>'
-		// 	+'<script>'
-		// 	+'var chat = io.connect("http://localhost:8080/");'
-		//   +'chat.on("connect", function () {'
-		//   +'  chat.emit("message", "hi!");'
-		// 	+'	chat.on("response", function(message){ '
-		// 	+'		$("body").append(message);'
-		// 	+'	});'
-		// 	+'  chat.emit("message");'//test
-		//   +'});'
-		// 	+'</script>'
-		// 	+'</body></html>'
-		// )
-	// },
-
-  initialize: function(options){
+	initialize: function(options){
     this.parent(options)
 
 		this.profile('os_init');//start profiling
@@ -586,7 +688,7 @@ module.exports = new Class({
 
         if(pipe.ids.length == 0){
           console.log('suspending...', pipe.ids)
-          // pipe.pipeline.fireEvent('onSuspend')
+          pipe.pipeline.fireEvent('onSuspend')
         }
 
       }.bind(this))

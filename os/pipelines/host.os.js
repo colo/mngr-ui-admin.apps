@@ -175,7 +175,7 @@ module.exports = function(conn, io, charts){
   	input: [
   		{
   			poll: {
-  				// suspended: true,//start suspended
+  				suspended: true,//start suspended
   				id: "input.os",
   				conn: [
             Object.merge(
@@ -251,51 +251,58 @@ module.exports = function(conn, io, charts){
   			// 		}
   			// })
 
-  			Array.each(docs, function(row, index){
-  				if(row.doc && row.doc.metadata && row.doc.metadata.path)
-  					switch (row.doc.metadata.path) {
-  						case 'os.procs':
-  							// row.doc = mount_filter(row.doc)
-  							delete docs[index]
-								break;
+				if(docs.length == 0 ){
+					pipeline.output({type: type, doc: docs})
+				}
+				else{
+	  			Array.each(docs, function(row, index){
+	  				if(row.doc && row.doc.metadata && row.doc.metadata.path)
+	  					switch (row.doc.metadata.path) {
+	  						case 'os.procs':
+	  							// row.doc = mount_filter(row.doc)
+	  							delete docs[index]
+									break;
 
-  						case 'os.mounts':
-  							row.doc = mount_filter(row.doc)
-  							break;
+	  						case 'os.mounts':
+	  							row.doc = mount_filter(row.doc)
+	  							break;
 
-  						case 'os.blockdevices':
-  							row.doc = blockdevices_filter(row.doc)
-  							break;
+	  						case 'os.blockdevices':
+	  							row.doc = blockdevices_filter(row.doc)
+	  							break;
 
-  						case 'os':
-  							row.doc = os_filter(row.doc)
-  							break;
+	  						case 'os':
+	  							row.doc = os_filter(row.doc)
+	  							break;
 
-  						// default:
-  						// 	pipeline.output(row.doc)
+	  						// default:
+	  						// 	pipeline.output(row.doc)
 
 
-  					}
+	  					}
 
-						// //console.log('ROW DOC', row.doc)
-						// data_to_tabular([{timestamp: row.doc.metadata.timestamp, value: row.doc.data}], {}, 'some_name', function(name, data){
-						// 	//console.log('ROW TABULAR', data)
-						// })
+							// //console.log('ROW DOC', row.doc)
+							// data_to_tabular([{timestamp: row.doc.metadata.timestamp, value: row.doc.data}], {}, 'some_name', function(name, data){
+							// 	//console.log('ROW TABULAR', data)
+							// })
 
-  					// Array.clean(docs)
+	  					// Array.clean(docs)
 
-						if(index == docs.length -1 ){
-							docs = docs.clean()
-  						pipeline.output({type: type, doc: docs})
-						}
-  			})
-
+							if(index == docs.length -1 ){
+								docs = docs.clean()
+	  						pipeline.output({type: type, doc: docs})
+							}
+	  			})
+				}
   		},
 
   	],
   	output: [
   		function(payload){
-				io.binary(false).volatile.emit('os', payload)
+				console.log('OUTPUT', payload)
+
+				if(io)
+					io.binary(false).volatile.emit('os', payload)
 
 				if(stats_init == true){
 					//console.log('charts', charts['uptime'].name, payload.doc)
@@ -354,7 +361,7 @@ module.exports = function(conn, io, charts){
 
 
 							if(counter == Object.getLength(charts) -1){
-								//console.log('OUTPUT data_to_tabular', buffer_output)
+								// console.log('OUTPUT data_to_tabular', buffer_output)
 								if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
 									io.binary(false).emit('os', {
 										type: payload.type,
@@ -380,7 +387,7 @@ module.exports = function(conn, io, charts){
 				if(stats_init == false)
 					stats_init = true
 
-
+      
   		}
   	]
   }
