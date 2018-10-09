@@ -298,97 +298,107 @@ module.exports = function(conn, io, charts){
 
   	],
   	output: [
-  		function(payload){
-				console.log('OUTPUT', payload)
-
-				if(io)
-					io.binary(false).volatile.emit('os', payload)
-
-				if(stats_init == true){
-					//console.log('charts', charts['uptime'].name, payload.doc)
-
-					__process_os_doc(payload.doc, function(stats){
-						let buffer_output = undefined
-
-						// //console.log('OUTPUT', stats)
-						let counter = 0
-						Object.each(charts, function(data, key){
-
-							let {name, chart} = data
-							/**
-							* we will create an instance for each one, as charts like "blockdevices"
-							* hace static properties like "prev", and you may have multiple devices overriding it
-							**/
-							if(!data['_instances']) data['_instances'] = {}
-
-							let matched = __match_stats_name(stats, name)
-
-							// if(Array.isArray(matched)){
-							// 	Array.each(matched, function(data){
-							// 		// this.__process_stat(chart, data.name, data.stat)
-							// 		if(stat)
-							// 			data_to_tabular(data.stat, chart, data.name, function(name, data){
-							// 				// //console.log('OUTPUT', name, data)
-							// 				buffer_output[name] = data
-							// 			})
-							// 	})
-							// }
-							// else{
-							if(matched){
-
-								// console.log('MATCHED', matched)
-
-								if(!buffer_output) buffer_output = {}
-								if(!buffer_output[key]) buffer_output[key] = {}
-
-								Object.each(matched, function(stat, name){
-									/**
-									* create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
-									**/
-									if(!data['_instances'][name])
-										data['_instances'][name] = Object.clone(chart)
-
-									// this.__process_stat(chart, name, stat)
-									if(stat){
-										// data_to_tabular(stat, chart, name, function(name, data){
-										data_to_tabular(stat, data['_instances'][name], name, function(name, to_buffer){
-											buffer_output[key][name] = to_buffer
-										})
-									}
-
-								})
-							}
-
-
-							if(counter == Object.getLength(charts) -1){
-								// console.log('OUTPUT data_to_tabular', buffer_output)
-								if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
-									io.binary(false).emit('os', {
-										type: payload.type,
-										doc: {
-											metadata: {
-												host: payload.doc[0].doc.metadata.host
-											},
-											data: buffer_output
-										},
-										tabular: true
-									})
-								}
-							}
-
-							counter++
-						}.bind(this))
-
-
-						// this.fireEvent('statsProcessed')
-					}.bind(this))
-				}
-
-				if(stats_init == false)
-					stats_init = true
-
-      
-  		}
+  		// function(payload){
+			// 	// console.log('OUTPUT', payload)
+      //
+			// 	if(io)
+			// 		io.binary(false).volatile.emit('os', payload)
+      //
+			// 	if(stats_init == true){
+			// 		// console.log('charts', charts, payload.doc)
+      //
+			// 		__process_os_doc(payload.doc, function(stats){
+			// 			let buffer_output = undefined
+      //
+			// 			// //console.log('OUTPUT', stats)
+			// 			let counter = 0
+			// 			Object.each(charts, function(data, key){
+      //
+			// 				let {name, chart} = data
+			// 				/**
+			// 				* we will create an instance for each one, as charts like "blockdevices"
+			// 				* hace static properties like "prev", and you may have multiple devices overriding it
+			// 				**/
+			// 				if(!data['_instances']) data['_instances'] = {}
+      //
+			// 				let matched = __match_stats_name(stats, name)
+      //
+			// 				// if(Array.isArray(matched)){
+			// 				// 	Array.each(matched, function(data){
+			// 				// 		// this.__process_stat(chart, data.name, data.stat)
+			// 				// 		if(stat)
+			// 				// 			data_to_tabular(data.stat, chart, data.name, function(name, data){
+			// 				// 				// //console.log('OUTPUT', name, data)
+			// 				// 				buffer_output[name] = data
+			// 				// 			})
+			// 				// 	})
+			// 				// }
+			// 				// else{
+			// 				if(matched){
+      //
+			// 					// console.log('MATCHED', matched)
+      //
+			// 					if(!buffer_output) buffer_output = {}
+			// 					if(!buffer_output[key]) buffer_output[key] = {}
+      //
+			// 					Object.each(matched, function(stat, name){
+			// 						/**
+			// 						* create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
+			// 						**/
+			// 						if(!data['_instances'][name])
+			// 							data['_instances'][name] = Object.clone(chart)
+      //
+			// 						// this.__process_stat(chart, name, stat)
+			// 						if(stat){
+			// 							// data_to_tabular(stat, chart, name, function(name, data){
+			// 							data_to_tabular(stat, data['_instances'][name], name, function(name, to_buffer){
+			// 								buffer_output[key][name] = to_buffer
+			// 							})
+			// 						}
+      //
+			// 					})
+			// 				}
+      //
+      //
+			// 				if(counter == Object.getLength(charts) -1){
+			// 					console.log('OUTPUT data_to_tabular', {
+			// 						type: payload.type,
+			// 						doc: {
+			// 							metadata: {
+			// 								host: payload.doc[0].doc.metadata.host
+			// 							},
+			// 							data: buffer_output
+			// 						},
+			// 						tabular: true
+			// 					})
+      //
+			// 					if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
+			// 						io.binary(false).emit('os', {
+			// 							type: payload.type,
+			// 							doc: {
+			// 								metadata: {
+			// 									host: payload.doc[0].doc.metadata.host
+			// 								},
+			// 								data: buffer_output
+			// 							},
+			// 							tabular: true
+			// 						})
+			// 					}
+			// 				}
+      //
+			// 				counter++
+			// 			}.bind(this))
+      //
+      //
+			// 			// this.fireEvent('statsProcessed')
+			// 		}.bind(this))
+			// 	}
+      //
+			// 	if(stats_init == false)
+			// 		stats_init = true
+      //
+      //
+  		// }
   	]
   }
 
