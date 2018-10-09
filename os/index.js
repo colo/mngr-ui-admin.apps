@@ -335,15 +335,6 @@ module.exports = new Class({
     else{
       let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
 
-      // if(this.stats[host] && Object.getLength(this.stats[host]) == 0){
-      //   if(resp){
-      //     resp.status(404).json({host: host, err: 'not found'})
-      //   }
-      //   else{
-      //     socket.binary(false).emit('host', {host: host, err: 'not found'})
-      //   }
-      // }
-      // else
       if(this.stats[host] && Object.getLength(this.stats[host]) > 0){//stats processed already
         console.log('this.stats[host]', this.stats[host])
         if(resp){
@@ -352,6 +343,10 @@ module.exports = new Class({
         else{
           socket.binary(false).emit('host', {host: host, status: 'ok', charts: this.charts[host]})
         }
+        // if(this.options.redis){
+          delete this.stats[host]
+          delete this.charts[host]
+        // }
       }
       else{
         let send_charts = function(){
@@ -389,7 +384,11 @@ module.exports = new Class({
       if(!this.charts[host])
         this.charts[host] = {}
 
-      let template = require('./pipelines/host.os')(require(ETC+'default.conn.js')(), this.io, this.charts[host])
+      let template = require('./pipelines/host.os')(
+        require(ETC+'default.conn.js')(this.options.redis),
+        this.io,
+        this.charts[host]
+      )
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
       template.input[0].poll.conn[0].id = template.input[0].poll.id

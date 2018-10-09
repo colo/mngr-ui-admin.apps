@@ -67,11 +67,10 @@ module.exports = new Class({
                       'sort',
                       'by_host',
                       {
-        								// startkey: [start_key, app.options.stat_host, "periodical",Date.now() + 0],
-        								// endkey: [end_key, app.options.stat_host, "periodical", Date.now() - 1000],
-                        startkey: [app.options.stat_host, "periodical",Date.now() + 0],
+        								startkey: [app.options.stat_host, "periodical",Date.now() + 0],
         								endkey: [app.options.stat_host, "periodical", Date.now() - 1000],
                         // limit: 1,
+                        // stale: "ok",
         								descending: true,
         								inclusive_end: true,
         								include_docs: true
