@@ -252,11 +252,23 @@ module.exports = new Class({
             if(!this.__charts_instances[host])
               this.__charts_instances[host] = {}
 
-            let counter = 0
-            let buffer_output = undefined
-						Object.each(charts, function(data, key){
+            let send_tabular = function(output){
+              console.log('send_tabular', output)
+              if(resp){
+                resp.json({host: host, status: 'ok', stats: output, tabular: true})
+              }
+              else{
+                socket.binary(false).emit('stats', {host: host, status: 'ok', stats: output, tabular: true})
+              }
+            }
 
-							let {name, chart} = data
+            let matched = undefined
+            Object.each(charts, function(data, key){
+              let {name, chart} = data
+
+              if(!matched)
+                matched = {}
+
 							/**
 							* we will create an instance for each one, as charts like "blockdevices"
 							* hace static properties like "prev", and you may have multiple devices overriding it
@@ -265,76 +277,90 @@ module.exports = new Class({
               if(!this.__charts_instances[host][key])
                 this.__charts_instances[host][key] = {}
 
-							let matched = this.__match_stats_name(stats, name)
-
-							if(matched){
-
-								// console.log('MATCHED', matched)
-
-								if(!buffer_output) buffer_output = {}
-								if(!buffer_output[key]) buffer_output[key] = {}
-
-								Object.each(matched, function(stat, matched_name){
-									/**
-									* create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
-									**/
-									// if(!data['_instances'][name])
-									// 	data['_instances'][name] = Object.clone(chart)
-                  if(!this.__charts_instances[host][key][matched_name])
-                    this.__charts_instances[host][key][matched_name] = Object.clone(chart)
-
-									// this.__process_stat(chart, name, stat)
-									if(stat){
-										// data_to_tabular(stat, chart, name, function(name, data){
-										data_to_tabular(
-                      stat,
-                      this.__charts_instances[host][key][matched_name],
-                      matched_name,
-                      function(matched_name, to_buffer){
-  											buffer_output[key][matched_name] = to_buffer
-  										}
-                    )
-									}
-
-								}.bind(this))
-							}
+							matched[key+'/'+name] = this.__match_stats_name(stats, name)
 
 
-							if(counter == Object.getLength(charts) -1){
-                if(resp){
-                  resp.json({host: host, status: 'ok', stats: buffer_output, tabular: true})
+						}.bind(this))
+
+            if(!matched || Object.getLength(matched) == 0){
+              send_tabular({})
+            }
+            else{
+              let buffer_output = {}
+              let count_matched = Object.keys(matched)
+  						// Object.each(charts, function(data, key){
+              Object.each(matched, function(data, key_name){
+                let key = key_name.split('/')[0]
+                let chart_name = key_name.split('/')[1]
+                // Object.each(data, function(value, name){
+                let {name, chart} = charts[key]
+
+                // console.log('MATCHED', key_name, data, key, chart_name, name, charts[key])
+
+                if(!buffer_output[key]) buffer_output[key] = {}
+
+                if(!data || Object.getLength(data) == 0){
+                  count_matched.erase(key_name)
+                  if(count_matched.length == 0)
+                    send_tabular(buffer_output)
                 }
                 else{
-                  socket.binary(false).emit('stats', {host: host, status: 'ok', stats: buffer_output, tabular: true})
+
+                  let count_data = Object.keys(data)
+                  Object.each(data, function(stat, matched_name){
+                    // console.log('MATCHED', key_name, matched_name, stat)
+                    /**
+                    * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
+                    **/
+                    // if(!data['_instances'][name])
+                    // 	data['_instances'][name] = Object.clone(chart)
+                    if(!this.__charts_instances[host][key][matched_name])
+                      this.__charts_instances[host][key][matched_name] = Object.clone(chart)
+
+                    // this.__process_stat(chart, name, stat)
+                    if(stat){
+                      // data_to_tabular(stat, chart, name, function(name, data){
+                      data_to_tabular(
+                        stat,
+                        this.__charts_instances[host][key][matched_name],
+                        matched_name,
+                        function(matched_name, to_buffer){
+                          buffer_output[key][matched_name] = to_buffer
+                          console.log('TO BUFFER',to_buffer)
+                          count_data.erase(matched_name)
+                          if(count_data.length == 0){
+                            count_matched.erase(key_name)
+                            if(count_matched.length == 0)
+                              send_tabular(buffer_output)
+                          }
+
+                        }
+                      )
+                    }
+                    else{
+                      count_data.erase(matched_name)
+                      if(count_data.length == 0){
+                        count_matched.erase(key_name)
+                        if(count_matched.length == 0)
+                          send_tabular(buffer_output)
+                      }
+
+                    }
+
+
+
+
+                    // counter++
+                  }.bind(this))
+
                 }
-								// console.log('OUTPUT data_to_tabular', {
-								// 	// type: payload.type,
-								// 	doc: {
-								// 		metadata: {
-								// 			host: host
-								// 		},
-								// 		data: buffer_output
-								// 	},
-								// 	tabular: true
-								// })
 
 
-								// if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
-								// 	io.binary(false).emit('os', {
-								// 		type: payload.type,
-								// 		doc: {
-								// 			metadata: {
-								// 				host: payload.doc[0].doc.metadata.host
-								// 			},
-								// 			data: buffer_output
-								// 		},
-								// 		tabular: true
-								// 	})
-								// }
-							}
 
-							counter++
-						}.bind(this))
+  						}.bind(this))
+            }
+
+
 
           }
           else{
