@@ -178,9 +178,11 @@ module.exports = new Class({
   stats: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'stat'])
     let {host, stat} = params
-    let query = (req) ? req.query : { tabular: params.tabular }
+    let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
+    let type = (range) ? 'range' : 'periodical'
 
+    // console.log('ARGUMENTS', arguments)
     console.log('PARAMS', params)
     console.log('QUERY', query)
     console.log('REQ', range)
@@ -202,10 +204,10 @@ module.exports = new Class({
 
         if(stats && Object.getLength(stats) == 0){
           if(resp){
-            resp.status(404).json({host: host, err: 'not found'})
+            resp.status(404).json({host: host, type: type, err: 'not found'})
           }
           else{
-            socket.binary(false).emit('stats', {host: host, err: 'not found'})
+            socket.binary(false).emit('stats', {host: host, type: type, err: 'not found'})
           }
         }
         else{
@@ -214,10 +216,10 @@ module.exports = new Class({
             this.__process_tabular(host, stats, function(output){
               //console.log('send_tabular', output)
               if(resp){
-                resp.json({host: host, status: 'ok', stats: output, tabular: true})
+                resp.json({host: host, status: 'ok', type: type, stats: output, tabular: true})
               }
               else{
-                socket.binary(false).emit('stats', {host: host, status: 'ok', stats: output, tabular: true})
+                socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
               }
             })
 
@@ -226,10 +228,10 @@ module.exports = new Class({
           }
           else{
             if(resp){
-              resp.json({host: host, status: 'ok', stats: stats})
+              resp.json({host: host, status: 'ok', type: type, stats: stats})
             }
             else{
-              socket.binary(false).emit('stats', {host: host, status: 'ok', stats: stats})
+              socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats})
             }
           }
 
@@ -379,6 +381,8 @@ module.exports = new Class({
 
 		this.profile('os_init');//start profiling
 
+    // this.addEvent('onSaveDoc', this._emit_stats)
+
     this.profile('os_init');//end profiling
 
 		this.log('os', 'info', 'os started');
@@ -411,6 +415,11 @@ module.exports = new Class({
 
 		}.bind(this));
 	},
+  _emit_stats: function(stats){
+		console.log('broadcast stats...', stats)
+		// socket.emit('app.doc', Object.values(this.docs))
+		this.io.binary(false).volatile.emit('stats', stats)
+	},
   _arguments: function(args, defined_params){
 		let req, resp, next, socket = undefined
     // //console.log(typeof args[0])
@@ -430,7 +439,10 @@ module.exports = new Class({
 		}
 		else{
       // //console.log('socket', args)
-      if(defined_params){
+      let isObject = (args[2] !== null && typeof args[2] === 'object' && isNaN(args[2]) && !Array.isArray(args[2])) ? true: false
+      console.log('isObject',isObject)
+
+      if(defined_params && isObject == false){
         Array.each(defined_params, function(name, index){
           params[name] = args[index + 2]
         })
@@ -684,6 +696,7 @@ module.exports = new Class({
         pipeline: new Pipeline(template),
         ids: []
       }
+
 
     }
 
