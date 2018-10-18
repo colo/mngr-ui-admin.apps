@@ -51,6 +51,7 @@ module.exports = new Class({
 
               if(path){
                 app.view({
+                  _extras: {type: 'once'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -70,6 +71,7 @@ module.exports = new Class({
               }
               else{
                 app.view({
+                  _extras: {type: 'once'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -255,6 +257,7 @@ module.exports = new Class({
 
               if(path){
                 app.view({
+                  _extras: {type: 'rnage'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -274,6 +277,7 @@ module.exports = new Class({
               }
               else{
                 app.view({
+                  _extras: {type: 'range'},
                   uri: app.options.db,
                   args: [
                     'sort',
@@ -356,6 +360,7 @@ module.exports = new Class({
                 //   ////console.log('couchdb.os path', path)
 
                   app.view({
+                    _extras: {type: 'periodical'},
       							uri: app.options.db,
                     args: [
                       'sort',
@@ -413,7 +418,7 @@ module.exports = new Class({
 
   view: function(err, resp, view){
 		// console.log('this.view ', err, resp, view.options.args);
-    // console.log('this.view ', err, view.options.args);
+    console.log('this.view ', err, view.options);
 
 		if(err){
 			//console.log('this.sort_by_path error %o', err);
@@ -423,7 +428,7 @@ module.exports = new Class({
 
         // if(view.options.args[0] == 'sort' && view.options.args[1] == 'by_host' && resp.rows.length > 0){
         // if(view.options.args[0] == 'sort' && view.options.args[1] == 'by_host'){
-          this.fireEvent('onPeriodicalDoc', [resp.rows, {type: 'periodical', input_type: this, app: null}]);
+          this.fireEvent('onPeriodicalDoc', [resp.rows, {type: view.options._extras.type, input_type: this, app: null}]);
         // }
         // else if(resp.rows.length > 0 && view.options.args[2].include_docs != false){
         //   // console.log('this.view ', resp.rows, view.options.args);

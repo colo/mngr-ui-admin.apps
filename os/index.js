@@ -31,7 +31,9 @@ module.exports = new Class({
   HostOSPipeline: undefined,
   pipelines: {},
   __stats: {},
+
   charts:{},
+
   __charts_instances:{},
 
   __charts: {
@@ -184,7 +186,7 @@ module.exports = new Class({
     let {host, stat} = params
     let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
-    let type = (range) ? 'range' : 'periodical'
+    let type = (range) ? 'range' : 'once'
 
     // console.log('ARGUMENTS', arguments)
     console.log('PARAMS', params)
@@ -421,21 +423,6 @@ module.exports = new Class({
 		console.log('broadcast stats...', host, payload)
     let {type, doc} = payload
 
-    // let emit = function(){
-    //   // this.io.binary(false).volatile.emit('stats', this.stats[host])
-    //   this.__process_tabular(host, stats, function(output){
-    //     //console.log('send_tabular', output)
-    //     if(resp){
-    //       resp.json({host: host, status: 'ok', type: type, stats: output, tabular: true})
-    //     }
-    //     else{
-    //       socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
-    //     }
-    //   })
-    //
-    //   this.removeEvent('statsProcessed', emit)
-    // }.bind(this)
-
     if(type == 'periodical' && doc.length > 0){
 
       this.__process_os_doc(doc, function(stats){
@@ -454,10 +441,7 @@ module.exports = new Class({
 
     }
 
-    // this.addEvent('statsProcessed', emit)
-    // __process_stats_charts
-		// socket.emit('app.doc', Object.values(this.docs))
-		// this.io.binary(false).volatile.emit('stats', stats)
+    
 	},
   _arguments: function(args, defined_params){
 		let req, resp, next, socket = undefined
@@ -591,7 +575,7 @@ module.exports = new Class({
                 stat_matched_name,
                 function(stat_matched_name, to_buffer){
                   buffer_output[key][__name] = to_buffer
-                  console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
+                  // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
                   count_data.erase(stat_matched_name)
                   if(count_data.length == 0){
                     count_matched.erase(key_name)
@@ -633,7 +617,7 @@ module.exports = new Class({
       let {type, doc} = payload
       // let { type, input, input_type, app } = opts
 
-      if(type == 'periodical'){
+      if(type == 'once' || type == 'range'){
 
         if(doc.length == 0){
           //console.log('save_stats', payload)
@@ -738,9 +722,9 @@ module.exports = new Class({
         ids: []
       }
 
-      // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
-      //   this.__emit_stats(host, stats)
-      // }.bind(this))
+      this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
+        this.__emit_stats(host, stats)
+      }.bind(this))
     }
 
     // //console.log('this.__stats[host]', this.__stats[host])
