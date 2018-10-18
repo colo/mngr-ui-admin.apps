@@ -40,17 +40,21 @@ module.exports = new Class({
     cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
     cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
     // freemem : { name: 'os.freemem', chart: freemem_chart},
-    // networkInterfaces : { name: 'os.networkInterfaces', chart: networkInterfaces_chart},
-    networkInterfaces_stats : { name: 'os_networkInterfaces_stats.%s', chart: networkInterfaces_stats_chart},
+    /**
+    * matched_name: true; will use that name as the key, else if will use the chart key
+    * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
+    * ex matched_name != true: os.cpus{ cpus_percentage: {}}
+    **/
+    networkInterfaces_stats : { 'matched_name': true, name: 'os_networkInterfaces_stats.%s', chart: networkInterfaces_stats_chart},
     // mounts_percentage : [
     //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
     //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
     // ],
-    mounts_percentage : { name: 'os_mounts.%s', chart: mounts_percentage_chart},
+    mounts_percentage : { 'matched_name': true, name: 'os_mounts.%s', chart: mounts_percentage_chart},
     // blockdevices_names : [
     //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
     // ]
-    blockdevices_stats : { name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
+    blockdevices_stats : { 'matched_name': true, name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
 
   },
 
@@ -551,7 +555,7 @@ module.exports = new Class({
         let key = key_name.split('/')[0]
         let chart_name = key_name.split('/')[1]
         // Object.each(data, function(value, name){
-        let {name, chart} = charts[key]
+        let {name, chart, matched_name} = charts[key]
 
         // //console.log('MATCHED', key_name, data, key, chart_name, name, charts[key])
 
@@ -565,29 +569,30 @@ module.exports = new Class({
         else{
 
           let count_data = Object.keys(data)
-          Object.each(data, function(stat, matched_name){
-            // //console.log('MATCHED', key_name, matched_name, stat)
+          Object.each(data, function(stat, stat_matched_name){
+            // //console.log('MATCHED', key_name, stat_matched_name, stat)
             /**
             * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
             **/
             // if(!data['_instances'][name])
             // 	data['_instances'][name] = Object.clone(chart)
-            if(!this.__charts_instances[host][key][matched_name])
-              this.__charts_instances[host][key][matched_name] = Object.clone(chart)
+            if(!this.__charts_instances[host][key][stat_matched_name])
+              this.__charts_instances[host][key][stat_matched_name] = Object.clone(chart)
 
             // this.__process_stat(chart, name, stat)
             if(stat){
+              let __name = (matched_name == true ) ? stat_matched_name : key
               if(!buffer_output[key]) buffer_output[key] = {}
 
               // data_to_tabular(stat, chart, name, function(name, data){
               data_to_tabular(
                 stat,
-                this.__charts_instances[host][key][matched_name],
-                matched_name,
-                function(matched_name, to_buffer){
-                  buffer_output[key][matched_name] = to_buffer
-                  // //console.log('TO BUFFER',to_buffer)
-                  count_data.erase(matched_name)
+                this.__charts_instances[host][key][stat_matched_name],
+                stat_matched_name,
+                function(stat_matched_name, to_buffer){
+                  buffer_output[key][__name] = to_buffer
+                  console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
+                  count_data.erase(stat_matched_name)
                   if(count_data.length == 0){
                     count_matched.erase(key_name)
                     if(count_matched.length == 0)
@@ -598,7 +603,7 @@ module.exports = new Class({
               )
             }
             else{
-              count_data.erase(matched_name)
+              count_data.erase(stat_matched_name)
               if(count_data.length == 0){
                 count_matched.erase(key_name)
                 if(count_matched.length == 0)
@@ -733,9 +738,9 @@ module.exports = new Class({
         ids: []
       }
 
-      this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
-        this.__emit_stats(host, stats)
-      }.bind(this))
+      // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
+      //   this.__emit_stats(host, stats)
+      // }.bind(this))
     }
 
     // //console.log('this.__stats[host]', this.__stats[host])
