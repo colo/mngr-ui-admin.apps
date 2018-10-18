@@ -31,6 +31,7 @@ module.exports = new Class({
   HostOSPipeline: undefined,
   pipelines: {},
   __stats: {},
+  __stats_tabular: {},
 
   charts:{},
 
@@ -199,8 +200,8 @@ module.exports = new Class({
     else{
 
       let send_stats = function(payload){
-        // let {stats, doc} = payload
-        let stats = this.__stats[host]
+
+        let stats = this.__stats[host].data
 
         if(stat){//one stat only
           stats = this.__find_stat(stat, stats)
@@ -218,18 +219,28 @@ module.exports = new Class({
         }
         else{
           if(query && query.format == 'tabular'){
-
-            this.__process_tabular(host, stats, function(output){
-              //console.log('send_tabular', output)
+            let send_tabular = function(stats){
               if(resp){
-                resp.json({host: host, status: 'ok', type: type, stats: output, tabular: true})
+                resp.json({host: host, status: 'ok', type: type, stats: stats, tabular: true})
               }
               else{
-                socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+                socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: true})
               }
-            })
+            }
 
 
+            let expire_time = Date.now() - 1000 //last second expire
+
+            if(!range && this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time){
+              console.log('TABULAR NOT EXPIRED', this.__stats_tabular[host])
+              this.__process_tabular(host, stats, send_tabular, true)//cache = true
+            }
+            else{
+              this.__process_tabular(host, stats, function(output){
+                this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
+                send_tabular(output)
+              }.bind(this))
+            }
 
           }
           else{
@@ -250,21 +261,35 @@ module.exports = new Class({
         this.removeEvent('statsProcessed', send_stats)
       }.bind(this)
 
-      this.addEvent('statsProcessed', send_stats)
+      let expire_time = Date.now() - 1000 //last second expire
 
 
-      let path = undefined
-      if(stat){
-        path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+      // if(this.__stats[host] && this.__stats[host].lastupdate)
+      //   console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
+
+      //if no range, lest find out if there are stats that are newer than expire time
+      if(!range && this.__stats[host] && this.__stats[host].lastupdate > expire_time){
+        console.log('NOT EXPIRED')
+        send_stats()
+      }
+      else{
+        this.addEvent('statsProcessed', send_stats)
+
+
+        let path = undefined
+        if(stat){
+          path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+        }
+
+        let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
+        this.__get_stats({
+          host: host,
+          pipeline: pipeline,
+          path: path,
+          range: range
+        })
       }
 
-      let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
-      this.__get_stats({
-        host: host,
-        pipeline: pipeline,
-        path: path,
-        range: range
-      })
     }
   },
   charts: function(){
@@ -330,57 +355,6 @@ module.exports = new Class({
 
 
 	},
-	// hosts: function(){
-  //   let {req, resp, socket, next, params} = this._arguments(arguments, ['host'])
-  //   let {host} = params
-  //   // //console.log('host...', params, host, this.__stats[host])
-  //   // let host = arguments[2]
-  //   if(host === null || host === undefined){
-  //     this.__no_host(req, resp, socket, next, params)
-  //   }
-  //   else{
-  //
-  //     let send_charts = function(){
-  //       if(this.__stats[host] && Object.getLength(this.__stats[host]) == 0){
-  //         if(resp){
-  //           resp.status(404).json({host: host, err: 'not found'})
-  //         }
-  //         else{
-  //           socket.binary(false).emit('hosts', {host: host, err: 'not found'})
-  //         }
-  //       }
-  //       else{
-  //         if(resp){
-  //           resp.json({host: host, status: 'ok', charts: this.charts[host]})
-  //         }
-  //         else{
-  //           socket.binary(false).emit('hosts', {host: host, status: 'ok', charts: this.charts[host]})
-  //         }
-  //
-  //         // if(this.options.redis){
-  //           // delete this.__stats[host]
-  //           // delete this.charts[host]
-  //         // }
-  //       }
-  //
-  //       this.removeEvent('statsProcessed', send_charts)
-  //     }.bind(this)
-  //
-  //     if(this.__stats[host] && Object.getLength(this.__stats[host]) > 0){//stats processed already
-  //       // //console.log('this.__stats[host]', this.__stats[host])
-  //       send_charts()
-  //     }
-  //     else{
-  //
-  //
-  //       this.addEvent('statsProcessed', send_charts)
-  //     }
-  //
-  //     let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
-  //   }
-  //
-  //
-	// },
 
 	initialize: function(options){
     this.parent(options)
@@ -420,28 +394,30 @@ module.exports = new Class({
 		}.bind(this));
 	},
   __emit_stats: function(host, payload){
-		console.log('broadcast stats...', host, payload)
+		// console.log('broadcast stats...', host, payload.type)
     let {type, doc} = payload
 
     if(type == 'periodical' && doc.length > 0){
 
       this.__process_os_doc(doc, function(stats){
-        // this.__process_stats_charts(host, stats)
+        // this.__stats[host] = {data: stats, lastupdate: Date.now()}
+        this.__process_stats_charts(host, stats)
+
+        console.log('broadcast stats...', this.__stats)
+
         this.__process_tabular(host, stats, function(output){
-          //console.log('send_tabular', output)
+          this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
+
+          console.log('broadcast stats...', output)
           this.io.binary(false).volatile.emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
-          // if(resp){
-          //   resp.json({host: host, status: 'ok', type: type, stats: output, tabular: true})
-          // }
-          // else{
-          //   socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
-          // }
-        }.bind(this))
+
+
+        }.bind(this), false)
       }.bind(this))
 
     }
 
-    
+
 	},
   _arguments: function(args, defined_params){
 		let req, resp, next, socket = undefined
@@ -502,7 +478,7 @@ module.exports = new Class({
 
     return result
   },
-  __process_tabular(host, stats, cb){
+  __process_tabular: function(host, stats, cb, cache){
     let charts = this.charts[host]
 
     if(!this.__charts_instances[host])
@@ -569,22 +545,38 @@ module.exports = new Class({
               if(!buffer_output[key]) buffer_output[key] = {}
 
               // data_to_tabular(stat, chart, name, function(name, data){
-              data_to_tabular(
-                stat,
-                this.__charts_instances[host][key][stat_matched_name],
-                stat_matched_name,
-                function(stat_matched_name, to_buffer){
-                  buffer_output[key][__name] = to_buffer
-                  // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
-                  count_data.erase(stat_matched_name)
-                  if(count_data.length == 0){
-                    count_matched.erase(key_name)
-                    if(count_matched.length == 0)
-                      cb(buffer_output)
-                  }
+             // console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
+              if(cache == true && this.__stats_tabular[host]){
+                // console.log(this.__stats_tabular[host])
+                buffer_output[key][__name] = this.__stats_tabular[host].data[key][__name]
 
+                count_data.erase(stat_matched_name)
+                if(count_data.length == 0){
+                  count_matched.erase(key_name)
+                  if(count_matched.length == 0)
+                    cb(buffer_output)
                 }
-              )
+              }
+              else{
+                data_to_tabular(
+                  stat,
+                  this.__charts_instances[host][key][stat_matched_name],
+                  stat_matched_name,
+                  function(stat_matched_name, to_buffer){
+                    buffer_output[key][__name] = to_buffer
+                    // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
+                    count_data.erase(stat_matched_name)
+                    if(count_data.length == 0){
+                      count_matched.erase(key_name)
+                      if(count_matched.length == 0)
+                        cb(buffer_output)
+                    }
+
+                  }
+                )
+              }
+
+
             }
             else{
               count_data.erase(stat_matched_name)
@@ -611,7 +603,7 @@ module.exports = new Class({
   },
   __get_stats: function(payload){
     let {host, pipeline, path, range} = payload
-    console.log('__get_stats', payload)
+    // console.log('__get_stats', payload)
 
     let save_stats = function (payload){
       let {type, doc} = payload
@@ -622,7 +614,8 @@ module.exports = new Class({
         if(doc.length == 0){
           //console.log('save_stats', payload)
 
-          this.__stats[host] = {}
+          this.__stats[host] = {data: {}, lastupdate: 0}
+          this.__stats_tabular[host] = {data: {}, lastupdate: 0}
           this.charts[host] = {}
           pipeline.removeEvent('onSaveDoc', save_stats)
           this.fireEvent('statsProcessed')
@@ -662,7 +655,7 @@ module.exports = new Class({
 
   },
   __process_stats_charts: function(host, stats){
-    this.__stats[host] = stats
+    this.__stats[host] = {data: stats, lastupdate: Date.now()}
     this.charts[host] = Object.clone(this.__charts)
     let count_charts = Object.keys(this.charts[host])
     let matched = undefined
@@ -726,83 +719,6 @@ module.exports = new Class({
         this.__emit_stats(host, stats)
       }.bind(this))
     }
-
-    // //console.log('this.__stats[host]', this.__stats[host])
-    // if(!this.__stats[host] || Object.getLength(this.__stats[host]) == 0){
-    //   // ////console.log('save_stats')
-    //   // ////console.log('CHARTS', this.__charts['uptime'].name)
-    //   let save_stats = function (payload){
-    //     let {type, doc} = payload
-    //     // let { type, input, input_type, app } = opts
-    //
-    //     if(type == 'periodical'){
-    //       let matched = undefined
-    //       // //console.log('save_stats', payload)
-    //
-    //       if(doc.length == 0){
-    //         //console.log('save_stats', payload)
-    //
-    //         this.__stats[host] = {}
-    //         this.charts[host] = {}
-    //         this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
-    //         this.fireEvent('statsProcessed')
-    //
-    //       }
-    //       else{
-    //         this.__process_os_doc(payload.doc, function(stats){
-    //           this.__stats[host] = stats
-    //           this.charts[host] = Object.clone(this.__charts)
-    //           Object.each(this.charts[host], function(data, key){
-    //
-    //               // if(stats.os && stats.os.networkInterfaces)
-    //                 ////console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
-    //
-    //               let {name, chart} = data
-    //               matched = this.__match_stats_name(stats, name)
-    //
-    //               // //console.log('MATCHED', name, matched)
-    //               // if(Array.isArray(matched)){
-    //               //   Array.each(matched, function(data){
-    //               //     this.__process_stat(chart, data.name, data.stat)
-    //               //   }.bind(this))
-    //               // }
-    //               // else{
-    //               if(matched)
-    //                 Object.each(matched, function(stat, name){
-    //                   this.__process_stat(chart, name, stat)
-    //                 }.bind(this))
-    //
-    //               // }
-    //             // }
-    //
-    //
-    //           }.bind(this))
-    //
-    //           this.fireEvent('statsProcessed')
-    //         }.bind(this))
-    //
-    //
-    //
-    //         /**
-    //         * once we get the desire stats, remove event
-    //         **/
-    //         // if(matched){
-    //         //   this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
-    //         //   // this.pipelines[host].pipeline.removeEvent('onSaveMultipleDocs', save_stats)
-    //         // }
-    //       }
-    //
-    //     }
-    //   }.bind(this)
-    //   /**
-    //   * onSaveDoc is exec when the input fires 'onPeriodicalDoc'
-    //   * so capture the output once (and for one host, as all stats are the same)
-    //   */
-    //   //console.log('firing...', host)
-    //   this.pipelines[host].pipeline.addEvent('onSaveDoc', save_stats)
-    //   // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
-    //   this.pipelines[host].pipeline.fireEvent('onOnce')
-    // }
 
     if(id){
       if(!this.pipelines[host].ids.contains(id))

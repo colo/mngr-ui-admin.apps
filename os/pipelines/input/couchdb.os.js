@@ -257,7 +257,7 @@ module.exports = new Class({
 
               if(path){
                 app.view({
-                  _extras: {type: 'rnage'},
+                  _extras: {type: 'range'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -418,7 +418,7 @@ module.exports = new Class({
 
   view: function(err, resp, view){
 		// console.log('this.view ', err, resp, view.options.args);
-    console.log('this.view ', err, view.options);
+    // console.log('this.view ', err, view.options);
 
 		if(err){
 			//console.log('this.sort_by_path error %o', err);
