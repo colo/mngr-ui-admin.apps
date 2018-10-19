@@ -37,27 +37,52 @@ module.exports = new Class({
 
   __charts_instances:{},
 
+  // __charts: {
+  //   uptime: { name: 'os.uptime', chart: uptime_chart },
+  //   loadavg: { name: 'os.loadavg', chart: loadavg_chart},
+  //   cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
+  //   cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
+  //   // freemem : { name: 'os.freemem', chart: freemem_chart},
+  //   /**
+  //   * matched_name: true; will use that name as the key, else if will use the chart key
+  //   * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
+  //   * ex matched_name != true: os.cpus{ cpus_percentage: {}}
+  //   **/
+  //   networkInterfaces_stats : { 'matched_name': true, name: 'os_networkInterfaces_stats.%s', chart: networkInterfaces_stats_chart},
+  //   // mounts_percentage : [
+  //   //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
+  //   //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
+  //   // ],
+  //   mounts_percentage : { 'matched_name': true, name: 'os_mounts.%s', chart: mounts_percentage_chart},
+  //   // blockdevices_names : [
+  //   //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
+  //   // ]
+  //   blockdevices_stats : { 'matched_name': true, name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
+  //
+  // },
+
   __charts: {
-    uptime: { name: 'os.uptime', chart: uptime_chart },
-    loadavg: { name: 'os.loadavg', chart: loadavg_chart},
-    cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
-    cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
-    // freemem : { name: 'os.freemem', chart: freemem_chart},
+    'os.uptime': {chart: uptime_chart},
+    'os.loadavg': {chart: loadavg_chart},
+    'os.cpus': {
+      times: { chart: cpus_times_chart },
+      percentage : { chart: cpus_percentage_chart }
+    },
     /**
     * matched_name: true; will use that name as the key, else if will use the chart key
     * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
     * ex matched_name != true: os.cpus{ cpus_percentage: {}}
     **/
-    networkInterfaces_stats : { 'matched_name': true, name: 'os_networkInterfaces_stats.%s', chart: networkInterfaces_stats_chart},
-    // mounts_percentage : [
-    //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
-    //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
-    // ],
-    mounts_percentage : { 'matched_name': true, name: 'os_mounts.%s', chart: mounts_percentage_chart},
-    // blockdevices_names : [
-    //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
-    // ]
-    blockdevices_stats : { 'matched_name': true, name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
+    'os_networkInterfaces_stats': {
+      properties: {'matched_name': true, match: '%s', chart: networkInterfaces_stats_chart},
+    },
+    'os_mounts':{
+      percentage : { 'matched_name': true, match: '%s', chart: mounts_percentage_chart},
+    },
+    'os_blockdevices': {
+      stats : { 'matched_name': true, match: '%s', chart: blockdevices_stats_chart},
+    }
+
 
   },
 
@@ -122,66 +147,11 @@ module.exports = new Class({
 					callbacks: ['stats'],
 					// middlewares: [], //socket.use(fn)
 				}],
-        // range: [{
-				// 	// path: ':param',
-				// 	// once: true, //socket.once
-				// 	callbacks: ['range'],
-				// 	// middlewares: [], //socket.use(fn)
-				// }],
-        // periodical: [{
-				// 	// path: ':param',
-				// 	// once: true, //socket.once
-				// 	callbacks: ['periodical'],
-				// 	// middlewares: [], //socket.use(fn)
-				// }],
-			// 	// '*': [{// catch all
-			// 	// 	path: '',
-			// 	// 	callbacks: ['not_found_message'],
-			// 	// 	middlewares: [], //socket.use(fn)
-			// 	// }]
+
 			}
 		}
 	},
 
-
-  /**
-  *
-  **/
-  // charts: function(socket, next){
-  //   let {host} = arguments[2]
-  //
-  //   socket.emit('charts', {
-  //     host: host,
-  //     charts: this.__charts
-  //   })
-  //
-	// },
-
-  // range: function(){
-  //   let {req, resp, socket, next, params} = this._arguments(arguments, ['range'])
-  //   let {host, path, range} = params
-  //
-	// 	// ////console.log('range...', host, range, path)
-	// 	let pipeline = this.__get_pipeline(host)
-  //   // pipelines.input[0].options.range_path = path
-  //   // ////console.log(pipeline.inputs[0])
-  //   pipeline.fireEvent('onRange',{ Range: range.type+' '+ range.start +'-'+ range.end +'/*', path: path })
-  //
-	// },
-  // periodical: function(socket, next){
-  //   let {host} = arguments[2]
-  //
-	// 	let pipeline = this.__get_pipeline(host, socket.id)
-  //
-  //   if(pipeline.inputs[0].options.suspended == true){
-  //     pipeline.fireEvent('onResume')
-  //     // pipeline.fireEvent('onSuspend')
-  //   }
-  //
-  //   // ////console.log('periodical', pipeline.inputs[0])
-  //   // pipeline.fireEvent('onResume')
-  //
-	// },
   stats: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'stat'])
     let {host, stat} = params
@@ -479,14 +449,22 @@ module.exports = new Class({
     return result
   },
   __process_tabular: function(host, stats, cb, cache){
-    let charts = this.charts[host]
+    // let charts = this.charts[host]
 
     if(!this.__charts_instances[host])
       this.__charts_instances[host] = {}
 
     let matched = undefined
-    Object.each(charts, function(data, key){
-      let {name, chart} = data
+    Object.each(this.charts[host], function(data, path){
+      let charts = {}
+      if(data.chart){
+        charts[path] = data
+      }
+      else{
+        charts = data
+      }
+
+      // let {name, chart} = data
 
       if(!matched)
         matched = {}
@@ -496,13 +474,29 @@ module.exports = new Class({
       * hace static properties like "prev", and you may have multiple devices overriding it
       **/
       // if(!data['_instances']) data['_instances'] = {}
-      if(!this.__charts_instances[host][key])
-        this.__charts_instances[host][key] = {}
+      if(!this.__charts_instances[host][path])
+        this.__charts_instances[host][path] = {}
 
-      matched[key+'/'+name] = this.__match_stats_name(stats, name)
+      Object.each(charts, function(chart_data, chart_name){
+        let {match, chart} = chart_data
+        if(!match){
+          match = path
+        }
+        else{
+          match = path+'.'+match
+        }
+
+        // if(!this.__charts_instances[host][path][chart_name])
+        //   this.__charts_instances[host][path][chart_name] = {}
+
+        matched[path+'/'+chart_name] = this.__match_stats_name(stats, match)
+
+      }.bind(this))
 
 
     }.bind(this))
+
+    // console.log('MATCHED', matched)
 
     if(!matched || Object.getLength(matched) == 0){
       cb({})
@@ -511,90 +505,308 @@ module.exports = new Class({
       let buffer_output = {}
       let count_matched = Object.keys(matched)
       // Object.each(charts, function(data, key){
-      Object.each(matched, function(data, key_name){
-        let key = key_name.split('/')[0]
-        let chart_name = key_name.split('/')[1]
-        // Object.each(data, function(value, name){
-        let {name, chart, matched_name} = charts[key]
 
-        // //console.log('MATCHED', key_name, data, key, chart_name, name, charts[key])
-
-
+      Object.each(matched, function(data, path_name){
+        let matched_chart_path = path_name.split('/')[0]
+        let matched_chart_name = path_name.split('/')[1]
 
         if(!data || Object.getLength(data) == 0){
-          count_matched.erase(key_name)
+          count_matched.erase(path_name)
           if(count_matched.length == 0)
             cb(buffer_output)
         }
-        else{
+        else if(this.charts[host][matched_chart_path]){
 
-          let count_data = Object.keys(data)
-          Object.each(data, function(stat, stat_matched_name){
-            // //console.log('MATCHED', key_name, stat_matched_name, stat)
-            /**
-            * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
-            **/
-            // if(!data['_instances'][name])
-            // 	data['_instances'][name] = Object.clone(chart)
-            if(!this.__charts_instances[host][key][stat_matched_name])
-              this.__charts_instances[host][key][stat_matched_name] = Object.clone(chart)
+            let chart_data = undefined
+            if(this.charts[host][matched_chart_path][matched_chart_name]){
+              chart_data = this.charts[host][matched_chart_path][matched_chart_name]
+            }
+            else{
+              matched_chart_name = undefined
+              chart_data = this.charts[host][matched_chart_path]
+            }
 
-            // this.__process_stat(chart, name, stat)
-            if(stat){
-              let __name = (matched_name == true ) ? stat_matched_name : key
-              if(!buffer_output[key]) buffer_output[key] = {}
+            let no_stat_matched_name = false
+            if(chart_data.matched_name !== true)
+              no_stat_matched_name = true
 
-              // data_to_tabular(stat, chart, name, function(name, data){
-             // console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
-              if(cache == true && this.__stats_tabular[host]){
-                // console.log(this.__stats_tabular[host])
-                buffer_output[key][__name] = this.__stats_tabular[host].data[key][__name]
+            if(no_stat_matched_name == false && !this.__charts_instances[host][matched_chart_path][matched_chart_name])
+              this.__charts_instances[host][matched_chart_path][matched_chart_name] = {}
 
+            // Object.each(data, function(charts_data, path){
+              // if(matched_chart_path == path){
+
+            console.log('NAMES',matched_chart_path,matched_chart_name)
+            // if(chart_data){
+            //   let charts = {}
+            //   if(chart_data.chart){
+            //     charts[matched_chart_path] = chart_data
+            //   }
+            //   else{
+            //     charts = chart_data
+            //   }
+
+              // console.log('CHARTS', chart_data)
+            // }
+
+            let count_data = Object.keys(data)
+            Object.each(data, function(stat, stat_matched_name){
+              // console.log('MATCHED', path_name, stat_matched_name, stat)
+
+              if(!buffer_output[matched_chart_path]) buffer_output[matched_chart_path] = {}
+
+              /**
+              * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
+              **/
+              let instance = undefined
+              if(!matched_chart_name){
+
+                if(no_stat_matched_name && !this.__charts_instances[host][matched_chart_path]){
+                  this.__charts_instances[host][matched_chart_path] = Object.clone(chart_data.chart)
+                }
+                else if(!this.__charts_instances[host][matched_chart_path][stat_matched_name]){
+                  this.__charts_instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
+                }
+
+                // if(!buffer_output[matched_chart_path][stat_matched_name])
+                //   buffer_output[matched_chart_path][stat_matched_name] = {}
+                if(no_stat_matched_name){
+                  instance = this.__charts_instances[host][matched_chart_path]
+                }
+                else{
+                  instance = this.__charts_instances[host][matched_chart_path][stat_matched_name]
+                }
+
+              }
+              else{
+
+                if(no_stat_matched_name == true && !this.__charts_instances[host][matched_chart_path][matched_chart_name]){
+
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
+                }
+                else if(!this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
+
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
+                }
+
+
+
+                if(!buffer_output[matched_chart_path][matched_chart_name])
+                  buffer_output[matched_chart_path][matched_chart_name] = {}
+
+                // if(!buffer_output[matched_chart_path][matched_chart_name])
+                //   buffer_output[matched_chart_path][matched_chart_name] = {}
+
+                if(no_stat_matched_name == true){
+                  instance = this.__charts_instances[host][matched_chart_path][matched_chart_name]
+                }
+                else{
+                  instance = this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
+                }
+
+
+              }
+
+
+              // this.__process_stat(chart, name, stat)
+              if(stat){
+                // let __name = (matched_name == true ) ? stat_matched_name : key
+
+
+                // data_to_tabular(stat, chart, name, function(name, data){
+               // console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
+                if(cache == true && this.__stats_tabular[host]){
+                  // console.log(this.__stats_tabular[host])
+                  if(!matched_chart_name){
+                    buffer_output[matched_chart_path] = this.__stats_tabular[host].data[matched_chart_path]
+                  }
+                  else{
+                    buffer_output[matched_chart_path][matched_chart_name] = this.__stats_tabular[host].data[matched_chart_path][matched_chart_name]
+                  }
+                  count_data.erase(stat_matched_name)
+                  if(count_data.length == 0){
+                    count_matched.erase(path_name)
+                    if(count_matched.length == 0)
+                      cb(buffer_output)
+                  }
+                }
+                else{
+
+
+                  data_to_tabular(
+                    stat,
+                    instance,
+                    (no_stat_matched_name) ? matched_chart_name : stat_matched_name,
+                    function(name, to_buffer){
+                      if(!matched_chart_name && no_stat_matched_name){
+                        buffer_output[matched_chart_path] = to_buffer
+                      }
+                      else if(!matched_chart_name){
+                        buffer_output[matched_chart_path][name] = to_buffer
+                      }
+                      else if(matched_chart_name && no_stat_matched_name) {
+                        buffer_output[matched_chart_path][matched_chart_name] = to_buffer
+                      }
+                      else if(matched_chart_name) {
+                        buffer_output[matched_chart_path][matched_chart_name][name] = to_buffer
+                      }
+
+                      // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
+                      count_data.erase(stat_matched_name)
+                      if(count_data.length == 0){
+                        count_matched.erase(path_name)
+                        if(count_matched.length == 0)
+                          cb(buffer_output)
+                      }
+
+                    }
+                  )
+                }
+
+
+              }
+              else{
                 count_data.erase(stat_matched_name)
                 if(count_data.length == 0){
-                  count_matched.erase(key_name)
+                  count_matched.erase(path_name)
                   if(count_matched.length == 0)
                     cb(buffer_output)
                 }
-              }
-              else{
-                data_to_tabular(
-                  stat,
-                  this.__charts_instances[host][key][stat_matched_name],
-                  stat_matched_name,
-                  function(stat_matched_name, to_buffer){
-                    buffer_output[key][__name] = to_buffer
-                    // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
-                    count_data.erase(stat_matched_name)
-                    if(count_data.length == 0){
-                      count_matched.erase(key_name)
-                      if(count_matched.length == 0)
-                        cb(buffer_output)
-                    }
 
-                  }
-                )
               }
 
 
-            }
-            else{
-              count_data.erase(stat_matched_name)
-              if(count_data.length == 0){
-                count_matched.erase(key_name)
-                if(count_matched.length == 0)
-                  cb(buffer_output)
-              }
-
-            }
 
 
+              // counter++
+            }.bind(this))
+            // console.log('INSTANCES', this.__charts_instances)
+
+          // // let count_charts = Object.keys(charts)
+          // Object.each(charts, function(chart_data, chart_name){
+          //   let {match, chart} = chart_data
+          //   if(!match){
+          //     match = path
+          //   }
+          //   else{
+          //     match = path+'.'+match
+          //   }
+          //
+          //   console.log('chart', chart_name, match)
+          //   // matched = this.__match_stats_name(stats, match)
+          //   //
+          //   // if(matched)
+          //   //   Object.each(matched, function(stat, match){
+          //   //     this.__process_stat(chart, match, stat)
+          //   //   }.bind(this))
+          //   //
+          //   // // count_charts.erase(chart_name)
+          //   // // if(count_paths.length == 0 && count_charts.length == 0)
+          //   // //   this.fireEvent('chartsProcessed')
+          //   //
+          //   //
+          //   // // console.log(path, chart_name)
+          //
+          // }.bind(this))
+
+          // Object.each(charts, function(chart_data, chart_name){
+          //   if(matched_chart_name == chart_name){
+          //     let {match, chart, matched_name} = chart_data
+          //
+          //     if(!match){
+          //       match = path
+          //     }
+          //     else{
+          //       match = path+'.'+match
+          //     }
+          //
+          //     let count_data = Object.keys(chart_data)
+          //     Object.each(chart_data, function(stat, stat_matched_name){
+          //       // //console.log('MATCHED', path_name, stat_matched_name, stat)
+          //       /**
+          //       * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
+          //       **/
+          //       // if(!data['_instances'][name])
+          //       // 	data['_instances'][name] = Object.clone(chart)
+          //       if(!this.__charts_instances[host][chart_path][stat_matched_name])
+          //         this.__charts_instances[host][chart_path][stat_matched_name] = Object.clone(chart)
+          //
+          //       // this.__process_stat(chart, name, stat)
+          //       if(stat){
+          //         let __name = (matched_name == true ) ? stat_matched_name : chart_path
+          //         if(!buffer_output[chart_path]) buffer_output[chart_path] = {}
+          //
+          //         // data_to_tabular(stat, chart, name, function(name, data){
+          //        // console.log('BEFORE data_to_tabular',__name, path, name, chart_name, stat_matched_name)
+          //         if(cache == true && this.__stats_tabular[host]){
+          //           // console.log(this.__stats_tabular[host])
+          //           buffer_output[chart_path][__name] = this.__stats_tabular[host].data[chart_path][__name]
+          //
+          //           count_data.erase(stat_matched_name)
+          //           if(count_data.length == 0){
+          //             count_matched.erase(path_name)
+          //             if(count_matched.length == 0)
+          //               cb(buffer_output)
+          //           }
+          //         }
+          //         else{
+          //           data_to_tabular(
+          //             stat,
+          //             this.__charts_instances[host][chart_path][stat_matched_name],
+          //             stat_matched_name,
+          //             function(stat_matched_name, to_buffer){
+          //               buffer_output[chart_path][__name] = to_buffer
+          //               // console.log('TO BUFFER',__name, chart_path, name, chart_name, stat_matched_name, to_buffer)
+          //               count_data.erase(stat_matched_name)
+          //               if(count_data.length == 0){
+          //                 count_matched.erase(path_name)
+          //                 if(count_matched.length == 0)
+          //                   cb(buffer_output)
+          //               }
+          //
+          //             }
+          //           )
+          //         }
+          //
+          //
+          //       }
+          //       else{
+          //         count_data.erase(stat_matched_name)
+          //         if(count_data.length == 0){
+          //           count_matched.erase(path_name)
+          //           if(count_matched.length == 0)
+          //             cb(buffer_output)
+          //         }
+          //
+          //       }
+          //
+          //
+          //
+          //
+          //       // counter++
+          //     }.bind(this))
+          //   }
+          //
+          // }.bind(this))
+
+            // }
 
 
-            // counter++
-          }.bind(this))
 
+          // }.bind(this))
         }
+
+
+
+        // //console.log('MATCHED', path_name, data, path, chart_name, name, charts[path])
+
+
+
+
+
+
+
+
 
 
 
@@ -657,38 +869,48 @@ module.exports = new Class({
   __process_stats_charts: function(host, stats){
     this.__stats[host] = {data: stats, lastupdate: Date.now()}
     this.charts[host] = Object.clone(this.__charts)
-    let count_charts = Object.keys(this.charts[host])
+
+    let count_paths = Object.keys(this.charts[host])
     let matched = undefined
 
-    Object.each(this.charts[host], function(data, key){
+    Object.each(this.charts[host], function(data, path){
+        let charts = {}
+        if(data.chart){
+          charts[path] = data
+        }
+        else{
+          charts = data
+        }
 
-        // if(stats.os && stats.os.networkInterfaces)
-          ////console.log('MATCHED', stats.os.networkInterfaces[0].value.lo)
+        // let count_charts = Object.keys(charts)
+        Object.each(charts, function(chart_data, chart_name){
+          let {match, chart} = chart_data
+          if(!match){
+            match = path
+          }
+          else{
+            match = path+'.'+match
+          }
 
-        let {name, chart} = data
-        matched = this.__match_stats_name(stats, name)
+          matched = this.__match_stats_name(stats, match)
 
-        // //console.log('MATCHED', name, matched)
-        // if(Array.isArray(matched)){
-        //   Array.each(matched, function(data){
-        //     this.__process_stat(chart, data.name, data.stat)
-        //   }.bind(this))
-        // }
-        // else{
-        if(matched)
-          Object.each(matched, function(stat, name){
-            this.__process_stat(chart, name, stat)
-          }.bind(this))
+          if(matched)
+            Object.each(matched, function(stat, match){
+              this.__process_stat(chart, match, stat)
+            }.bind(this))
 
-        count_charts.erase(key)
-        if(count_charts.length == 0)
+          // count_charts.erase(chart_name)
+          // if(count_paths.length == 0 && count_charts.length == 0)
+          //   this.fireEvent('chartsProcessed')
+
+
+          // console.log(path, chart_name)
+
+        }.bind(this))
+
+        count_paths.erase(path)
+        if(count_paths.length == 0)
           this.fireEvent('chartsProcessed')
-
-
-        // }
-      // }
-
-
 
     }.bind(this))
 
@@ -734,7 +956,7 @@ module.exports = new Class({
     return this.pipelines[host].pipeline
   },
   __match_stats_name: function(stats, name){
-
+    // console.log('__match_stats_name', name, stats)
     let stat = undefined
     if(stats){
       if(name.indexOf('.') > -1){
