@@ -175,6 +175,11 @@ module.exports = new Class({
 
         if(stat){//one stat only
           stats = this.__find_stat(stat, stats)
+          // console.log('STAT', stats, stat)
+          // Object.each(stats, function(data, name){
+          //   if(name != stat)
+          //     delete stats[name]
+          // })
         }
 
         // console.log('send_stats', stats)
@@ -373,13 +378,14 @@ module.exports = new Class({
         // this.__stats[host] = {data: stats, lastupdate: Date.now()}
         this.__process_stats_charts(host, stats)
 
-        console.log('broadcast stats...', this.__stats)
+        console.log('broadcast stats...', this.__stats[host])
+        this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
 
         this.__process_tabular(host, stats, function(output){
           this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
 
-          console.log('broadcast stats...', output)
-          this.io.binary(false).volatile.emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+          // console.log('broadcast stats...', output)
+          this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
 
         }.bind(this), false)
@@ -666,6 +672,7 @@ module.exports = new Class({
 
               }
               else{
+                delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
                 count_data.erase(stat_matched_name)
                 if(count_data.length == 0){
                   count_matched.erase(path_name)
