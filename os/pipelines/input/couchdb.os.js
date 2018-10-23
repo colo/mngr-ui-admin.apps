@@ -417,7 +417,8 @@ module.exports = new Class({
   },
 
   view: function(err, resp, view){
-		// console.log('this.view ', err, resp, view.options.args);
+    // if(view.options._extras.type == 'range')
+		  // console.log('this.view ', err, resp);
     // console.log('this.view ', err, view.options);
 
 		if(err){

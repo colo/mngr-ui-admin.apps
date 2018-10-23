@@ -160,9 +160,10 @@ module.exports = new Class({
     let type = (range) ? 'range' : 'once'
 
     // console.log('ARGUMENTS', arguments)
-    console.log('PARAMS', params)
-    console.log('QUERY', query)
-    console.log('REQ', range)
+    // console.log('PARAMS', params)
+    // console.log('QUERY', query)
+    // console.log('REQ', range)
+
 
     if(host === null || host === undefined){
       this.__no_host(req, resp, socket, next, params)
@@ -199,6 +200,12 @@ module.exports = new Class({
                 resp.json({host: host, status: 'ok', type: type, stats: stats, tabular: true})
               }
               else{
+                // if(stats.length == 0){
+                // console.log('PARAMS', params)
+                // console.log('QUERY', query)
+                // console.log('REQ', range)
+                // }
+                //
                 socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: true})
               }
             }
@@ -213,6 +220,7 @@ module.exports = new Class({
             else{
               this.__process_tabular(host, stats, function(output){
                 this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
+                console.log('TABULAR RANGE', output)
                 send_tabular(output)
               }.bind(this))
             }
@@ -955,7 +963,7 @@ module.exports = new Class({
 
       if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
         // console.log('RESUMING....')
-        this.pipelines[host].pipeline.fireEvent('onResume')
+        // this.pipelines[host].pipeline.fireEvent('onResume')
 
       }
     }
