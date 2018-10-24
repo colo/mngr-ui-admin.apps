@@ -214,13 +214,13 @@ module.exports = new Class({
             let expire_time = Date.now() - 1000 //last second expire
 
             if(!range && this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time){
-              console.log('TABULAR NOT EXPIRED', this.__stats_tabular[host])
+              // console.log('TABULAR NOT EXPIRED', this.__stats_tabular[host])
               this.__process_tabular(host, stats, send_tabular, true)//cache = true
             }
             else{
               this.__process_tabular(host, stats, function(output){
                 this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
-                console.log('TABULAR RANGE', output)
+                // console.log('TABULAR RANGE', output)
                 send_tabular(output)
               }.bind(this))
             }
@@ -386,7 +386,7 @@ module.exports = new Class({
         // this.__stats[host] = {data: stats, lastupdate: Date.now()}
         this.__process_stats_charts(host, stats)
 
-        console.log('broadcast stats...', this.__stats[host])
+        // console.log('broadcast stats...', this.__stats[host])
         this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
 
         this.__process_tabular(host, stats, function(output){
@@ -550,7 +550,8 @@ module.exports = new Class({
             // Object.each(data, function(charts_data, path){
               // if(matched_chart_path == path){
 
-            console.log('NAMES',matched_chart_path,matched_chart_name)
+            // console.log('NAMES',matched_chart_path,matched_chart_name)
+
             // if(chart_data){
             //   let charts = {}
             //   if(chart_data.chart){
@@ -883,7 +884,9 @@ module.exports = new Class({
   },
   __process_stats_charts: function(host, stats){
     this.__stats[host] = {data: stats, lastupdate: Date.now()}
-    this.charts[host] = Object.clone(this.__charts)
+
+    if(!this.charts[host] || Object.getLength(this.charts[host]) == 0)
+      this.charts[host] = Object.clone(this.__charts)
 
     let count_paths = Object.keys(this.charts[host])
     let matched = undefined
@@ -898,34 +901,55 @@ module.exports = new Class({
         }
 
         // let count_charts = Object.keys(charts)
-        Object.each(charts, function(chart_data, chart_name){
-          let {match, chart} = chart_data
-          if(!match){
-            match = path
-          }
-          else{
-            match = path+'.'+match
-          }
+        if(Object.getLength(charts) > 0){
+          Object.each(charts, function(chart_data, chart_name){
+            let {match, chart} = chart_data
+            if(!match){
+              match = path
+            }
+            else{
+              match = path+'.'+match
+            }
 
-          matched = this.__match_stats_name(stats, match)
+            matched = this.__match_stats_name(stats, match)
 
-          if(matched)
-            Object.each(matched, function(stat, match){
-              this.__process_stat(chart, match, stat)
-            }.bind(this))
+            if(matched){
+              let count_matched = Object.keys(matched)
+              Object.each(matched, function(stat, match){
+                this.__process_stat(chart, match, stat)
 
-          // count_charts.erase(chart_name)
-          // if(count_paths.length == 0 && count_charts.length == 0)
-          //   this.fireEvent('chartsProcessed')
+                count_matched.erase(match)
+
+                if(count_matched.length == 0){
+                  count_paths.erase(path)
+                  if(count_paths.length == 0)
+                    this.fireEvent('chartsProcessed')
+                }
+
+              }.bind(this))
+            }
+            else{
+              count_paths.erase(path)
+              if(count_paths.length == 0)
+                this.fireEvent('chartsProcessed')
+            }
+            // count_charts.erase(chart_name)
+            // if(count_paths.length == 0 && count_charts.length == 0)
+            //   this.fireEvent('chartsProcessed')
 
 
-          // console.log(path, chart_name)
+            // console.log(path, chart_name)
 
-        }.bind(this))
+          }.bind(this))
+        }
+        else{
+          count_paths.erase(path)
+          if(count_paths.length == 0)
+            this.fireEvent('chartsProcessed')
+        }
 
-        count_paths.erase(path)
-        if(count_paths.length == 0)
-          this.fireEvent('chartsProcessed')
+
+
 
     }.bind(this))
 
@@ -963,7 +987,7 @@ module.exports = new Class({
 
       if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
         // console.log('RESUMING....')
-        // this.pipelines[host].pipeline.fireEvent('onResume')
+        this.pipelines[host].pipeline.fireEvent('onResume')
 
       }
     }

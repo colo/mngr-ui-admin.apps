@@ -243,7 +243,7 @@ module.exports = new Class({
           * used to get stats on "init", process'em and process charts
           **/
 					sort_by_host_or_path: function(req, next, app){
-            console.log('sort_by_host_or_path RANGE', app.options.stat_host, req)
+            // console.log('sort_by_host_or_path RANGE', app.options.stat_host, req)
 
              let path = req.path
              let range = req.opt.range
