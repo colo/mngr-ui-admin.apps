@@ -418,7 +418,7 @@ module.exports = new Class({
 
   view: function(err, resp, view){
     // if(view.options._extras.type == 'range')
-		  // console.log('this.view ', err, resp);
+		//   console.log('this.view ', err, resp);
     // console.log('this.view ', err, view.options);
 
 		if(err){
@@ -426,10 +426,13 @@ module.exports = new Class({
 
 		}
 		else{
-
+      let type = view.options._extras.type
+      let event = type.charAt(0).toUpperCase() + type.slice(1)
         // if(view.options.args[0] == 'sort' && view.options.args[1] == 'by_host' && resp.rows.length > 0){
         // if(view.options.args[0] == 'sort' && view.options.args[1] == 'by_host'){
-          this.fireEvent('onPeriodicalDoc', [resp.rows, {type: view.options._extras.type, input_type: this, app: null}]);
+
+      this.fireEvent('on'+event+'Doc', [resp.rows, {type: type, input_type: this, app: null}]);
+
         // }
         // else if(resp.rows.length > 0 && view.options.args[2].include_docs != false){
         //   // console.log('this.view ', resp.rows, view.options.args);

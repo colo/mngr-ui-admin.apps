@@ -160,9 +160,9 @@ module.exports = new Class({
     let type = (range) ? 'range' : 'once'
 
     // console.log('ARGUMENTS', arguments)
-    // console.log('PARAMS', params)
-    // console.log('QUERY', query)
-    // console.log('REQ', range)
+    console.log('PARAMS', params)
+    console.log('QUERY', query)
+    console.log('REQ', range)
 
 
     if(host === null || host === undefined){
@@ -170,22 +170,27 @@ module.exports = new Class({
     }
     else{
 
-      let send_stats = function(payload){
+      let send_stats = function(stats){
 
-        let stats = this.__stats[host].data
+        // let stats = this.__stats[host].data
 
+
+        let found_stats = {}
         if(stat){//one stat only
-          stats = this.__find_stat(stat, stats)
+          found_stats = this.__find_stat(stat, Object.clone(stats))
           // console.log('STAT', stats, stat)
           // Object.each(stats, function(data, name){
           //   if(name != stat)
           //     delete stats[name]
           // })
         }
+        else{
+          found_stats = Object.clone(stats)
+        }
 
         // console.log('send_stats', stats)
 
-        if(stats && Object.getLength(stats) == 0){
+        if(found_stats && Object.getLength(found_stats) == 0){
           if(resp){
             resp.status(404).json({host: host, type: type, err: 'not found'})
           }
@@ -195,7 +200,9 @@ module.exports = new Class({
         }
         else{
           if(query && query.format == 'tabular'){
+
             let send_tabular = function(stats){
+
               if(resp){
                 resp.json({host: host, status: 'ok', type: type, stats: stats, tabular: true})
               }
@@ -208,19 +215,20 @@ module.exports = new Class({
                 //
                 socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: true})
               }
-            }
+            }.bind(this)
 
 
             let expire_time = Date.now() - 1000 //last second expire
 
-            if(!range && this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time){
-              // console.log('TABULAR NOT EXPIRED', this.__stats_tabular[host])
-              this.__process_tabular(host, stats, send_tabular, true)//cache = true
+            if(!range && ( this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time )){
+              console.log('TABULAR NOT EXPIRED')
+              // this.__process_tabular(host, this.__stats[host].data, send_tabular, true)//cache = true
+              send_tabular(this.__stats_tabular[host].data)
             }
             else{
-              this.__process_tabular(host, stats, function(output){
+              this.__process_tabular(host, found_stats, function(output){
                 this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
-                // console.log('TABULAR RANGE', output)
+                console.log('TABULAR RANGE')
                 send_tabular(output)
               }.bind(this))
             }
@@ -228,10 +236,10 @@ module.exports = new Class({
           }
           else{
             if(resp){
-              resp.json({host: host, status: 'ok', type: type, stats: stats})
+              resp.json({host: host, status: 'ok', type: type, stats: found_stats})
             }
             else{
-              socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats})
+              socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: found_stats})
             }
           }
 
@@ -251,11 +259,17 @@ module.exports = new Class({
       //   console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
 
       //if no range, lest find out if there are stats that are newer than expire time
-      if(!range && this.__stats[host] && this.__stats[host].lastupdate > expire_time){
-        console.log('NOT EXPIRED')
-        send_stats()
+      if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
+        console.log('NOT EXPIRED', new Date(expire_time))
+        send_stats(this.__stats[host].data)
       }
       else{
+        let update_stats = function(stats){
+          this.__stats[host] = { data: stats, lastupdate: Date.now() }
+          this.removeEvent('statsProcessed', update_stats)
+        }.bind(this)
+
+        this.addEvent('statsProcessed', update_stats)
         this.addEvent('statsProcessed', send_stats)
 
 
@@ -384,13 +398,14 @@ module.exports = new Class({
 
       this.__process_os_doc(doc, function(stats){
         // this.__stats[host] = {data: stats, lastupdate: Date.now()}
-        this.__process_stats_charts(host, stats)
+        // this.__process_stats_charts(host, stats)
 
         // console.log('broadcast stats...', this.__stats[host])
-        this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
+        // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
+        this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
 
         this.__process_tabular(host, stats, function(output){
-          this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
+          // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
 
           // console.log('broadcast stats...', output)
           this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
@@ -842,11 +857,11 @@ module.exports = new Class({
         if(doc.length == 0){
           //console.log('save_stats', payload)
 
-          this.__stats[host] = {data: {}, lastupdate: 0}
-          this.__stats_tabular[host] = {data: {}, lastupdate: 0}
+          // this.__stats[host] = {data: {}, lastupdate: 0}
+          // this.__stats_tabular[host] = {data: {}, lastupdate: 0}
           this.charts[host] = {}
           pipeline.removeEvent('onSaveDoc', save_stats)
-          this.fireEvent('statsProcessed')
+          this.fireEvent('statsProcessed', {})
           this.fireEvent('chartsProcessed')
         }
         else{
@@ -883,7 +898,7 @@ module.exports = new Class({
 
   },
   __process_stats_charts: function(host, stats){
-    this.__stats[host] = {data: stats, lastupdate: Date.now()}
+    // this.__stats[host] = {data: stats, lastupdate: Date.now()}
 
     if(!this.charts[host] || Object.getLength(this.charts[host]) == 0)
       this.charts[host] = Object.clone(this.__charts)
@@ -953,7 +968,7 @@ module.exports = new Class({
 
     }.bind(this))
 
-    this.fireEvent('statsProcessed')
+    this.fireEvent('statsProcessed', stats)
   },
   __get_pipeline: function(host, id){
     console.log('__get_pipeline', host)
