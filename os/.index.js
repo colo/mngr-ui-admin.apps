@@ -158,32 +158,27 @@ module.exports = new Class({
     let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
     let type = (range) ? 'range' : 'once'
+    let id = (socket) ? socket.id : req.session.id
 
     // console.log('ARGUMENTS', arguments)
     console.log('PARAMS', params)
     console.log('QUERY', query)
-    console.log('REQ', range)
+    console.log('ID', id)
+    console.log('RANGE', range)
+    // console.log('SOCKET', socket.conn)
 
 
     if(host === null || host === undefined){
       this.__no_host(req, resp, socket, next, params)
     }
     else{
-      // let send_stats = function(stats){
-      //   console.log('PARAMS', params)
-      //   console.log('QUERY', query)
-      //   console.log('REQ', range)
-      //   console.log('found_stats', stats)
-      //
-      // }
+      let send_stats = {}
 
-      let send_stats = function(stats){
+      // let send_stats =
+      send_stats[id] = function(stats){
+        console.log('send_stats', stats)
         // let stats = this.__stats[host].data
 
-        // console.log('PARAMS', params)
-        // console.log('QUERY', query)
-        // console.log('REQ', range)
-        // console.log('found_stats', stats)
 
         let found_stats = {}
         if(stat){//one stat only
@@ -198,7 +193,7 @@ module.exports = new Class({
           found_stats = Object.clone(stats)
         }
 
-
+        // console.log('send_stats', stats)
 
         if(found_stats && Object.getLength(found_stats) == 0){
           if(resp){
@@ -211,7 +206,8 @@ module.exports = new Class({
         else{
           if(query && query.format == 'tabular'){
 
-            let send_tabular = function(tabular){
+            let send_tabular = {}
+            send_tabular[id] = function(tabular){
 
               if(resp){
                 resp.json({host: host, status: 'ok', type: type, stats: tabular, tabular: true})
@@ -231,18 +227,18 @@ module.exports = new Class({
             let expire_time = Date.now() - 1000 //last second expire
 
             if(!range && ( this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time )){
-              console.log('TABULAR NOT EXPIRED')
+              // console.log('TABULAR NOT EXPIRED')
               // this.__process_tabular(host, this.__stats[host].data, send_tabular, true)//cache = true
-              send_tabular(this.__stats_tabular[host].data)
+              // send_tabular(this.__stats_tabular[host].data)
+              send_tabular[id](this.__stats_tabular[host].data)
             }
             else{
-              // console.log('send_stats', found_stats.os_networkInterfaces_stats)
-
+              // console.log('TABULAR RANGE', found_stats)
               this.__process_tabular(host, found_stats, function(output){
-                // console.log('send_stats', output)
                 this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
                 // console.log('TABULAR RANGE', output)
-                send_tabular(this.__stats_tabular[host].data)
+                // send_tabular(output)
+                send_tabular[id](output)
               }.bind(this))
             }
 
@@ -262,7 +258,7 @@ module.exports = new Class({
           // }
         }
 
-        this.removeEvent('statsProcessed', send_stats)
+        this.removeEvent('statsProcessed', send_stats[id])
       }.bind(this)
 
       let expire_time = Date.now() - 1000 //last second expire
@@ -272,19 +268,20 @@ module.exports = new Class({
       //   console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
 
       //if no range, lest find out if there are stats that are newer than expire time
-      // if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
-      //   console.log('NOT EXPIRED', new Date(expire_time))
-      //   send_stats(this.__stats[host].data)
-      // }
-      // else{
-        let update_stats = function(stats){
+      if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
+        console.log('NOT EXPIRED', new Date(expire_time))
+        // send_stats(this.__stats[host].data)
+        send_stats[id](this.__stats[host].data)
+      }
+      else{
+        let update_stats = {}
+        update_stats[id] = function(stats){
           this.__stats[host] = { data: stats, lastupdate: Date.now() }
-          this.removeEvent('statsProcessed', update_stats)
+          this.removeEvent('statsProcessed', update_stats[id])
         }.bind(this)
 
-        this.addEvent('statsProcessed', update_stats)
-        this.addEvent('statsProcessed', send_stats)
-
+        this.addEvent('statsProcessed', update_stats[id])
+        this.addEvent('statsProcessed', send_stats[id])
 
 
         let path = undefined
@@ -301,7 +298,7 @@ module.exports = new Class({
         })
       }
 
-    // }
+    }
   },
   charts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'chart'])
@@ -477,7 +474,8 @@ module.exports = new Class({
       socket.emit('host', {error: 'no host param', status: 500})
     }
   },
-  __find_stat(stat, stats){
+  __find_stat: function(stat, stats){
+    stats = Object.clone(stats)
     let result = {}
     if(stat.indexOf('.') > -1){
       let key = stat.split('.')[0]
@@ -493,13 +491,15 @@ module.exports = new Class({
   },
   __process_tabular: function(host, stats, cb, cache){
     // let charts = this.charts[host]
-    if(Object.clone(stats).os_networkInterfaces_stats && Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
-    console.log('PRE-MATCHED', Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
+    // stats = Object.clone(stats)
 
     if(!this.__charts_instances[host])
       this.__charts_instances[host] = {}
 
+    // console.log('PRE MATCHED', stats.os.networkInterfaces)
+
     let matched = undefined
+
     Object.each(this.charts[host], function(data, path){
       let charts = {}
       if(data.chart){
@@ -534,7 +534,7 @@ module.exports = new Class({
         // if(!this.__charts_instances[host][path][chart_name])
         //   this.__charts_instances[host][path][chart_name] = {}
 
-        matched[path+'/'+chart_name] = this.__match_stats_name(Object.clone(stats), match)
+        matched[path+'/'+chart_name] = this.__match_stats_name(stats, match)
 
       }.bind(this))
 
@@ -554,6 +554,8 @@ module.exports = new Class({
       Object.each(matched, function(data, path_name){
         let matched_chart_path = path_name.split('/')[0]
         let matched_chart_name = path_name.split('/')[1]
+
+        // console.log('DATA', matched_chart_name, data)
 
         if(!data || Object.getLength(data) == 0){
           count_matched.erase(path_name)
@@ -656,13 +658,14 @@ module.exports = new Class({
 
               // this.__process_stat(chart, name, stat)
               if(stat){
+                // console.log('STAT', matched_chart_name, stat_matched_name, stat)
                 // let __name = (matched_name == true ) ? stat_matched_name : key
 
 
                 // data_to_tabular(stat, chart, name, function(name, data){
                // console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
                 if(cache == true && this.__stats_tabular[host]){
-                  // console.log(this.__stats_tabular[host])
+                  // console.log('CACHE', this.__stats_tabular[host])
                   if(!matched_chart_name){
                     buffer_output[matched_chart_path] = this.__stats_tabular[host].data[matched_chart_path]
                   }
@@ -678,7 +681,7 @@ module.exports = new Class({
                 }
                 else{
 
-
+                  // console.log('TO BUFFER',stat_matched_name, stat)
                   data_to_tabular(
                     stat,
                     instance,
@@ -697,12 +700,14 @@ module.exports = new Class({
                         buffer_output[matched_chart_path][matched_chart_name][name] = to_buffer
                       }
 
-                      // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
+                      // console.log('TO BUFFER',name, stat)
                       count_data.erase(stat_matched_name)
                       if(count_data.length == 0){
                         count_matched.erase(path_name)
-                        if(count_matched.length == 0)
+                        if(count_matched.length == 0){
+                          // console.log('TO BUFFER',buffer_output)
                           cb(buffer_output)
+                        }
                       }
 
                     }
@@ -712,7 +717,14 @@ module.exports = new Class({
 
               }
               else{
-                delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
+                //remove if no stats, so we don't get empty keys
+                if(matched_chart_name){
+                  delete buffer_output[matched_chart_path][matched_chart_name]
+                }
+                else{
+                  delete buffer_output[matched_chart_path]
+                }
+
                 count_data.erase(stat_matched_name)
                 if(count_data.length == 0){
                   count_matched.erase(path_name)
@@ -862,16 +874,15 @@ module.exports = new Class({
   },
   __get_stats: function(payload){
     let {host, pipeline, path, range} = payload
-
+    // console.log('__get_stats', payload)
 
     let save_stats = function (payload){
+      // payload = Object.clone(payload)
+
       let {type, doc} = payload
       // let { type, input, input_type, app } = opts
 
       if(type == 'once' || type == 'range'){
-        if(type == 'range')
-          console.log('__get_stats', doc)
-
 
         if(doc.length == 0){
           //console.log('save_stats', payload)
@@ -885,6 +896,8 @@ module.exports = new Class({
         }
         else{
           this.__process_os_doc(payload.doc, function(stats){
+            // console.log('__process_os_doc', stats)
+            // this.fireEvent('statsProcessed', stats)
             this.__process_stats_charts(host, stats)
           }.bind(this))
 
@@ -948,6 +961,8 @@ module.exports = new Class({
             matched = this.__match_stats_name(stats, match)
 
             if(matched){
+              // console.log('MATCHED', matched, chart_name)
+
               let count_matched = Object.keys(matched)
               Object.each(matched, function(stat, match){
                 this.__process_stat(chart, match, stat)
@@ -956,16 +971,20 @@ module.exports = new Class({
 
                 if(count_matched.length == 0){
                   count_paths.erase(path)
-                  if(count_paths.length == 0)
+                  if(count_paths.length == 0){
+                    this.fireEvent('statsProcessed', stats)
                     this.fireEvent('chartsProcessed')
+                  }
                 }
 
               }.bind(this))
             }
             else{
               count_paths.erase(path)
-              if(count_paths.length == 0)
+              if(count_paths.length == 0){
+                this.fireEvent('statsProcessed', stats)
                 this.fireEvent('chartsProcessed')
+              }
             }
             // count_charts.erase(chart_name)
             // if(count_paths.length == 0 && count_charts.length == 0)
@@ -978,8 +997,10 @@ module.exports = new Class({
         }
         else{
           count_paths.erase(path)
-          if(count_paths.length == 0)
+          if(count_paths.length == 0){
+            this.fireEvent('statsProcessed', stats)
             this.fireEvent('chartsProcessed')
+          }
         }
 
 
@@ -987,7 +1008,7 @@ module.exports = new Class({
 
     }.bind(this))
 
-    this.fireEvent('statsProcessed', stats)
+    // this.fireEvent('statsProcessed', stats)
   },
   __get_pipeline: function(host, id){
     console.log('__get_pipeline', host)
@@ -1021,7 +1042,7 @@ module.exports = new Class({
 
       if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
         // console.log('RESUMING....')
-        // this.pipelines[host].pipeline.fireEvent('onResume')
+        this.pipelines[host].pipeline.fireEvent('onResume')
 
       }
     }
@@ -1032,12 +1053,16 @@ module.exports = new Class({
     // console.log('__match_stats_name', name, stats)
     let stat = undefined
     if(stats){
+
       if(name.indexOf('.') > -1){
         let key = name.split('.')[0]
         let rest = name.substring(name.indexOf('.')+1)
         // ////console.log('__match_stats_name', stats, name)
 
         let parse_data = function(stat_data, stat_name){
+          // if(Array.isArray(stat_data))
+          //   stat_data = stat_data[0]
+
           let matched = this.__match_stats_name(stat_data, rest)
 
 
@@ -1045,7 +1070,8 @@ module.exports = new Class({
           //   //console.log('__match_stats_name', name, stat_data, matched)
           // }
           // if(rest.indexOf('%s') > -1)
-          //   //console.log('__match_stats_name', name, stats, matched)
+            // console.log('__match_stats_name', name, stats, matched)
+            // console.log('__match_stats_name', name, matched)
 
           stat = {}
           if(matched){
@@ -1082,8 +1108,13 @@ module.exports = new Class({
           }
         }.bind(this)
 
+        // if(Array.isArray(stats))
+        //   stats = stats[0]
+
+
         if(key.indexOf('%') > -1){
           stat = {}
+
           Object.each(stats, function(stat_data, stat_name){
             stat[stat_name] = parse_data(stat_data, stat_name)
             // //console.log('parsing....',stat)
@@ -1093,7 +1124,7 @@ module.exports = new Class({
           return stat
         }
         else{
-          // //console.log('parsing....',parse_data(stats[key], key))
+          // console.log('parsing....',stats[key], key)
           return parse_data(stats[key], key)
         }
 
@@ -1145,13 +1176,19 @@ module.exports = new Class({
           // name = name.replace('.%s')
           // ////console.log()
           // if(name == '%s')
-          //   //console.log('stats', stats)
+            // console.log('stats', stats)
+
+          // if(Array.isArray(stats))
+          //   stats = stats[0]
 
           Object.each(stats, function(data, key){
             stat[key] = data
           })
         }
         else{
+          // if(Array.isArray(stats))
+          //   stats = stats[0]
+          //
           stat = {}
           stat[name] = stats[name]
         }

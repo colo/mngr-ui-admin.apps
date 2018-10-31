@@ -1,6 +1,7 @@
 'use strict'
 
-var	path = require('path')
+var	path = require('path'),
+    seedrandom = require('seedrandom');
 
 const App =  process.env.NODE_ENV === 'production'
       ? require(path.join(process.cwd(), '/config/prod.conf'))
@@ -169,15 +170,13 @@ module.exports = new Class({
       this.__no_host(req, resp, socket, next, params)
     }
     else{
-      // let send_stats = function(stats){
-      //   console.log('PARAMS', params)
-      //   console.log('QUERY', query)
-      //   console.log('REQ', range)
-      //   console.log('found_stats', stats)
-      //
-      // }
+      let send_stats = {}
 
-      let send_stats = function(stats){
+      // let send_stats
+      let rng = seedrandom()
+      let _rand = rng()
+      console.log('RNG', _rand)
+      send_stats[_rand] = function(stats){
         // let stats = this.__stats[host].data
 
         // console.log('PARAMS', params)
@@ -262,7 +261,7 @@ module.exports = new Class({
           // }
         }
 
-        this.removeEvent('statsProcessed', send_stats)
+        this.removeEvent('statsProcessed', send_stats[_rand])
       }.bind(this)
 
       let expire_time = Date.now() - 1000 //last second expire
@@ -283,7 +282,7 @@ module.exports = new Class({
         }.bind(this)
 
         this.addEvent('statsProcessed', update_stats)
-        this.addEvent('statsProcessed', send_stats)
+        this.addEvent('statsProcessed', send_stats[_rand])
 
 
 
@@ -864,7 +863,11 @@ module.exports = new Class({
     let {host, pipeline, path, range} = payload
 
 
-    let save_stats = function (payload){
+    let save_stats = {}
+    let rng = seedrandom()
+    let _rand = rng()
+
+    save_stats[_rand] = function (payload){
       let {type, doc} = payload
       // let { type, input, input_type, app } = opts
 
@@ -879,7 +882,7 @@ module.exports = new Class({
           // this.__stats[host] = {data: {}, lastupdate: 0}
           // this.__stats_tabular[host] = {data: {}, lastupdate: 0}
           this.charts[host] = {}
-          pipeline.removeEvent('onSaveDoc', save_stats)
+          pipeline.removeEvent('onSaveDoc', save_stats[_rand])
           this.fireEvent('statsProcessed', {})
           this.fireEvent('chartsProcessed')
         }
@@ -895,7 +898,7 @@ module.exports = new Class({
           //   this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
           //   // this.pipelines[host].pipeline.removeEvent('onSaveMultipleDocs', save_stats)
           // }
-          pipeline.removeEvent('onSaveDoc', save_stats)
+          pipeline.removeEvent('onSaveDoc', save_stats[_rand])
           // pipeline.removeEvent('onSaveMultipleDocs', save_stats)
         }
 
@@ -906,7 +909,7 @@ module.exports = new Class({
     * onSaveDoc is exec when the input fires 'onPeriodicalDoc'
     * so capture the output once (and for one host, as all stats are the same)
     */
-    pipeline.addEvent('onSaveDoc', save_stats)
+    pipeline.addEvent('onSaveDoc', save_stats[_rand])
     // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
     if(range){
       pipeline.fireEvent('onRange', { Range: range, path: path })
