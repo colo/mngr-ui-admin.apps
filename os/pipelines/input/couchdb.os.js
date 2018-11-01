@@ -51,7 +51,7 @@ module.exports = new Class({
 
               if(path){
                 app.view({
-                  _extras: {type: 'once'},
+                  _extras: {id: req.id, type: 'once'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -71,7 +71,7 @@ module.exports = new Class({
               }
               else{
                 app.view({
-                  _extras: {type: 'once'},
+                  _extras: {id: req.id, type: 'once'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -257,7 +257,7 @@ module.exports = new Class({
 
               if(path){
                 app.view({
-                  _extras: {type: 'range'},
+                  _extras: {id: req.id, type: 'range'},
     							uri: app.options.db,
                   args: [
                     'sort',
@@ -277,7 +277,7 @@ module.exports = new Class({
               }
               else{
                 app.view({
-                  _extras: {type: 'range'},
+                  _extras: {id: req.id, type: 'range'},
                   uri: app.options.db,
                   args: [
                     'sort',
@@ -427,11 +427,12 @@ module.exports = new Class({
 		}
 		else{
       let type = view.options._extras.type
+      let id = view.options._extras.id
       let event = type.charAt(0).toUpperCase() + type.slice(1)
         // if(view.options.args[0] == 'sort' && view.options.args[1] == 'by_host' && resp.rows.length > 0){
         // if(view.options.args[0] == 'sort' && view.options.args[1] == 'by_host'){
 
-      this.fireEvent('on'+event+'Doc', [Array.clone(resp.rows), {type: type, input_type: this, app: null}]);
+      this.fireEvent('on'+event+'Doc', [Array.clone(resp.rows), {id: id, type: type, input_type: this, app: null}]);
 
         // }
         // else if(resp.rows.length > 0 && view.options.args[2].include_docs != false){

@@ -203,7 +203,7 @@ module.exports = function(conn, io, charts){
   	filters: [
   		// decompress,
   		function(docs, opts, next, pipeline){
-        let { type, input, input_type, app } = opts
+        let { id, type, input, input_type, app } = opts
   			// ////console.log('sizeof', sizeof(docs), docs)
 
   			// //////console.log('host.template.filter', docs)
@@ -252,7 +252,7 @@ module.exports = function(conn, io, charts){
   			// })
 
 				if(docs.length == 0 ){
-					pipeline.output({type: type, doc: docs})
+					pipeline.output({id: id, type: type, doc: docs})
 				}
 				else{
 	  			Array.each(docs, function(row, index){
@@ -290,7 +290,7 @@ module.exports = function(conn, io, charts){
 
 							if(index == docs.length -1 ){
 								docs = docs.clean()
-	  						pipeline.output({type: type, doc: docs})
+	  						pipeline.output({id: id, type: type, doc: docs})
 							}
 	  			})
 				}

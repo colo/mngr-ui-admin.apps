@@ -158,11 +158,18 @@ module.exports = new Class({
     let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
     let type = (range) ? 'range' : 'once'
-
+    let id = (socket) ? socket.id : req.session.id
+    let session = (socket) ? socket.handshake.session : req.session
+    // console.log('SESSION', session)
+    session.send_stats = session.send_stats+1 || 0
+    let req_id = id +'.'+session.send_stats
+    // session.save()
     // console.log('ARGUMENTS', arguments)
     console.log('PARAMS', params)
     console.log('QUERY', query)
     console.log('REQ', range)
+    console.log('SESSION', session)
+
 
 
     if(host === null || host === undefined){
@@ -262,7 +269,7 @@ module.exports = new Class({
           // }
         }
 
-        this.removeEvent('statsProcessed', send_stats)
+        this.removeEvent('statsProcessed.'+req_id, send_stats)
       }.bind(this)
 
       let expire_time = Date.now() - 1000 //last second expire
@@ -271,19 +278,19 @@ module.exports = new Class({
       // if(this.__stats[host] && this.__stats[host].lastupdate)
       //   console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
 
-      //if no range, lest find out if there are stats that are newer than expire time
-      // if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
-      //   console.log('NOT EXPIRED', new Date(expire_time))
-      //   send_stats(this.__stats[host].data)
-      // }
-      // else{
+      // if no range, lest find out if there are stats that are newer than expire time
+      if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
+        console.log('NOT EXPIRED', new Date(expire_time))
+        send_stats(this.__stats[host].data)
+      }
+      else{
         let update_stats = function(stats){
           this.__stats[host] = { data: stats, lastupdate: Date.now() }
-          this.removeEvent('statsProcessed', update_stats)
+          this.removeEvent('statsProcessed.'+req_id, update_stats)
         }.bind(this)
 
-        this.addEvent('statsProcessed', update_stats)
-        this.addEvent('statsProcessed', send_stats)
+        this.addEvent('statsProcessed.'+req_id, update_stats)
+        this.addEvent('statsProcessed.'+req_id, send_stats)
 
 
 
@@ -297,15 +304,21 @@ module.exports = new Class({
           host: host,
           pipeline: pipeline,
           path: path,
-          range: range
+          range: range,
+          req_id: req_id//use and "id" for the event
         })
       }
 
-    // }
+    }
   },
   charts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'chart'])
     let {host, chart} = params
+    let id = (socket) ? socket.id : req.session.id
+    let session = (socket) ? socket.handshake.session : req.session
+    session.send_charts = session.send_charts+1 || 0
+    let req_id = id +'.'+session.send_charts
+
     // //console.log('host...', params, host, this.__stats[host])
     // let host = arguments[2]
     if(host === null || host === undefined){
@@ -345,7 +358,7 @@ module.exports = new Class({
           // }
         }
 
-        this.removeEvent('chartsProcessed', send_charts)
+        this.removeEvent('chartsProcessed.'+req_id, send_charts)
       }.bind(this)
 
       if(this.charts[host] && Object.getLength(this.charts[host]) > 0){//stats processed already
@@ -353,11 +366,12 @@ module.exports = new Class({
         send_charts()
       }
       else{
-        this.addEvent('chartsProcessed', send_charts)
+        this.addEvent('chartsProcessed.'+req_id, send_charts)
         let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
         this.__get_stats({
           host:host,
-          pipeline:pipeline
+          pipeline:pipeline,
+          req_id: req_id
         })
       }
 
@@ -405,7 +419,7 @@ module.exports = new Class({
 		}.bind(this));
 	},
   __emit_stats: function(host, payload){
-		// console.log('broadcast stats...', host, payload.type)
+		console.log('broadcast stats...', host, payload.type)
     let {type, doc} = payload
 
     if(type == 'periodical' && doc.length > 0){
@@ -861,44 +875,52 @@ module.exports = new Class({
     }
   },
   __get_stats: function(payload){
-    let {host, pipeline, path, range} = payload
+    let {host, pipeline, path, range, req_id} = payload
+    let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
+    let statsProcessedEventName = (req_id) ? 'statsProcessed.'+req_id : 'statsProcessed'
 
+    console.log('__get_stats', req_id)
 
     let save_stats = function (payload){
-      let {type, doc} = payload
-      // let { type, input, input_type, app } = opts
+      let {id, type, doc} = payload
+      if(!id || id == undefined || id == req_id){
+        // console.log('2 __get_stats', id)
+        // let { type, input, input_type, app } = opts
 
-      if(type == 'once' || type == 'range'){
-        if(type == 'range')
-          console.log('__get_stats', doc)
+        if(type == 'once' || type == 'range'){
+          console.log('2 __get_stats', id)
+          // if(type == 'range')
 
+          if(doc.length == 0){
+            //console.log('save_stats', payload)
 
-        if(doc.length == 0){
-          //console.log('save_stats', payload)
+            // this.__stats[host] = {data: {}, lastupdate: 0}
+            // this.__stats_tabular[host] = {data: {}, lastupdate: 0}
+            this.charts[host] = {}
+            pipeline.removeEvent('onSaveDoc', save_stats)
+            // this.fireEvent('chartsProcessed')
 
-          // this.__stats[host] = {data: {}, lastupdate: 0}
-          // this.__stats_tabular[host] = {data: {}, lastupdate: 0}
-          this.charts[host] = {}
-          pipeline.removeEvent('onSaveDoc', save_stats)
-          this.fireEvent('statsProcessed', {})
-          this.fireEvent('chartsProcessed')
+            this.fireEvent(statsProcessedEventName, {})
+            this.fireEvent(chartsProcessedEventName)
+
+          }
+          else{
+            this.__process_os_doc(payload.doc, function(stats){
+              this.__process_stats_charts(host, stats, id)
+            }.bind(this))
+
+            /**
+            * once we get the desire stats, remove event
+            **/
+            // if(matched){
+            //   this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
+            //   // this.pipelines[host].pipeline.removeEvent('onSaveMultipleDocs', save_stats)
+            // }
+            pipeline.removeEvent('onSaveDoc', save_stats)
+            // pipeline.removeEvent('onSaveMultipleDocs', save_stats)
+          }
+
         }
-        else{
-          this.__process_os_doc(payload.doc, function(stats){
-            this.__process_stats_charts(host, stats)
-          }.bind(this))
-
-          /**
-          * once we get the desire stats, remove event
-          **/
-          // if(matched){
-          //   this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
-          //   // this.pipelines[host].pipeline.removeEvent('onSaveMultipleDocs', save_stats)
-          // }
-          pipeline.removeEvent('onSaveDoc', save_stats)
-          // pipeline.removeEvent('onSaveMultipleDocs', save_stats)
-        }
-
       }
     }.bind(this)
 
@@ -909,15 +931,17 @@ module.exports = new Class({
     pipeline.addEvent('onSaveDoc', save_stats)
     // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
     if(range){
-      pipeline.fireEvent('onRange', { Range: range, path: path })
+      pipeline.fireEvent('onRange', { id: req_id, Range: range, path: path })
     }
     else{
-      pipeline.fireEvent('onOnce', {path: path})
+      pipeline.fireEvent('onOnce', { id: req_id, path: path})
     }
 
   },
-  __process_stats_charts: function(host, stats){
+  __process_stats_charts: function(host, stats, id){
     // this.__stats[host] = {data: stats, lastupdate: Date.now()}
+    let chartsProcessedEventName = (id) ? 'chartsProcessed.'+id : 'chartsProcessed'
+    let statsProcessedEventName = (id) ? 'statsProcessed.'+id : 'statsProcessed'
 
     if(!this.charts[host] || Object.getLength(this.charts[host]) == 0)
       this.charts[host] = Object.clone(this.__charts)
@@ -957,7 +981,7 @@ module.exports = new Class({
                 if(count_matched.length == 0){
                   count_paths.erase(path)
                   if(count_paths.length == 0)
-                    this.fireEvent('chartsProcessed')
+                    this.fireEvent(chartsProcessedEventName)
                 }
 
               }.bind(this))
@@ -965,7 +989,7 @@ module.exports = new Class({
             else{
               count_paths.erase(path)
               if(count_paths.length == 0)
-                this.fireEvent('chartsProcessed')
+                this.fireEvent(chartsProcessedEventName)
             }
             // count_charts.erase(chart_name)
             // if(count_paths.length == 0 && count_charts.length == 0)
@@ -979,7 +1003,7 @@ module.exports = new Class({
         else{
           count_paths.erase(path)
           if(count_paths.length == 0)
-            this.fireEvent('chartsProcessed')
+            this.fireEvent(chartsProcessedEventName)
         }
 
 
@@ -987,7 +1011,9 @@ module.exports = new Class({
 
     }.bind(this))
 
-    this.fireEvent('statsProcessed', stats)
+
+    this.fireEvent(statsProcessedEventName, stats)
+
   },
   __get_pipeline: function(host, id){
     console.log('__get_pipeline', host)
@@ -1021,7 +1047,7 @@ module.exports = new Class({
 
       if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
         // console.log('RESUMING....')
-        // this.pipelines[host].pipeline.fireEvent('onResume')
+        this.pipelines[host].pipeline.fireEvent('onResume')
 
       }
     }
