@@ -307,83 +307,83 @@ module.exports = new Class({
         /**
         * peridically exec this view to keep it warm on couchdb
         **/
+        // // {
+				// // 	sort_by_path: function(req, next, app){
+        // //     // console.log('WARM SORT_BY_PATH RANGE', app.options.stat_host)
+        // //     let path = 'os'
+        // //     // let range = req.opt.range
+        // //
+        // //     if(app.options.stat_host){
+        // //       let end = Date.now()
+        // //       let start = end - 1000
+        // //
+        // //               // next(
+        // //       app.view({
+  			// // 				uri: app.options.db,
+        // //         args: [
+        // //           'sort',
+        // //           'by_path',
+        // //           {
+        // //             startkey: [path, app.options.stat_host, "periodical", start],
+    		// // 						endkey: [path, app.options.stat_host, "periodical", end],
+        // //             stale: "update_after",
+        // //             limit:1,
+    		// // 						inclusive_end: true,
+    		// // 						include_docs: false
+    		// // 					}
+        // //         ]
+  			// // 			})
+        // //
+        // //
+        // //     }
+        // //
+        // //
+        // //
+				// // 	}
+				// // },
+        //
         // {
-				// 	sort_by_path: function(req, next, app){
-        //     // console.log('WARM SORT_BY_PATH RANGE', app.options.stat_host)
-        //     let path = 'os'
-        //     // let range = req.opt.range
+				// 	sort_by_host: function(req, next, app){
         //
         //     if(app.options.stat_host){
-        //       let end = Date.now()
-        //       let start = end - 1000
+        //       // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
+        //       // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
         //
-        //               // next(
-        //       app.view({
-  			// 				uri: app.options.db,
-        //         args: [
-        //           'sort',
-        //           'by_path',
-        //           {
-        //             startkey: [path, app.options.stat_host, "periodical", start],
-    		// 						endkey: [path, app.options.stat_host, "periodical", end],
-        //             stale: "update_after",
-        //             limit:1,
-    		// 						inclusive_end: true,
-    		// 						include_docs: false
-    		// 					}
-        //         ]
-  			// 			})
+        //       /**
+        //       * limit for 'os',
+        //       * unlimit for 'munin'
+        //       */
         //
+        //       // Array.each(app.options.paths, function(path){
         //
+        //         // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
+        //         //   ////console.log('couchdb.os path', path)
+        //
+        //           app.view({
+        //             _extras: {type: 'periodical'},
+      	// 						uri: app.options.db,
+        //             args: [
+        //               'sort',
+        //               'by_host',
+        //               {
+        // 								// startkey: [app.options.stat_host, "periodical",Date.now() + 0],
+        // 								// endkey: [app.options.stat_host, "periodical", Date.now() - 1000],
+        //                 startkey: [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
+        // 								endkey: [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
+        //                 // limit: 1,
+        // 								descending: true,
+        // 								inclusive_end: true,
+        // 								include_docs: true
+        // 							}
+        //
+        //             ]
+      	// 					})
+        //         // }
+        //       // })
         //     }
         //
-        //
-        //
 				// 	}
-				// },
-
-        {
-					sort_by_host: function(req, next, app){
-
-            if(app.options.stat_host){
-              // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
-              // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
-
-              /**
-              * limit for 'os',
-              * unlimit for 'munin'
-              */
-
-              // Array.each(app.options.paths, function(path){
-
-                // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-                //   ////console.log('couchdb.os path', path)
-
-                  app.view({
-                    _extras: {type: 'periodical'},
-      							uri: app.options.db,
-                    args: [
-                      'sort',
-                      'by_host',
-                      {
-        								// startkey: [app.options.stat_host, "periodical",Date.now() + 0],
-        								// endkey: [app.options.stat_host, "periodical", Date.now() - 1000],
-                        startkey: [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
-        								endkey: [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
-                        // limit: 1,
-        								descending: true,
-        								inclusive_end: true,
-        								include_docs: true
-        							}
-
-                    ]
-      						})
-                // }
-              // })
-            }
-
-					}
-				}
+				// }
 
 			],
 
