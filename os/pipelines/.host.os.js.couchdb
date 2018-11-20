@@ -1,6 +1,6 @@
 'use strict'
 
-const InputPollerRethinkDBOS = require ( './input/rethinkdb.os.js' )
+const InputPollerCouchDBOS = require ( './input/couchdb.os.js' )
 
 let cron = require('node-cron')
 
@@ -60,9 +60,9 @@ let __process_os_doc = function(doc, cb){
 	if(Array.isArray(doc)){
 		Array.each(doc, function(row){
 
-			// if(row != null && row.metadata.host == this.host){
-			if(row != null){
-				let {keys, path, host} = extract_data_os(row)
+			// if(row.doc != null && row.doc.metadata.host == this.host){
+			if(row.doc != null){
+				let {keys, path, host} = extract_data_os(row.doc)
 
 				// //console.log('ROW', keys, path)
 
@@ -182,7 +182,7 @@ module.exports = function(conn, io, charts){
               Object.clone(conn),
               {
                 path_key: 'os',
-                module: InputPollerRethinkDBOS,
+                module: InputPollerCouchDBOS,
               }
             )
   				],
@@ -215,11 +215,11 @@ module.exports = function(conn, io, charts){
   			}
 
   			// Array.each(docs, function(row){
-  			// 	if(row && row.metadata && row.metadata.path)
-  			// 		switch (row.metadata.path) {
+  			// 	if(row.doc && row.doc.metadata && row.doc.metadata.path)
+  			// 		switch (row.doc.metadata.path) {
   			// 			case 'os.mounts':
   			// 				mount_filter(
-  			// 					row,
+  			// 					row.doc,
   			// 					opts,
   			// 					pipeline.output.bind(pipeline),
   			// 					pipeline
@@ -228,7 +228,7 @@ module.exports = function(conn, io, charts){
         //
   			// 			case 'os.blockdevices':
   			// 				blockdevices_filter(
-  			// 					row,
+  			// 					row.doc,
   			// 					opts,
   			// 					pipeline.output.bind(pipeline),
   			// 					pipeline
@@ -237,7 +237,7 @@ module.exports = function(conn, io, charts){
         //
   			// 			case 'os.blockdevices':
   			// 				os_filter(
-  			// 					row,
+  			// 					row.doc,
   			// 					opts,
   			// 					pipeline.output.bind(pipeline),
   			// 					pipeline
@@ -245,46 +245,44 @@ module.exports = function(conn, io, charts){
   			// 				break;
         //
   			// 			default:
-  			// 				pipeline.output(row)
+  			// 				pipeline.output(row.doc)
         //
         //
   			// 		}
   			// })
 
-				console.log(docs)
-				
 				if(docs.length == 0 ){
 					pipeline.output({id: id, type: type, doc: docs})
 				}
 				else{
 	  			Array.each(docs, function(row, index){
-	  				if(row && row.metadata && row.metadata.path)
-	  					switch (row.metadata.path) {
+	  				if(row.doc && row.doc.metadata && row.doc.metadata.path)
+	  					switch (row.doc.metadata.path) {
 	  						case 'os.procs':
-	  							// row = mount_filter(row)
+	  							// row.doc = mount_filter(row.doc)
 	  							delete docs[index]
 									break;
 
 	  						case 'os.mounts':
-	  							row = mount_filter(row)
+	  							row.doc = mount_filter(row.doc)
 	  							break;
 
 	  						case 'os.blockdevices':
-	  							row = blockdevices_filter(row)
+	  							row.doc = blockdevices_filter(row.doc)
 	  							break;
 
 	  						case 'os':
-	  							row = os_filter(row)
+	  							row.doc = os_filter(row.doc)
 	  							break;
 
 	  						// default:
-	  						// 	pipeline.output(row)
+	  						// 	pipeline.output(row.doc)
 
 
 	  					}
 
-							// //console.log('ROW DOC', row)
-							// data_to_tabular([{timestamp: row.metadata.timestamp, value: row.data}], {}, 'some_name', function(name, data){
+							// //console.log('ROW DOC', row.doc)
+							// data_to_tabular([{timestamp: row.doc.metadata.timestamp, value: row.doc.data}], {}, 'some_name', function(name, data){
 							// 	//console.log('ROW TABULAR', data)
 							// })
 
@@ -307,9 +305,9 @@ module.exports = function(conn, io, charts){
 			// 		io.binary(false).volatile.emit('os', payload)
       //
 			// 	if(stats_init == true){
-			// 		// console.log('charts', charts, payload)
+			// 		// console.log('charts', charts, payload.doc)
       //
-			// 		__process_os_doc(payload, function(stats){
+			// 		__process_os_doc(payload.doc, function(stats){
 			// 			let buffer_output = undefined
       //
 			// 			// //console.log('OUTPUT', stats)
@@ -367,19 +365,19 @@ module.exports = function(conn, io, charts){
 			// 						type: payload.type,
 			// 						doc: {
 			// 							metadata: {
-			// 								host: payload[0].metadata.host
+			// 								host: payload.doc[0].doc.metadata.host
 			// 							},
 			// 							data: buffer_output
 			// 						},
 			// 						tabular: true
 			// 					})
       //
-			// 					if(buffer_output && payload[0] && payload[0].metadata){
+			// 					if(buffer_output && payload.doc[0].doc && payload.doc[0].doc.metadata){
 			// 						io.binary(false).emit('os', {
 			// 							type: payload.type,
 			// 							doc: {
 			// 								metadata: {
-			// 									host: payload[0].metadata.host
+			// 									host: payload.doc[0].doc.metadata.host
 			// 								},
 			// 								data: buffer_output
 			// 							},

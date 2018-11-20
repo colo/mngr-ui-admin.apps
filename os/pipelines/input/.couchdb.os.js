@@ -1,7 +1,7 @@
 'use strict'
 
-// const App = require ( '../../node_modules/node-app-couchdb-client/index' )
-const App = require ( 'node-app-couchdb-client/index' )
+// const App = require ( '../../node_modules/node-app-rethinkdb-client/index' )
+const App = require ( 'node-app-rethinkdb-client/index' )
 
 const roundMilliseconds = function(timestamp){
   let d = new Date(timestamp)
@@ -18,7 +18,7 @@ module.exports = new Class({
 
 
   options: {
-    // couchdb: {
+    // rethinkdb: {
     //   request: require('cachemachine')({redis: true, hostname: 'elk'})
     // },
 
@@ -125,7 +125,7 @@ module.exports = new Class({
         //         // Array.each(app.options.paths, function(path){
         //           // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
         //
-        //             // ////console.log('couchdb.os range', path)
+        //             // ////console.log('rethinkdb.os range', path)
         //
         //               // next(
         //             let end = range_start + 1000
@@ -195,7 +195,7 @@ module.exports = new Class({
         //         // Array.each(app.options.paths, function(path){
         //           // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
         //
-        //             // ////console.log('couchdb.os range', path)
+        //             // ////console.log('rethinkdb.os range', path)
         //
         //               // next(
         //             // let end = range_start + 1000
@@ -305,7 +305,7 @@ module.exports = new Class({
 			],
 			periodical: [
         /**
-        * peridically exec this view to keep it warm on couchdb
+        * peridically exec this view to keep it warm on rethinkdb
         **/
         // // {
 				// // 	sort_by_path: function(req, next, app){
@@ -357,7 +357,7 @@ module.exports = new Class({
         //       // Array.each(app.options.paths, function(path){
         //
         //         // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-        //         //   ////console.log('couchdb.os path', path)
+        //         //   ////console.log('rethinkdb.os path', path)
         //
         //           app.view({
         //             _extras: {type: 'periodical'},
@@ -473,7 +473,7 @@ module.exports = new Class({
 
     options.paths = paths
 
-    //////////console.log('input.poller.couchdb.os', options)
+    //////////console.log('input.poller.rethinkdb.os', options)
 		this.parent(options);//override default options
 
     // this.addEvent('onExit', function(){

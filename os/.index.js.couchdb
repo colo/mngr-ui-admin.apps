@@ -1342,16 +1342,15 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/host.vue
   **/
   __process_os_doc: function(doc, cb){
-    console.log('__process_os_doc', doc)
-    
+
     let paths = {}
 
     if(Array.isArray(doc)){
       Array.each(doc, function(row){
 
-        // if(row != null && row.metadata.host == this.host){
-        if(row != null){
-          let {keys, path, host} = extract_data_os(row)
+        // if(row.doc != null && row.doc.metadata.host == this.host){
+        if(row.doc != null){
+          let {keys, path, host} = extract_data_os(row.doc)
 
           // ////console.log('ROW', keys, path)
 
