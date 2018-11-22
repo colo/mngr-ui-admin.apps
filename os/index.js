@@ -160,15 +160,15 @@ module.exports = new Class({
     let type = (range) ? 'range' : 'once'
     let id = (socket) ? socket.id : req.session.id
     let session = (socket) ? socket.handshake.session : req.session
-    // console.log('SESSION', session)
+    // //console.log('SESSION', session)
     session.send_stats = session.send_stats+1 || 0
     let req_id = id +'.'+session.send_stats
     // session.save()
-    // console.log('ARGUMENTS', arguments)
-    console.log('PARAMS', params)
-    console.log('QUERY', query)
-    console.log('REQ', range)
-    console.log('SESSION', session)
+    // //console.log('ARGUMENTS', arguments)
+    //console.log('PARAMS', params)
+    //console.log('QUERY', query)
+    //console.log('REQ', range)
+    //console.log('SESSION', session)
 
 
 
@@ -177,25 +177,25 @@ module.exports = new Class({
     }
     else{
       // let send_stats = function(stats){
-      //   console.log('PARAMS', params)
-      //   console.log('QUERY', query)
-      //   console.log('REQ', range)
-      //   console.log('found_stats', stats)
+      //   //console.log('PARAMS', params)
+      //   //console.log('QUERY', query)
+      //   //console.log('REQ', range)
+      //   //console.log('found_stats', stats)
       //
       // }
 
       let send_stats = function(stats){
         // let stats = this.__stats[host].data
 
-        // console.log('PARAMS', params)
-        // console.log('QUERY', query)
-        // console.log('REQ', range)
-        // console.log('found_stats', stats)
+        // //console.log('PARAMS', params)
+        // //console.log('QUERY', query)
+        // //console.log('REQ', range)
+        // //console.log('found_stats', stats)
 
         let found_stats = {}
         if(stat){//one stat only
           found_stats = this.__find_stat(stat, Object.clone(stats))
-          // console.log('STAT', stats, stat)
+          // //console.log('STAT', stats, stat)
           // Object.each(stats, function(data, name){
           //   if(name != stat)
           //     delete stats[name]
@@ -225,9 +225,9 @@ module.exports = new Class({
               }
               else{
                 // if(stats.length == 0){
-                // console.log('PARAMS', params)
-                // console.log('QUERY', query)
-                // console.log('REQ', range)
+                // //console.log('PARAMS', params)
+                // //console.log('QUERY', query)
+                // //console.log('REQ', range)
                 // }
                 //
                 socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: tabular, tabular: true})
@@ -238,17 +238,17 @@ module.exports = new Class({
             let expire_time = Date.now() - 1000 //last second expire
 
             if(!range && ( this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time )){
-              console.log('TABULAR NOT EXPIRED')
+              //console.log('TABULAR NOT EXPIRED')
               // this.__process_tabular(host, this.__stats[host].data, send_tabular, true)//cache = true
               send_tabular(this.__stats_tabular[host].data)
             }
             else{
-              // console.log('send_stats', found_stats.os_networkInterfaces_stats)
+              // //console.log('send_stats', found_stats.os_networkInterfaces_stats)
 
               this.__process_tabular(host, found_stats, function(output){
-                // console.log('send_stats', output)
+                // //console.log('send_stats', output)
                 this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
-                // console.log('TABULAR RANGE', output)
+                // //console.log('TABULAR RANGE', output)
                 send_tabular(this.__stats_tabular[host].data)
               }.bind(this))
             }
@@ -276,11 +276,11 @@ module.exports = new Class({
 
 
       // if(this.__stats[host] && this.__stats[host].lastupdate)
-      //   console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
+      //   //console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
 
       // if no range, lest find out if there are stats that are newer than expire time
       if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
-        console.log('NOT EXPIRED', new Date(expire_time))
+        //console.log('NOT EXPIRED', new Date(expire_time))
         send_stats(this.__stats[host].data)
       }
       else{
@@ -319,7 +319,7 @@ module.exports = new Class({
     session.send_charts = session.send_charts+1 || 0
     let req_id = id +'.'+session.send_charts
 
-    // //console.log('host...', params, host, this.__stats[host])
+    // ////console.log('host...', params, host, this.__stats[host])
     // let host = arguments[2]
     if(host === null || host === undefined){
       this.__no_host(req, resp, socket, next, params)
@@ -362,7 +362,7 @@ module.exports = new Class({
       }.bind(this)
 
       if(this.charts[host] && Object.getLength(this.charts[host]) > 0){//stats processed already
-        // //console.log('this.__stats[host]', this.__stats[host])
+        // ////console.log('this.__stats[host]', this.__stats[host])
         send_charts()
       }
       else{
@@ -395,7 +395,7 @@ module.exports = new Class({
 
 		socket.on('disconnect', function () {
 
-      //console.log('disconnect this.io.namespace.connected', this.io.connected)
+      ////console.log('disconnect this.io.namespace.connected', this.io.connected)
 
 
       Object.each(this.pipelines, function(pipe){
@@ -404,10 +404,10 @@ module.exports = new Class({
           pipe.ids = pipe.ids.clean()
         }
 
-        //console.log('suspending...', pipe.ids, pipe.ids.length)
+        ////console.log('suspending...', pipe.ids, pipe.ids.length)
 
         if(pipe.ids.length == 0){
-          //console.log('suspending...', pipe.ids)
+          ////console.log('suspending...', pipe.ids)
           pipe.pipeline.fireEvent('onSuspend')
         }
 
@@ -419,7 +419,7 @@ module.exports = new Class({
 		}.bind(this));
 	},
   __emit_stats: function(host, payload){
-		console.log('broadcast stats...', host, payload.type)
+		//console.log('broadcast stats...', host, payload.type)
     let {type, doc} = payload
 
     if(type == 'periodical' && doc.length > 0){
@@ -428,14 +428,14 @@ module.exports = new Class({
         // this.__stats[host] = {data: stats, lastupdate: Date.now()}
         // this.__process_stats_charts(host, stats)
 
-        // console.log('broadcast stats...', this.__stats[host])
+        // //console.log('broadcast stats...', this.__stats[host])
         // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
         this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
 
         this.__process_tabular(host, stats, function(output){
           // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
 
-          // console.log('broadcast stats...', output)
+          // //console.log('broadcast stats...', output)
           this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
 
@@ -448,7 +448,7 @@ module.exports = new Class({
 	},
   _arguments: function(args, defined_params){
 		let req, resp, next, socket = undefined
-    // //console.log(typeof args[0])
+    // ////console.log(typeof args[0])
 		if(args[0]._readableState){//express
 			req = args[0]
 			resp = args[1]
@@ -464,9 +464,9 @@ module.exports = new Class({
 			params = req.params
 		}
 		else{
-      // //console.log('socket', args)
+      // ////console.log('socket', args)
       let isObject = (args[2] !== null && typeof args[2] === 'object' && isNaN(args[2]) && !Array.isArray(args[2])) ? true: false
-      console.log('isObject',isObject)
+      //console.log('isObject',isObject)
 
       if(defined_params && isObject == false){
         Array.each(defined_params, function(name, index){
@@ -496,7 +496,7 @@ module.exports = new Class({
     if(stat.indexOf('.') > -1){
       let key = stat.split('.')[0]
       let rest = stat.substring(stat.indexOf('.') + 1)
-      // console.log('REST', key, rest)
+      // //console.log('REST', key, rest)
       result[key] = this.__find_stat(rest, stats[key])
     }
     else if(stats){
@@ -507,8 +507,8 @@ module.exports = new Class({
   },
   __process_tabular: function(host, stats, cb, cache){
     // let charts = this.charts[host]
-    if(Object.clone(stats).os_networkInterfaces_stats && Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
-    console.log('PRE-MATCHED', Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
+    // if(Object.clone(stats).os_networkInterfaces_stats && Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
+    // //console.log('PRE-MATCHED', Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
 
     if(!this.__charts_instances[host])
       this.__charts_instances[host] = {}
@@ -555,7 +555,7 @@ module.exports = new Class({
 
     }.bind(this))
 
-    // console.log('MATCHED', matched)
+    // //console.log('MATCHED', matched)
 
     if(!matched || Object.getLength(matched) == 0){
       cb({})
@@ -595,7 +595,7 @@ module.exports = new Class({
             // Object.each(data, function(charts_data, path){
               // if(matched_chart_path == path){
 
-            // console.log('NAMES',matched_chart_path,matched_chart_name)
+            // //console.log('NAMES',matched_chart_path,matched_chart_name)
 
             // if(chart_data){
             //   let charts = {}
@@ -606,12 +606,12 @@ module.exports = new Class({
             //     charts = chart_data
             //   }
 
-              // console.log('CHARTS', chart_data)
+              // //console.log('CHARTS', chart_data)
             // }
 
             let count_data = Object.keys(data)
             Object.each(data, function(stat, stat_matched_name){
-              // console.log('MATCHED', path_name, stat_matched_name, stat)
+              // //console.log('MATCHED', path_name, stat_matched_name, stat)
 
               if(!buffer_output[matched_chart_path]) buffer_output[matched_chart_path] = {}
 
@@ -674,9 +674,9 @@ module.exports = new Class({
 
 
                 // data_to_tabular(stat, chart, name, function(name, data){
-               // console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
+               // //console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
                 if(cache == true && this.__stats_tabular[host]){
-                  // console.log(this.__stats_tabular[host])
+                  // //console.log(this.__stats_tabular[host])
                   if(!matched_chart_name){
                     buffer_output[matched_chart_path] = this.__stats_tabular[host].data[matched_chart_path]
                   }
@@ -711,7 +711,7 @@ module.exports = new Class({
                         buffer_output[matched_chart_path][matched_chart_name][name] = to_buffer
                       }
 
-                      // console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
+                      // //console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
                       count_data.erase(stat_matched_name)
                       if(count_data.length == 0){
                         count_matched.erase(path_name)
@@ -741,7 +741,7 @@ module.exports = new Class({
 
               // counter++
             }.bind(this))
-            // console.log('INSTANCES', this.__charts_instances)
+            // //console.log('INSTANCES', this.__charts_instances)
 
           // // let count_charts = Object.keys(charts)
           // Object.each(charts, function(chart_data, chart_name){
@@ -753,7 +753,7 @@ module.exports = new Class({
           //     match = path+'.'+match
           //   }
           //
-          //   console.log('chart', chart_name, match)
+          //   //console.log('chart', chart_name, match)
           //   // matched = this.__match_stats_name(stats, match)
           //   //
           //   // if(matched)
@@ -766,7 +766,7 @@ module.exports = new Class({
           //   // //   this.fireEvent('chartsProcessed')
           //   //
           //   //
-          //   // // console.log(path, chart_name)
+          //   // // //console.log(path, chart_name)
           //
           // }.bind(this))
 
@@ -783,7 +783,7 @@ module.exports = new Class({
           //
           //     let count_data = Object.keys(chart_data)
           //     Object.each(chart_data, function(stat, stat_matched_name){
-          //       // //console.log('MATCHED', path_name, stat_matched_name, stat)
+          //       // ////console.log('MATCHED', path_name, stat_matched_name, stat)
           //       /**
           //       * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
           //       **/
@@ -798,9 +798,9 @@ module.exports = new Class({
           //         if(!buffer_output[chart_path]) buffer_output[chart_path] = {}
           //
           //         // data_to_tabular(stat, chart, name, function(name, data){
-          //        // console.log('BEFORE data_to_tabular',__name, path, name, chart_name, stat_matched_name)
+          //        // //console.log('BEFORE data_to_tabular',__name, path, name, chart_name, stat_matched_name)
           //         if(cache == true && this.__stats_tabular[host]){
-          //           // console.log(this.__stats_tabular[host])
+          //           // //console.log(this.__stats_tabular[host])
           //           buffer_output[chart_path][__name] = this.__stats_tabular[host].data[chart_path][__name]
           //
           //           count_data.erase(stat_matched_name)
@@ -817,7 +817,7 @@ module.exports = new Class({
           //             stat_matched_name,
           //             function(stat_matched_name, to_buffer){
           //               buffer_output[chart_path][__name] = to_buffer
-          //               // console.log('TO BUFFER',__name, chart_path, name, chart_name, stat_matched_name, to_buffer)
+          //               // //console.log('TO BUFFER',__name, chart_path, name, chart_name, stat_matched_name, to_buffer)
           //               count_data.erase(stat_matched_name)
           //               if(count_data.length == 0){
           //                 count_matched.erase(path_name)
@@ -859,7 +859,7 @@ module.exports = new Class({
 
 
 
-        // //console.log('MATCHED', path_name, data, path, chart_name, name, charts[path])
+        // ////console.log('MATCHED', path_name, data, path, chart_name, name, charts[path])
 
 
 
@@ -879,20 +879,20 @@ module.exports = new Class({
     let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
     let statsProcessedEventName = (req_id) ? 'statsProcessed.'+req_id : 'statsProcessed'
 
-    console.log('__get_stats', req_id)
+    //console.log('__get_stats', req_id)
 
     let save_stats = function (payload){
       let {id, type, doc} = payload
       if(!id || id == undefined || id == req_id){
-        // console.log('2 __get_stats', id)
+        // //console.log('2 __get_stats', id)
         // let { type, input, input_type, app } = opts
 
         if(type == 'once' || type == 'range'){
-          console.log('2 __get_stats', id)
+          //console.log('2 __get_stats', id)
           // if(type == 'range')
 
           if(doc.length == 0){
-            //console.log('save_stats', payload)
+            ////console.log('save_stats', payload)
 
             // this.__stats[host] = {data: {}, lastupdate: 0}
             // this.__stats_tabular[host] = {data: {}, lastupdate: 0}
@@ -996,7 +996,7 @@ module.exports = new Class({
             //   this.fireEvent('chartsProcessed')
 
 
-            // console.log(path, chart_name)
+            // //console.log(path, chart_name)
 
           }.bind(this))
         }
@@ -1016,7 +1016,7 @@ module.exports = new Class({
 
   },
   __get_pipeline: function(host, id){
-    console.log('__get_pipeline', host)
+    //console.log('__get_pipeline', host)
 
     if(!this.pipelines[host]){
       // let template = Object.clone(this.HostOSPipeline)
@@ -1047,7 +1047,8 @@ module.exports = new Class({
         this.pipelines[host].ids.push(id)
 
       if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
-        // console.log('RESUMING....')
+        // //console.log('RESUMING....')
+        // this.pipelines[host].pipeline.addEvent('onConnect', this.pipelines[host].pipeline.fireEvent('onResume'))
         this.pipelines[host].pipeline.fireEvent('onResume')
 
       }
@@ -1056,23 +1057,23 @@ module.exports = new Class({
     return this.pipelines[host].pipeline
   },
   __match_stats_name: function(stats, name){
-    // console.log('__match_stats_name', name, stats)
+    // //console.log('__match_stats_name', name, stats)
     let stat = undefined
     if(stats){
       if(name.indexOf('.') > -1){
         let key = name.split('.')[0]
         let rest = name.substring(name.indexOf('.')+1)
-        // ////console.log('__match_stats_name', stats, name)
+        // //////console.log('__match_stats_name', stats, name)
 
         let parse_data = function(stat_data, stat_name){
           let matched = this.__match_stats_name(stat_data, rest)
 
 
           // if(name == '%s.%s.%s' ){
-          //   //console.log('__match_stats_name', name, stat_data, matched)
+          //   ////console.log('__match_stats_name', name, stat_data, matched)
           // }
           // if(rest.indexOf('%s') > -1)
-          //   //console.log('__match_stats_name', name, stats, matched)
+          //   ////console.log('__match_stats_name', name, stats, matched)
 
           stat = {}
           if(matched){
@@ -1097,9 +1098,9 @@ module.exports = new Class({
             }
 
             // if(name == 'os.networkInterfaces.0.value.%s.%s.%s' ){
-            //   //console.log('__match_stats_name', name)
-            //   // //console.log(stat_data)
-            //   //console.log(stat)
+            //   ////console.log('__match_stats_name', name)
+            //   // ////console.log(stat_data)
+            //   ////console.log(stat)
             // }
 
             return stat
@@ -1113,24 +1114,24 @@ module.exports = new Class({
           stat = {}
           Object.each(stats, function(stat_data, stat_name){
             stat[stat_name] = parse_data(stat_data, stat_name)
-            // //console.log('parsing....',stat)
+            // ////console.log('parsing....',stat)
 
           })
 
           return stat
         }
         else{
-          // //console.log('parsing....',parse_data(stats[key], key))
+          // ////console.log('parsing....',parse_data(stats[key], key))
           return parse_data(stats[key], key)
         }
 
         // let matched = this.__match_stats_name(stats[key], rest)
         //
         // if(name == '%s.%s.%s' ){
-        //   //console.log('__match_stats_name', name, stats, matched)
+        //   ////console.log('__match_stats_name', name, stats, matched)
         // }
         // // if(rest.indexOf('%s') > -1)
-        // //   //console.log('__match_stats_name', name, stats, matched)
+        // //   ////console.log('__match_stats_name', name, stats, matched)
         //
         // if(matched){
         // 	if(Array.isArray(matched)){
@@ -1170,9 +1171,9 @@ module.exports = new Class({
         else if(name == '%s'){//we want one stat per key
           stat = {}
           // name = name.replace('.%s')
-          // ////console.log()
+          // //////console.log()
           // if(name == '%s')
-          //   //console.log('stats', stats)
+          //   ////console.log('stats', stats)
 
           Object.each(stats, function(data, key){
             stat[key] = data
@@ -1199,7 +1200,7 @@ module.exports = new Class({
   // 		if(name.indexOf('.') > -1){
   // 			let key = name.split('.')[0]
   // 			let rest = name.substring(name.indexOf('.')+1)
-  // 			// ////console.log('__match_stats_name', stats, name)
+  // 			// //////console.log('__match_stats_name', stats, name)
   // 			let matched = this.__match_stats_name(stats[key], rest)
   // 			// let result = undefined
   // 			if(matched){
@@ -1231,7 +1232,7 @@ module.exports = new Class({
   // 			}
   // 			else if(name == '%s'){//we want one stat per key
   // 				// name = name.replace('.%s')
-  // 				// ////console.log()
+  // 				// //////console.log()
   // 				Object.each(stats, function(data, key){
   // 					stat[key] = data
   // 				})
@@ -1254,7 +1255,7 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_chart (chart, name, stat){
-    ////console.log('data_to_tabular', name, stat)
+    //////console.log('data_to_tabular', name, stat)
 
     if(chart.init && typeOf(chart.init) == 'function')
       chart.init(this, chart, name, stat, 'chart')
@@ -1265,7 +1266,7 @@ module.exports = new Class({
     // if(this.stat.data.length > 0){
     //
     //   data_to_tabular(stat, chart, name, function (name, data){
-    //     ////console.log('data_to_tabular result', name, data)
+    //     //////console.log('data_to_tabular result', name, data)
     //   })
     // }
     //
@@ -1276,7 +1277,7 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_stat: function(chart, name, stat){
-    ////console.log('__process_stat', chart, name, stat)
+    //////console.log('__process_stat', chart, name, stat)
     if(!Array.isArray(stat))
       stat = [stat]
 
@@ -1300,7 +1301,7 @@ module.exports = new Class({
           let prop_to_filter = Object.keys(filter)[0]
           let value_to_filter = filter[prop_to_filter]
 
-          // ////console.log('stat[0].value[prop_to_filter]', name, stat)
+          // //////console.log('stat[0].value[prop_to_filter]', name, stat)
           if(
             stat[0].value[prop_to_filter]
             && value_to_filter.test(stat[0].value[prop_to_filter]) == true
@@ -1342,8 +1343,8 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/host.vue
   **/
   __process_os_doc: function(doc, cb){
-    console.log('__process_os_doc', doc)
-    
+    //console.log('__process_os_doc', doc)
+
     let paths = {}
 
     if(Array.isArray(doc)){
@@ -1353,14 +1354,14 @@ module.exports = new Class({
         if(row != null){
           let {keys, path, host} = extract_data_os(row)
 
-          // ////console.log('ROW', keys, path)
+          // //////console.log('ROW', keys, path)
 
           if(!paths[path])
             paths[path] = {}
 
 
           Object.each(keys, function(data, key){
-            // //////console.log('ROW', key, data)
+            // ////////console.log('ROW', key, data)
             if(!paths[path][key])
               paths[path][key] = []
 

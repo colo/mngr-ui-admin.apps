@@ -251,8 +251,8 @@ module.exports = function(conn, io, charts){
   			// 		}
   			// })
 
-				console.log(docs)
-				
+				// console.log(docs)
+
 				if(docs.length == 0 ){
 					pipeline.output({id: id, type: type, doc: docs})
 				}

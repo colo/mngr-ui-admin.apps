@@ -360,103 +360,47 @@ module.exports = new Class({
 				}
 
 			],
-			periodical: [
-        /**
-        * peridically exec this view to keep it warm on rethinkdb
-        **/
-        // // {
-				// // 	sort_by_path: function(req, next, app){
-        // //     // console.log('WARM SORT_BY_PATH RANGE', app.options.stat_host)
-        // //     let path = 'os'
-        // //     // let range = req.opt.range
-        // //
-        // //     if(app.options.stat_host){
-        // //       let end = Date.now()
-        // //       let start = end - 1000
-        // //
-        // //               // next(
-        // //       app.view({
-  			// // 				uri: app.options.db,
-        // //         args: [
-        // //           'sort',
-        // //           'by_path',
-        // //           {
-        // //             startkey: [path, app.options.stat_host, "periodical", start],
-    		// // 						endkey: [path, app.options.stat_host, "periodical", end],
-        // //             stale: "update_after",
-        // //             limit:1,
-    		// // 						inclusive_end: true,
-    		// // 						include_docs: false
-    		// // 					}
-        // //         ]
-  			// // 			})
-        // //
-        // //
-        // //     }
-        // //
-        // //
-        // //
-				// // 	}
-				// // },
-
-        {
-					sort_by_host: function(req, next, app){
-
-            if(app.options.stat_host){
-              // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
-              // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
-
-              /**
-              * limit for 'os',
-              * unlimit for 'munin'
-              */
-
-              // Array.each(app.options.paths, function(path){
-
-                // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-                //   ////console.log('rethinkdb.os path', path)
-
-                app.between({
-                  _extras: {type: 'periodical'},
-                  uri: app.options.db+'/periodical',
-                  args: [
-                    [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
-                    [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
-                    {
-                      index: 'sort_by_host',
-                      leftBound: 'open',
-                      rightBound: 'open'
-                    }
-                  ]
-                })
-
-                  // app.view({
-                  //   _extras: {type: 'periodical'},
-      						// 	uri: app.options.db,
-                  //   args: [
-                  //     'sort',
-                  //     'by_host',
-                  //     {
-        					// 			// startkey: [app.options.stat_host, "periodical",Date.now() + 0],
-        					// 			// endkey: [app.options.stat_host, "periodical", Date.now() - 1000],
-                  //       startkey: [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
-        					// 			endkey: [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
-                  //       // limit: 1,
-        					// 			descending: true,
-        					// 			inclusive_end: true,
-        					// 			include_docs: true
-        					// 		}
-                  //
-                  //   ]
-      						// })
-                // }
-              // })
-            }
-
-					}
-				}
-
-			],
+			// periodical: [
+      //   {
+      //     sort_by_host: function(req, next, app){
+      //     }
+      //   }
+      //   // {
+			// 	// 	sort_by_host: function(req, next, app){
+      //   //
+      //   //     if(app.options.stat_host){
+      //   //       // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
+      //   //       // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
+      //   //
+      //   //       /**
+      //   //       * limit for 'os',
+      //   //       * unlimit for 'munin'
+      //   //       */
+      //   //
+      //   //       // Array.each(app.options.paths, function(path){
+      //   //
+      //   //         // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
+      //   //         //   ////console.log('rethinkdb.os path', path)
+      //   //
+      //   //         app.between({
+      //   //           _extras: {type: 'periodical'},
+      //   //           uri: app.options.db+'/periodical',
+      //   //           args: [
+      //   //             [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
+      //   //             [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
+      //   //             {
+      //   //               index: 'sort_by_host',
+      //   //               leftBound: 'open',
+      //   //               rightBound: 'open'
+      //   //             }
+      //   //           ]
+      //   //         })
+      //   //     }
+      //   //
+			// 	// 	}
+			// 	// }
+      //
+			// ],
 
 		},
 
@@ -464,6 +408,10 @@ module.exports = new Class({
       between: [{
         path: ':database/:table',
         callbacks: ['between']
+      }],
+      changes: [{
+        path: ':database/:table',
+        callbacks: ['changes']
       }],
 			// request: [
 			// 	{
@@ -483,7 +431,7 @@ module.exports = new Class({
 
   },
   between: function(err, resp, params){
-    debug_internals('between', arguments)
+    // debug_internals('between', arguments)
     // resp.each(function(err, row) {
     //     if (err) throw err;
     //     debug_internals('between', row)
@@ -562,6 +510,15 @@ module.exports = new Class({
     //////////console.log('input.poller.rethinkdb.os', options)
 		this.parent(options);//override default options
 
+    // let _register = function(){
+    //   // this.removeEvent('onResume', _register)
+    //   this.register_on_changes()
+    // }.bind(this)
+
+    // this.addEvent('onResume', this.register_on_changes.bind(this))
+    // this.addEvent('onSuspend', () => this.removeEvent('onResume', this.register_on_changes.bind(this)))
+    this.addEvent('onConnect', this.register_on_changes.bind(this))
+
     // this.addEvent('onExit', function(){
     //   console.log('EXITING...')
     //
@@ -575,6 +532,58 @@ module.exports = new Class({
 
 		this.log('root', 'info', 'root started');
   },
+  changes: function(err, resp, params){
+    debug_internals('changes %o %o %o', err, resp, params)
+    resp.each(function(err, row){
+      if(row.type == 'add'){
+        // console.log(row.new_val)
+        this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+      }
+
+        // let type = params.options._extras.type
+        // let id = params.options._extras.id
+        // let event = type.charAt(0).toUpperCase() + type.slice(1)
+        //
+        // this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
+
+    }.bind(this));
+  },
+  register_on_changes: function(){
+    debug_internals('register_on_changes')
+    // this.r.db(this.options.db).table('periodical').changes({includeTypes: true}).run(this.conn, function(err, cursor){
+    //   debug_internals('changes %o', err, cursor)
+    //    cursor.each(console.log);
+    // })
+    this.changes({
+       _extras: {type: 'periodical'},
+       uri: this.options.db+'/periodical',
+       args: {includeTypes: true},
+       query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
+
+       // query: this.r.db(this.options.db).table('periodical').between(
+       //   [this.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
+       //   [this.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
+       //   {
+       //     index: 'sort_by_host',
+       //     leftBound: 'open',
+       //     rightBound: 'open'
+       //   }
+       // )
+    })
+    // app.between({
+    //           _extras: {type: 'periodical'},
+    //           uri: app.options.db+'/periodical',
+    //           args: [
+    //             [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
+    //             [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
+    //             {
+    //               index: 'sort_by_host',
+    //               leftBound: 'open',
+    //               rightBound: 'open'
+    //             }
+    //           ]
+    //         })
+  }
   // connect: function(){
   //
 	// },
