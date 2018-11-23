@@ -511,13 +511,15 @@ module.exports = new Class({
 		this.parent(options);//override default options
 
     // let _register = function(){
+    //   debug_internals('_register')
     //   // this.removeEvent('onResume', _register)
     //   this.register_on_changes()
     // }.bind(this)
 
-    // this.addEvent('onResume', this.register_on_changes.bind(this))
+    this.addEvent('onResume', this.register_on_changes.bind(this))
+    // this.addEvent('onResume', _register)
     // this.addEvent('onSuspend', () => this.removeEvent('onResume', this.register_on_changes.bind(this)))
-    this.addEvent('onConnect', this.register_on_changes.bind(this))
+    // this.addEvent('onConnect', this.register_on_changes.bind(this))
 
     // this.addEvent('onExit', function(){
     //   console.log('EXITING...')
@@ -534,6 +536,14 @@ module.exports = new Class({
   },
   changes: function(err, resp, params){
     debug_internals('changes %o %o %o', err, resp, params)
+
+    let _close = function(){
+      resp.close()
+      this.removeEvent('onSuspend', _close)
+    }.bind(this)
+
+    this.addEvent('onSuspend', _close)
+
     resp.each(function(err, row){
       if(row.type == 'add'){
         // console.log(row.new_val)

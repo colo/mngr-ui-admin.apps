@@ -25,6 +25,9 @@ let blockdevices_stats_chart = require('mngr-ui-admin-charts/os/blockdevices_sta
 let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces')
 let networkInterfaces_stats_chart = require('mngr-ui-admin-charts/os/networkInterfaces_stats')
 
+let debug = require('debug')('apps:os'),
+    debug_internals = require('debug')('apps:os:Internals');
+
 module.exports = new Class({
   Extends: App,
 
@@ -299,14 +302,15 @@ module.exports = new Class({
           path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
         }
 
-        let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
-        this.__get_stats({
-          host: host,
-          pipeline: pipeline,
-          path: path,
-          range: range,
-          req_id: req_id//use and "id" for the event
-        })
+        let pipe = this.__get_pipeline(host, (socket) ? socket.id : undefined)
+        if(pipe.connected == true)
+          this.__get_stats({
+            host: host,
+            pipeline: pipe.pipeline,
+            path: path,
+            range: range,
+            req_id: req_id//use and "id" for the event
+          })
       }
 
     }
@@ -367,12 +371,13 @@ module.exports = new Class({
       }
       else{
         this.addEvent('chartsProcessed.'+req_id, send_charts)
-        let pipeline = this.__get_pipeline(host, (socket) ? socket.id : undefined)
-        this.__get_stats({
-          host:host,
-          pipeline:pipeline,
-          req_id: req_id
-        })
+        let pipe = this.__get_pipeline(host, (socket) ? socket.id : undefined)
+        if(pipe.connected)
+          this.__get_stats({
+            host:host,
+            pipeline:pipeline,
+            req_id: req_id
+          })
       }
 
 
@@ -406,8 +411,9 @@ module.exports = new Class({
 
         ////console.log('suspending...', pipe.ids, pipe.ids.length)
 
-        if(pipe.ids.length == 0){
+        if(pipe.ids.length == 0 && pipe.suspended == false){
           ////console.log('suspending...', pipe.ids)
+          pipe.suspended = true
           pipe.pipeline.fireEvent('onSuspend')
         }
 
@@ -930,10 +936,10 @@ module.exports = new Class({
     */
     pipeline.addEvent('onSaveDoc', save_stats)
     // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
-    if(range){
+    if(range && pipeline.inputs[0].options.conn[0].module.connected == true){
       pipeline.fireEvent('onRange', { id: req_id, Range: range, path: path })
     }
-    else{
+    else if(pipeline.inputs[0].options.conn[0].module.connected == true){
       pipeline.fireEvent('onOnce', { id: req_id, path: path})
     }
 
@@ -1032,29 +1038,68 @@ module.exports = new Class({
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
       template.input[0].poll.conn[0].id = template.input[0].poll.id
+      let pipeline = new Pipeline(template)
       this.pipelines[host] = {
-        pipeline: new Pipeline(template),
-        ids: []
+        pipeline: pipeline,
+        ids: [],
+        connected: false,
+        suspended: pipeline.inputs[0].options.suspended
       }
 
       this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
         this.__emit_stats(host, stats)
       }.bind(this))
-    }
 
-    if(id){
-      if(!this.pipelines[host].ids.contains(id))
-        this.pipelines[host].ids.push(id)
+      // console.log('BEFORE RESUMING....',this.pipelines[host].pipeline.inputs[0].options.conn[0].module.connected)
 
-      if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
-        // //console.log('RESUMING....')
-        // this.pipelines[host].pipeline.addEvent('onConnect', this.pipelines[host].pipeline.fireEvent('onResume'))
-        this.pipelines[host].pipeline.fireEvent('onResume')
+      if(this.pipelines[host].connected == false){
+        this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', function(){
+          // this.pipelines[host].pipeline.fireEvent('onResume')
+          debug_internals('RESUMING....')
+          this.pipelines[host].connected = true
+          // console.log('RESUMING....',this.pipelines[host].pipeline.inputs[0].options.conn[0].module.connected)
 
+          _resume()
+        }.bind(this))
       }
+
     }
 
-    return this.pipelines[host].pipeline
+    let _resume = function(){
+      if(id){
+        if(!this.pipelines[host].ids.contains(id))
+          this.pipelines[host].ids.push(id)
+
+        if(this.pipelines[host].suspended == true){
+          console.log('RESUMING....')
+          this.pipelines[host].suspended = false
+          this.pipelines[host].pipeline.fireEvent('onResume')
+
+        }
+      }
+    }.bind(this)
+
+
+    if(this.pipelines[host].connected == true){
+      _resume()
+    }
+    // if(id){
+    //   if(!this.pipelines[host].ids.contains(id))
+    //     this.pipelines[host].ids.push(id)
+    //
+    //   if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
+    //     // //console.log('RESUMING....')
+    //     this.pipelines[host].pipeline.inputs[0].conn.addEvent('onConnect', function(){
+    //       // this.pipelines[host].pipeline.fireEvent('onResume')
+    //       debug_internals('RESUMING....')
+    //       console.log('RESUMING....')
+    //     })
+    //     // this.pipelines[host].pipeline.fireEvent('onResume')
+    //
+    //   }
+    // }
+
+    return this.pipelines[host]
   },
   __match_stats_name: function(stats, name){
     // //console.log('__match_stats_name', name, stats)
