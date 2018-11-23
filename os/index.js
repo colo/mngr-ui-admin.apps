@@ -302,15 +302,17 @@ module.exports = new Class({
           path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
         }
 
-        let pipe = this.__get_pipeline(host, (socket) ? socket.id : undefined)
-        if(pipe.connected == true)
-          this.__get_stats({
-            host: host,
-            pipeline: pipe.pipeline,
-            path: path,
-            range: range,
-            req_id: req_id//use and "id" for the event
-          })
+        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
+          // if(pipe.connected == true)
+            this.__get_stats({
+              host: host,
+              pipeline: pipe.pipeline,
+              path: path,
+              range: range,
+              req_id: req_id//use and "id" for the event
+            })
+        }.bind(this))
+
       }
 
     }
@@ -371,13 +373,15 @@ module.exports = new Class({
       }
       else{
         this.addEvent('chartsProcessed.'+req_id, send_charts)
-        let pipe = this.__get_pipeline(host, (socket) ? socket.id : undefined)
-        if(pipe.connected)
-          this.__get_stats({
-            host:host,
-            pipeline:pipeline,
-            req_id: req_id
-          })
+        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
+          // if(pipe.connected)
+            this.__get_stats({
+              host:host,
+              pipeline: pipe.pipeline,
+              req_id: req_id
+            })
+        }.bind(this))
+
       }
 
 
@@ -936,10 +940,10 @@ module.exports = new Class({
     */
     pipeline.addEvent('onSaveDoc', save_stats)
     // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
-    if(range && pipeline.inputs[0].options.conn[0].module.connected == true){
+    if(range){
       pipeline.fireEvent('onRange', { id: req_id, Range: range, path: path })
     }
-    else if(pipeline.inputs[0].options.conn[0].module.connected == true){
+    else{
       pipeline.fireEvent('onOnce', { id: req_id, path: path})
     }
 
@@ -1021,8 +1025,10 @@ module.exports = new Class({
     this.fireEvent(statsProcessedEventName, stats)
 
   },
-  __get_pipeline: function(host, id){
+  __get_pipeline: function(host, id, cb){
     //console.log('__get_pipeline', host)
+    // let _resume = undefined
+    // let _connect = undefined
 
     if(!this.pipelines[host]){
       // let template = Object.clone(this.HostOSPipeline)
@@ -1050,39 +1056,72 @@ module.exports = new Class({
         this.__emit_stats(host, stats)
       }.bind(this))
 
-      // console.log('BEFORE RESUMING....',this.pipelines[host].pipeline.inputs[0].options.conn[0].module.connected)
+      // let _connect = function(){
+      //   this.pipelines[host].pipeline.inputs[0].options.conn[0].module.removeEvent('onConnect', _connect)
+      //   debug_internals('CONECTING....')
+      //
+      //   this.pipelines[host].connected = true
+      //
+      //   cb(this.pipelines[host])
+      //   _resume()
+      // }.bind(this)
 
       if(this.pipelines[host].connected == false){
-        this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', function(){
-          // this.pipelines[host].pipeline.fireEvent('onResume')
-          debug_internals('RESUMING....')
-          this.pipelines[host].connected = true
-          // console.log('RESUMING....',this.pipelines[host].pipeline.inputs[0].options.conn[0].module.connected)
+        this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
+          this.pipelines[host],
+          id,
+          cb
+        ))
+      }
+      else{
+        // if(id)
+        this.__resume_pipeline(this.pipelines[host], id)
 
-          _resume()
-        }.bind(this))
+        cb(this.pipelines[host])
       }
 
+
     }
-
-    let _resume = function(){
-      if(id){
-        if(!this.pipelines[host].ids.contains(id))
-          this.pipelines[host].ids.push(id)
-
-        if(this.pipelines[host].suspended == true){
-          console.log('RESUMING....')
-          this.pipelines[host].suspended = false
-          this.pipelines[host].pipeline.fireEvent('onResume')
-
-        }
+    // else{
+    //   cb(this.pipelines[host])
+    //
+    //   if(this.pipelines[host].connected == true){
+    //     _resume()
+    //   }
+    //
+    //
+    // }
+    else{
+      if(this.pipelines[host].connected == false){
+        this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
+          this.pipelines[host],
+          id,
+          cb
+        ))
       }
-    }.bind(this)
+      else{
+        // if(id)
 
+        cb(this.pipelines[host])
 
-    if(this.pipelines[host].connected == true){
-      _resume()
+        this.__resume_pipeline(this.pipelines[host], id)
+      }
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // if(id){
     //   if(!this.pipelines[host].ids.contains(id))
     //     this.pipelines[host].ids.push(id)
@@ -1099,7 +1138,33 @@ module.exports = new Class({
     //   }
     // }
 
-    return this.pipelines[host]
+    // return this.pipelines[host]
+  },
+  __after_connect_pipeline: function(pipeline, id, cb){
+    pipeline.pipeline.inputs[0].options.conn[0].module.removeEvents('onConnect')
+    debug_internals('CONECTING....')
+
+    pipeline.connected = true
+
+    cb(pipeline)
+
+    this.__resume_pipeline(pipeline, id)
+
+
+
+  },
+  __resume_pipeline: function(pipeline, id){
+    if(id){
+      if(!pipeline.ids.contains(id))
+        pipeline.ids.push(id)
+
+      if(pipeline.suspended == true){
+        debug_internals('RESUMING....')
+        pipeline.suspended = false
+        pipeline.pipeline.fireEvent('onResume')
+
+      }
+    }
   },
   __match_stats_name: function(stats, name){
     // //console.log('__match_stats_name', name, stats)
