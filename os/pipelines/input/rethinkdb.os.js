@@ -19,7 +19,8 @@ module.exports = new Class({
   Extends: App,
 
   paths: /^os.*/,
-
+  changes_buffer: [],
+  changes_buffer_expire: undefined,
 
   options: {
     // rethinkdb: {
@@ -65,7 +66,8 @@ module.exports = new Class({
                       leftBound: 'open',
                       rightBound: 'open'
                     }
-                  ]
+                  ],
+                  // orderBy: {index: 'sort_by_path'}
                 })
                 // app.view({
                 //   _extras: {id: req.id, type: 'once'},
@@ -98,7 +100,8 @@ module.exports = new Class({
                       leftBound: 'open',
                       rightBound: 'open'
                     }
-                  ]
+                  ],
+                  // orderBy: {index: 'sort_by_host'}
                 })
                 // app.view({
                 //   _extras: {id: req.id, type: 'once'},
@@ -297,7 +300,8 @@ module.exports = new Class({
                       leftBound: 'open',
                       rightBound: 'open'
                     }
-                  ]
+                  ],
+                  orderBy: {index: 'sort_by_path'}
                 })
 
                 // app.view({
@@ -331,7 +335,8 @@ module.exports = new Class({
                       leftBound: 'open',
                       rightBound: 'open'
                     }
-                  ]
+                  ],
+                  orderBy: {index: 'sort_by_host'}
                 })
                 // app.view({
                 //   _extras: {id: req.id, type: 'range'},
@@ -544,10 +549,21 @@ module.exports = new Class({
 
     this.addEvent('onSuspend', _close)
 
+    if(!this.changes_buffer_expire)
+      this.changes_buffer_expire = Date.now()
+
     resp.each(function(err, row){
       if(row.type == 'add'){
         // console.log(row.new_val)
-        this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+        // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+        this.changes_buffer.push(row.new_val)
+      }
+
+      if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
+        // console.log('onPeriodicalDoc', this.changes_buffer.length)
+        this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+        this.changes_buffer_expire = Date.now()
+        this.changes_buffer = []
       }
 
         // let type = params.options._extras.type
