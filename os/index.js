@@ -73,9 +73,9 @@ module.exports = new Class({
       times: { chart: cpus_times_chart },
       percentage : { chart: cpus_percentage_chart }
     },
-    'os_procs': {
-      count: {'matched_name': true, match: '%s', chart: procs_count_chart },
-    },
+    // 'os_procs': {
+    //   count: {'matched_name': true, match: '%s', chart: procs_count_chart },
+    // },
     /**
     * matched_name: true; will use that name as the key, else if will use the chart key
     * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
