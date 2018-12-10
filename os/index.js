@@ -24,6 +24,8 @@ let mounts_percentage_chart = require('mngr-ui-admin-charts/os/mounts_percentage
 let blockdevices_stats_chart = require('mngr-ui-admin-charts/os/blockdevices_stats')
 let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces')
 let networkInterfaces_stats_chart = require('mngr-ui-admin-charts/os/networkInterfaces_stats')
+let procs_count_chart = require('mngr-ui-admin-charts/os/procs_count')
+// let procs_top_chart = require('mngr-ui-admin-charts/os/procs_top')
 
 let debug = require('debug')('apps:os'),
     debug_internals = require('debug')('apps:os:Internals');
@@ -70,6 +72,9 @@ module.exports = new Class({
     'os.cpus': {
       times: { chart: cpus_times_chart },
       percentage : { chart: cpus_percentage_chart }
+    },
+    'os_procs': {
+      count: {'matched_name': true, match: '%s', chart: procs_count_chart },
     },
     /**
     * matched_name: true; will use that name as the key, else if will use the chart key
@@ -1387,7 +1392,7 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_stat: function(chart, name, stat){
-    //////console.log('__process_stat', chart, name, stat)
+    // console.log('__process_stat', chart, name, stat)
     if(!Array.isArray(stat))
       stat = [stat]
 

@@ -262,7 +262,7 @@ module.exports = function(conn, io, charts){
 	  					switch (row.metadata.path) {
 	  						case 'os.procs':
 	  							// row = mount_filter(row)
-	  							delete docs[index]
+	  							// delete docs[index]
 									break;
 
 	  						case 'os.mounts':

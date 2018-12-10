@@ -35,8 +35,8 @@ module.exports = new Class({
     path_start_key: null,
     path_end_key: null,
 
-    paths_blacklist: /^os\.procs.*/,
-    // paths_blacklist: undefined,
+    // paths_blacklist: /^os\.procs.*/,
+    paths_blacklist: undefined,
 
     range: [
       Date.now() - 300000,
