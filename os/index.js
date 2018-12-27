@@ -73,8 +73,8 @@ module.exports = new Class({
       times: { chart: cpus_times_chart },
       percentage : { chart: cpus_percentage_chart }
     },
-    'os_procs_stats':{
-      percentage_mem: {'matched_name': true, match: '%s', chart: procs_top_chart },
+    'os_procs_uid_stats':{
+      top: {'matched_name': true, match: '%s', chart: procs_top_chart },
     },
     // 'os_procs': {
     //   count: {'matched_name': true, match: '%s', chart: procs_count_chart },
@@ -342,6 +342,9 @@ module.exports = new Class({
 
       let send_charts = function(){
         let charts = {}
+
+        debug_internals('send_charts %o', this.__charts_instances[host])
+        
         if(chart && this.charts[host]){
           charts[chart] = this.charts[host][chart]
         }
@@ -641,9 +644,11 @@ module.exports = new Class({
 
                 if(no_stat_matched_name && !this.__charts_instances[host][matched_chart_path]){
                   this.__charts_instances[host][matched_chart_path] = Object.clone(chart_data.chart)
+                  this.__charts_instances[host][matched_chart_path].matched = matched_chart_path
                 }
                 else if(!this.__charts_instances[host][matched_chart_path][stat_matched_name]){
                   this.__charts_instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
+                  this.__charts_instances[host][matched_chart_path][stat_matched_name].matched = stat_matched_name
                 }
 
                 // if(!buffer_output[matched_chart_path][stat_matched_name])
@@ -661,10 +666,12 @@ module.exports = new Class({
                 if(no_stat_matched_name == true && !this.__charts_instances[host][matched_chart_path][matched_chart_name]){
 
                   this.__charts_instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name].matched = matched_chart_name
                 }
                 else if(!this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
 
                   this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].matched = stat_matched_name
                 }
 
 
@@ -1001,6 +1008,8 @@ module.exports = new Class({
                   if(count_paths.length == 0)
                     this.fireEvent(chartsProcessedEventName)
                 }
+
+
 
               }.bind(this))
             }
@@ -1448,14 +1457,16 @@ module.exports = new Class({
 
       // chart.label = this.__process_chart_label(chart, name, stat) || name
       // let chart_name = this.__process_chart_name(chart, stat) || name
+      chart = chart.pre_process(chart, name, stat)
 
       this.__process_chart(
-        chart.pre_process(chart, name, stat),
+        chart,
         name,
         stat
       )
     }
 
+    return chart
   },
   /**
   * from mngr-ui-admin-lte/host.vue
