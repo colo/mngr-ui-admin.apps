@@ -76,6 +76,12 @@ module.exports = new Class({
     'os_procs_uid_stats':{
       top: {'matched_name': true, match: '%s', chart: procs_top_chart },
     },
+    'os_procs_cmd_stats':{
+      top: {'matched_name': true, match: '%s', chart: procs_top_chart },
+    },
+    'os_procs_stats':{
+      top: {'matched_name': true, match: '%s', chart: procs_top_chart },
+    },
     // 'os_procs': {
     //   count: {'matched_name': true, match: '%s', chart: procs_count_chart },
     // },
