@@ -121,6 +121,11 @@ module.exports = new Class({
 						version: '',
 					},
           {
+						path: 'instances/:host?/:path?',
+						callbacks: ['instances'],
+						version: '',
+					},
+          {
 						path: 'stats/:host?/:stat?',
 						callbacks: ['stats'],
 						version: '',
@@ -150,6 +155,12 @@ module.exports = new Class({
 					// path: ':param',
 					// once: true, //socket.once
 					callbacks: ['charts'],
+					// middlewares: [], //socket.use(fn)
+				}],
+        instances: [{
+					// path: ':param',
+					// once: true, //socket.once
+					callbacks: ['instances'],
 					// middlewares: [], //socket.use(fn)
 				}],
         stats: [{
@@ -343,9 +354,7 @@ module.exports = new Class({
       let send_charts = function(){
         let charts = {}
 
-        debug_internals('send_charts %o', this.__charts_instances[host])
-        
-        if(chart && this.charts[host]){
+        if(chart && this.charts[host][chart]){
           charts[chart] = this.charts[host][chart]
         }
         else if(this.charts[host]){
@@ -400,7 +409,105 @@ module.exports = new Class({
 
 
 	},
+  instances: function(){
+    debug_internals('instances')
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'path'])
+    let {host, path} = params
+    let id = (socket) ? socket.id : req.session.id
+    let session = (socket) ? socket.handshake.session : req.session
+    session.send_instances = session.send_instances+1 || 0
+    let req_id = id +'.'+session.send_instances
 
+    // ////console.log('host...', params, host, this.__stats[host])
+    // let host = arguments[2]
+    if(host === null || host === undefined){
+      this.__no_host(req, resp, socket, next, params)
+    }
+    else{
+
+      let send_instances = function(){
+        debug_internals('send_instances')
+
+        let instances = {}
+
+        debug_internals('send_instances %o', this.__charts_instances[host])
+
+        if(path && this.__charts_instances[host][path]){
+          instances[path] = this.__charts_instances[host][path]
+        }
+        else if(this.__charts_instances[host]){
+          instances = this.__charts_instances[host]
+        }
+
+        if(instances && Object.getLength(instances) == 0){
+          if(resp){
+            resp.status(404).json({host: host, err: 'not found'})
+          }
+          else{
+            socket.binary(false).emit('instances', {host: host, err: 'not found'})
+          }
+        }
+        else{
+
+          if(resp){
+            resp.json({host: host, status: 'ok', instances: instances})
+          }
+          else{
+            socket.binary(false).emit('instances', {host: host, status: 'ok', instances: instances})
+          }
+
+          // if(this.options.redis){
+            // delete this.__stats[host]
+            // delete this.charts[host]
+          // }
+        }
+
+        // this.removeEvent('instancesProcessed.'+req_id, send_instances)
+      }.bind(this)
+
+      let expire_time = Date.now() - 1000 //last second expire
+
+      if(
+        ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )
+        && (this.__charts_instances[host] && Object.getLength(this.__charts_instances[host]) > 0)
+      ){//stats processed already
+        // ////console.log('this.__stats[host]', this.__stats[host])
+        send_instances()
+      }
+      else{
+        // this.addEvent('instancesProcessed.'+req_id, send_instances)
+
+        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
+          // if(pipe.connected)
+            this.__get_stats({
+              host:host,
+              pipeline: pipe.pipeline,
+              req_id: req_id
+            }, function(payload){
+              debug_internals('cb', payload)
+              if(payload.doc)
+                this.__process_os_doc(payload.doc, function(stats){
+                  // this.__process_stats_charts(host, stats, req_id)
+
+                  this.__process_tabular(host, stats, function(output){
+                    // // //console.log('send_stats', output)
+                    // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
+                    // // //console.log('TABULAR RANGE', output)
+                    send_instances()
+                  }.bind(this))
+
+                }.bind(this))
+
+            }.bind(this))
+        }.bind(this))
+
+      }
+
+
+    }
+
+
+	},
 	initialize: function(options){
     this.parent(options)
 
@@ -644,11 +751,13 @@ module.exports = new Class({
 
                 if(no_stat_matched_name && !this.__charts_instances[host][matched_chart_path]){
                   this.__charts_instances[host][matched_chart_path] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path].matched = matched_chart_path
+                  this.__charts_instances[host][matched_chart_path].name = matched_chart_path
+                  this.__charts_instances[host][matched_chart_path].path = matched_chart_path
                 }
                 else if(!this.__charts_instances[host][matched_chart_path][stat_matched_name]){
                   this.__charts_instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path][stat_matched_name].matched = stat_matched_name
+                  this.__charts_instances[host][matched_chart_path][stat_matched_name].name = stat_matched_name
+                  this.__charts_instances[host][matched_chart_path][stat_matched_name].path = matched_chart_path
                 }
 
                 // if(!buffer_output[matched_chart_path][stat_matched_name])
@@ -666,12 +775,14 @@ module.exports = new Class({
                 if(no_stat_matched_name == true && !this.__charts_instances[host][matched_chart_path][matched_chart_name]){
 
                   this.__charts_instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name].matched = matched_chart_name
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name].name = matched_chart_name
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name].path = matched_chart_path
                 }
                 else if(!this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
 
                   this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].matched = stat_matched_name
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].name = stat_matched_name
+                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].path = matched_chart_path+'.'+matched_chart_name
                 }
 
 
@@ -899,7 +1010,9 @@ module.exports = new Class({
       }.bind(this))
     }
   },
-  __get_stats: function(payload){
+  __get_stats: function(payload, cb){
+    debug_internals('__get_stats %o', payload)
+
     let {host, pipeline, path, range, req_id} = payload
     let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
     let statsProcessedEventName = (req_id) ? 'statsProcessed.'+req_id : 'statsProcessed'
@@ -911,6 +1024,7 @@ module.exports = new Class({
       if(!id || id == undefined || id == req_id){
         // //console.log('2 __get_stats', id)
         // let { type, input, input_type, app } = opts
+        debug_internals('__get_stats->save_stats %o', payload)
 
         if(type == 'once' || type == 'range'){
           //console.log('2 __get_stats', id)
@@ -946,6 +1060,10 @@ module.exports = new Class({
           }
 
         }
+
+        if(typeof cb == 'function')
+          cb(payload)
+
       }
     }.bind(this)
 
@@ -1040,6 +1158,7 @@ module.exports = new Class({
 
 
     this.fireEvent(statsProcessedEventName, stats)
+
 
   },
   __get_pipeline: function(host, id, cb){
