@@ -26,6 +26,7 @@ let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces
 let networkInterfaces_stats_chart = require('mngr-ui-admin-charts/os/networkInterfaces_stats')
 // let procs_count_chart = require('mngr-ui-admin-charts/os/procs_count')
 let procs_top_chart = require('mngr-ui-admin-charts/os/procs_top')
+let munin = require('mngr-ui-admin-charts/munin/default')
 
 let debug = require('debug')('apps:os'),
     debug_internals = require('debug')('apps:os:Internals');
@@ -42,29 +43,7 @@ module.exports = new Class({
 
   __charts_instances:{},
 
-  // __charts: {
-  //   uptime: { name: 'os.uptime', chart: uptime_chart },
-  //   loadavg: { name: 'os.loadavg', chart: loadavg_chart},
-  //   cpus_times: { name: 'os.cpus', chart: cpus_times_chart},
-  //   cpus_percentage : { name: 'os.cpus', chart: cpus_percentage_chart},
-  //   // freemem : { name: 'os.freemem', chart: freemem_chart},
-  //   /**
-  //   * matched_name: true; will use that name as the key, else if will use the chart key
-  //   * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
-  //   * ex matched_name != true: os.cpus{ cpus_percentage: {}}
-  //   **/
-  //   networkInterfaces_stats : { 'matched_name': true, name: 'os_networkInterfaces_stats.%s', chart: networkInterfaces_stats_chart},
-  //   // mounts_percentage : [
-  //   //   { name: 'os_mounts.0', chart: Object.clone(mounts_percentage_chart)},
-  //   //   { name: 'os_mounts.1', chart: Object.clone(mounts_percentage_chart)},
-  //   // ],
-  //   mounts_percentage : { 'matched_name': true, name: 'os_mounts.%s', chart: mounts_percentage_chart},
-  //   // blockdevices_names : [
-  //   //   { name: 'os_blockdevices.sda', chart: Object.clone(blockdevices_stats_chart)},
-  //   // ]
-  //   blockdevices_stats : { 'matched_name': true, name: 'os_blockdevices.%s', chart: blockdevices_stats_chart},
-  //
-  // },
+
 
   __charts: {
     'os.uptime': {chart: uptime_chart},
@@ -98,7 +77,8 @@ module.exports = new Class({
     },
     'os_blockdevices': {
       stats : { 'matched_name': true, match: '%s', chart: blockdevices_stats_chart},
-    }
+    },
+    'new RegExp("^munin")': { chart: munin }
 
 
   },
@@ -672,17 +652,44 @@ module.exports = new Class({
 
       Object.each(charts, function(chart_data, chart_name){
         let {match, chart} = chart_data
-        if(!match){
-          match = path
-        }
-        else{
-          match = path+'.'+match
-        }
+        // if(!match){
+        //   match = path
+        // }
+        // else{
+        //   match = path+'.'+match
+        // }
 
         // if(!this.__charts_instances[host][path][chart_name])
         //   this.__charts_instances[host][path][chart_name] = {}
+        try{
+          let rg = eval(path)
+          let obj = this.__match_stats_name(Object.clone(stats), path, match)
+          // // matched = Object.merge(matched, obj)
+          debug_internals('PRE TO MATCHED OBJ %o',obj)
+          Object.each(obj, function(obj_data, new_path){
+            let start_path = new_path.substring(0, new_path.indexOf('_'))
+            let end_path = new_path.substring(new_path.indexOf('_')+1)
+            if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
+            Object.each(obj_data, function(value, chart_name){
+              if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
 
-        matched[path+'/'+chart_name] = this.__match_stats_name(Object.clone(stats), match)
+              if(!this.__charts_instances[host][start_path])
+                this.__charts_instances[host][start_path] = {}
+
+              matched[start_path+'/'+end_path][chart_name] = value
+            }.bind(this))
+          //   // matched[start_path+'/'+end_path] = obj_data
+        }.bind(this))
+
+
+          debug_internals('PRE TO MATCHED %o',matched)
+
+        }
+        catch(e){
+          matched[path+'/'+chart_name] = this.__match_stats_name(Object.clone(stats), path, match)
+
+        }
+
 
       }.bind(this))
 
@@ -690,6 +697,7 @@ module.exports = new Class({
     }.bind(this))
 
     // //console.log('MATCHED', matched)
+    debug_internals('TO MATCHED %o',matched)
 
     if(!matched || Object.getLength(matched) == 0){
       cb({})
@@ -697,321 +705,226 @@ module.exports = new Class({
     else{
       let buffer_output = {}
       let count_matched = Object.keys(matched)
-      // Object.each(charts, function(data, key){
+      debug_internals('COUNT_MATCHED %o', count_matched)
+
 
       Object.each(matched, function(data, path_name){
         let matched_chart_path = path_name.split('/')[0]
         let matched_chart_name = path_name.split('/')[1]
+
+        // debug_internals('buffer_output %s %s',matched_chart_path, matched_chart_name)
 
         if(!data || Object.getLength(data) == 0){
           count_matched.erase(path_name)
           if(count_matched.length == 0)
             cb(buffer_output)
         }
-        else if(this.charts[host][matched_chart_path]){
+        // else if(this.charts[host][matched_chart_path]){
+        else if(this.charts[host]){
+          let matched_chart_path_data = undefined
+          if(this.charts[host][matched_chart_path]){
+            matched_chart_path_data = this.charts[host][matched_chart_path]
+          }
+          else{
+            Object.each(this.charts[host], function(host_chart_data, host_chart_path){
+              try{
+                let rg = eval(host_chart_path)
+                if(rg.test(matched_chart_path)){
+                  if(!matched_chart_path_data) matched_chart_path_data = {}
+                  matched_chart_path_data[matched_chart_name] = Object.clone(host_chart_data)
+                  this.charts[host][matched_chart_path] = Object.clone(host_chart_data)
+                }
+              }
+              catch(e){}
+            })
+          }
 
-            let chart_data = undefined
-            if(this.charts[host][matched_chart_path][matched_chart_name]){
-              chart_data = this.charts[host][matched_chart_path][matched_chart_name]
+
+
+
+          let chart_data = undefined
+          if(matched_chart_path_data[matched_chart_name]){
+            chart_data = matched_chart_path_data[matched_chart_name]
+          }
+          else{
+            matched_chart_name = undefined
+            chart_data = matched_chart_path_data
+          }
+
+          // debug_internals('matched_chart %s %s %o',matched_chart_path, matched_chart_name, chart_data)
+
+          let no_stat_matched_name = false
+          if(chart_data.matched_name !== true)
+            no_stat_matched_name = true
+
+          if(no_stat_matched_name == false && !this.__charts_instances[host][matched_chart_path][matched_chart_name])
+            this.__charts_instances[host][matched_chart_path][matched_chart_name] = {}
+
+          let count_data = Object.keys(data)
+          debug_internals('COUNT_DATA %o', count_data)
+
+          Object.each(data, function(stat, stat_matched_name){
+            count_data.erase(stat_matched_name)
+
+            // //console.log('MATCHED', path_name, stat_matched_name, stat)
+            // debug_internals('stat_matched_name %s %s %s',matched_chart_path, matched_chart_name, stat_matched_name)
+
+            if(!buffer_output[matched_chart_path]) buffer_output[matched_chart_path] = {}
+
+            /**
+            * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
+            **/
+            let instance = undefined
+            if(!matched_chart_name){
+
+              if(no_stat_matched_name && !this.__charts_instances[host][matched_chart_path]){
+                this.__charts_instances[host][matched_chart_path] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path].name = matched_chart_path
+                this.__charts_instances[host][matched_chart_path].path = matched_chart_path
+              }
+              else if(!this.__charts_instances[host][matched_chart_path][stat_matched_name]){
+                this.__charts_instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path][stat_matched_name].name = stat_matched_name
+                this.__charts_instances[host][matched_chart_path][stat_matched_name].path = matched_chart_path
+              }
+
+              // if(!buffer_output[matched_chart_path][stat_matched_name])
+              //   buffer_output[matched_chart_path][stat_matched_name] = {}
+              if(no_stat_matched_name){
+                instance = this.__charts_instances[host][matched_chart_path]
+              }
+              else{
+                instance = this.__charts_instances[host][matched_chart_path][stat_matched_name]
+              }
+
+
             }
             else{
-              matched_chart_name = undefined
-              chart_data = this.charts[host][matched_chart_path]
+
+              if(no_stat_matched_name == true && !this.__charts_instances[host][matched_chart_path][matched_chart_name]){
+
+                this.__charts_instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path][matched_chart_name].name = matched_chart_name
+                this.__charts_instances[host][matched_chart_path][matched_chart_name].path = matched_chart_path
+              }
+              else if(!this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
+
+                this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].name = stat_matched_name
+                this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].path = matched_chart_path+'.'+matched_chart_name
+              }
+
+
+
+              if(!buffer_output[matched_chart_path][matched_chart_name])
+                buffer_output[matched_chart_path][matched_chart_name] = {}
+
+              // if(!buffer_output[matched_chart_path][matched_chart_name])
+              //   buffer_output[matched_chart_path][matched_chart_name] = {}
+
+              if(no_stat_matched_name == true){
+                instance = this.__charts_instances[host][matched_chart_path][matched_chart_name]
+              }
+              else{
+                instance = this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
+              }
+
+
             }
 
-            let no_stat_matched_name = false
-            if(chart_data.matched_name !== true)
-              no_stat_matched_name = true
 
-            if(no_stat_matched_name == false && !this.__charts_instances[host][matched_chart_path][matched_chart_name])
-              this.__charts_instances[host][matched_chart_path][matched_chart_name] = {}
+            // this.__process_stat(chart, name, stat)
+            if(stat){
 
-            // Object.each(data, function(charts_data, path){
-              // if(matched_chart_path == path){
+              // let __name = (matched_name == true ) ? stat_matched_name : key
 
-            // //console.log('NAMES',matched_chart_path,matched_chart_name)
 
-            // if(chart_data){
-            //   let charts = {}
-            //   if(chart_data.chart){
-            //     charts[matched_chart_path] = chart_data
-            //   }
-            //   else{
-            //     charts = chart_data
-            //   }
-
-              // //console.log('CHARTS', chart_data)
-            // }
-
-            let count_data = Object.keys(data)
-            Object.each(data, function(stat, stat_matched_name){
-              // //console.log('MATCHED', path_name, stat_matched_name, stat)
-
-              if(!buffer_output[matched_chart_path]) buffer_output[matched_chart_path] = {}
-
-              /**
-              * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
-              **/
-              let instance = undefined
-              if(!matched_chart_name){
-
-                if(no_stat_matched_name && !this.__charts_instances[host][matched_chart_path]){
-                  this.__charts_instances[host][matched_chart_path] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path].name = matched_chart_path
-                  this.__charts_instances[host][matched_chart_path].path = matched_chart_path
-                }
-                else if(!this.__charts_instances[host][matched_chart_path][stat_matched_name]){
-                  this.__charts_instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path][stat_matched_name].name = stat_matched_name
-                  this.__charts_instances[host][matched_chart_path][stat_matched_name].path = matched_chart_path
-                }
-
-                // if(!buffer_output[matched_chart_path][stat_matched_name])
-                //   buffer_output[matched_chart_path][stat_matched_name] = {}
-                if(no_stat_matched_name){
-                  instance = this.__charts_instances[host][matched_chart_path]
+              // data_to_tabular(stat, chart, name, function(name, data){
+             // //console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
+              if(cache == true && this.__stats_tabular[host]){
+                // //console.log(this.__stats_tabular[host])
+                if(!matched_chart_name){
+                  buffer_output[matched_chart_path] = this.__stats_tabular[host].data[matched_chart_path]
                 }
                 else{
-                  instance = this.__charts_instances[host][matched_chart_path][stat_matched_name]
+                  buffer_output[matched_chart_path][matched_chart_name] = this.__stats_tabular[host].data[matched_chart_path][matched_chart_name]
                 }
-
-              }
-              else{
-
-                if(no_stat_matched_name == true && !this.__charts_instances[host][matched_chart_path][matched_chart_name]){
-
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name].name = matched_chart_name
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name].path = matched_chart_path
-                }
-                else if(!this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
-
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].name = stat_matched_name
-                  this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].path = matched_chart_path+'.'+matched_chart_name
-                }
-
-
-
-                if(!buffer_output[matched_chart_path][matched_chart_name])
-                  buffer_output[matched_chart_path][matched_chart_name] = {}
-
-                // if(!buffer_output[matched_chart_path][matched_chart_name])
-                //   buffer_output[matched_chart_path][matched_chart_name] = {}
-
-                if(no_stat_matched_name == true){
-                  instance = this.__charts_instances[host][matched_chart_path][matched_chart_name]
-                }
-                else{
-                  instance = this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
-                }
-
-
-              }
-
-
-              // this.__process_stat(chart, name, stat)
-              if(stat){
-                // let __name = (matched_name == true ) ? stat_matched_name : key
-
-
-                // data_to_tabular(stat, chart, name, function(name, data){
-               // //console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
-                if(cache == true && this.__stats_tabular[host]){
-                  // //console.log(this.__stats_tabular[host])
-                  if(!matched_chart_name){
-                    buffer_output[matched_chart_path] = this.__stats_tabular[host].data[matched_chart_path]
-                  }
-                  else{
-                    buffer_output[matched_chart_path][matched_chart_name] = this.__stats_tabular[host].data[matched_chart_path][matched_chart_name]
-                  }
-                  count_data.erase(stat_matched_name)
-                  if(count_data.length == 0){
-                    count_matched.erase(path_name)
-                    if(count_matched.length == 0)
-                      cb(buffer_output)
-                  }
-                }
-                else{
-
-
-                  data_to_tabular(
-                    stat,
-                    instance,
-                    (no_stat_matched_name) ? matched_chart_name : stat_matched_name,
-                    function(name, to_buffer){
-                      if(!matched_chart_name && no_stat_matched_name){
-                        buffer_output[matched_chart_path] = to_buffer
-                      }
-                      else if(!matched_chart_name){
-                        buffer_output[matched_chart_path][name] = to_buffer
-                      }
-                      else if(matched_chart_name && no_stat_matched_name) {
-                        buffer_output[matched_chart_path][matched_chart_name] = to_buffer
-                      }
-                      else if(matched_chart_name) {
-                        buffer_output[matched_chart_path][matched_chart_name][name] = to_buffer
-                      }
-
-                      // //console.log('TO BUFFER',__name, key, name, chart_name, stat_matched_name, to_buffer)
-                      count_data.erase(stat_matched_name)
-                      if(count_data.length == 0){
-                        count_matched.erase(path_name)
-                        if(count_matched.length == 0)
-                          cb(buffer_output)
-                      }
-
-                    }
-                  )
-                }
-
-
-              }
-              else{
-                delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
-                count_data.erase(stat_matched_name)
+                // count_data.erase(stat_matched_name)
                 if(count_data.length == 0){
                   count_matched.erase(path_name)
                   if(count_matched.length == 0)
                     cb(buffer_output)
                 }
+              }
+              else{
 
+
+                data_to_tabular(
+                  stat,
+                  instance,
+                  (no_stat_matched_name) ? matched_chart_name : stat_matched_name,
+                  function(name, to_buffer){
+                    if(!matched_chart_name && no_stat_matched_name){
+                      buffer_output[matched_chart_path] = to_buffer
+                    }
+                    else if(!matched_chart_name){
+                      buffer_output[matched_chart_path][name] = to_buffer
+                    }
+                    else if(matched_chart_name && no_stat_matched_name) {
+                      buffer_output[matched_chart_path][matched_chart_name] = to_buffer
+                    }
+                    else if(matched_chart_name) {
+                      buffer_output[matched_chart_path][matched_chart_name][name] = to_buffer
+                    }
+
+
+                    // count_data.erase(stat_matched_name)
+
+                    // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name, stat)
+
+                    if(count_data.length == 0){
+                      count_matched.erase(path_name)
+                      if(count_matched.length == 0){
+                        debug_internals('buffer_output %o',buffer_output)
+                        cb(buffer_output)
+                      }
+                    }
+
+                  }
+                )
               }
 
 
+            }
+            else{
+              debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name, stat)
 
+              delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
+              // count_data.erase(stat_matched_name)
+              if(count_data.length == 0){
+                count_matched.erase(path_name)
+                if(count_matched.length == 0){
+                  debug_internals('buffer_output %o',buffer_output)
+                  cb(buffer_output)
+                }
+              }
 
-              // counter++
-            }.bind(this))
-            // //console.log('INSTANCES', this.__charts_instances)
-
-          // // let count_charts = Object.keys(charts)
-          // Object.each(charts, function(chart_data, chart_name){
-          //   let {match, chart} = chart_data
-          //   if(!match){
-          //     match = path
-          //   }
-          //   else{
-          //     match = path+'.'+match
-          //   }
-          //
-          //   //console.log('chart', chart_name, match)
-          //   // matched = this.__match_stats_name(stats, match)
-          //   //
-          //   // if(matched)
-          //   //   Object.each(matched, function(stat, match){
-          //   //     this.__process_stat(chart, match, stat)
-          //   //   }.bind(this))
-          //   //
-          //   // // count_charts.erase(chart_name)
-          //   // // if(count_paths.length == 0 && count_charts.length == 0)
-          //   // //   this.fireEvent('chartsProcessed')
-          //   //
-          //   //
-          //   // // //console.log(path, chart_name)
-          //
-          // }.bind(this))
-
-          // Object.each(charts, function(chart_data, chart_name){
-          //   if(matched_chart_name == chart_name){
-          //     let {match, chart, matched_name} = chart_data
-          //
-          //     if(!match){
-          //       match = path
-          //     }
-          //     else{
-          //       match = path+'.'+match
-          //     }
-          //
-          //     let count_data = Object.keys(chart_data)
-          //     Object.each(chart_data, function(stat, stat_matched_name){
-          //       // ////console.log('MATCHED', path_name, stat_matched_name, stat)
-          //       /**
-          //       * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
-          //       **/
-          //       // if(!data['_instances'][name])
-          //       // 	data['_instances'][name] = Object.clone(chart)
-          //       if(!this.__charts_instances[host][chart_path][stat_matched_name])
-          //         this.__charts_instances[host][chart_path][stat_matched_name] = Object.clone(chart)
-          //
-          //       // this.__process_stat(chart, name, stat)
-          //       if(stat){
-          //         let __name = (matched_name == true ) ? stat_matched_name : chart_path
-          //         if(!buffer_output[chart_path]) buffer_output[chart_path] = {}
-          //
-          //         // data_to_tabular(stat, chart, name, function(name, data){
-          //        // //console.log('BEFORE data_to_tabular',__name, path, name, chart_name, stat_matched_name)
-          //         if(cache == true && this.__stats_tabular[host]){
-          //           // //console.log(this.__stats_tabular[host])
-          //           buffer_output[chart_path][__name] = this.__stats_tabular[host].data[chart_path][__name]
-          //
-          //           count_data.erase(stat_matched_name)
-          //           if(count_data.length == 0){
-          //             count_matched.erase(path_name)
-          //             if(count_matched.length == 0)
-          //               cb(buffer_output)
-          //           }
-          //         }
-          //         else{
-          //           data_to_tabular(
-          //             stat,
-          //             this.__charts_instances[host][chart_path][stat_matched_name],
-          //             stat_matched_name,
-          //             function(stat_matched_name, to_buffer){
-          //               buffer_output[chart_path][__name] = to_buffer
-          //               // //console.log('TO BUFFER',__name, chart_path, name, chart_name, stat_matched_name, to_buffer)
-          //               count_data.erase(stat_matched_name)
-          //               if(count_data.length == 0){
-          //                 count_matched.erase(path_name)
-          //                 if(count_matched.length == 0)
-          //                   cb(buffer_output)
-          //               }
-          //
-          //             }
-          //           )
-          //         }
-          //
-          //
-          //       }
-          //       else{
-          //         count_data.erase(stat_matched_name)
-          //         if(count_data.length == 0){
-          //           count_matched.erase(path_name)
-          //           if(count_matched.length == 0)
-          //             cb(buffer_output)
-          //         }
-          //
-          //       }
-          //
-          //
-          //
-          //
-          //       // counter++
-          //     }.bind(this))
-          //   }
-          //
-          // }.bind(this))
-
-            // }
+            }
 
 
 
-          // }.bind(this))
+
+            // counter++
+          }.bind(this))
+          // //console.log('INSTANCES', this.__charts_instances)
+
+
         }
+        // else{
+        //   cb({})
+        // }
 
-
-
-        // ////console.log('MATCHED', path_name, data, path, chart_name, name, charts[path])
-
-
-
-
-
-
-
-
-
-
+        count_matched.erase(path_name)
 
       }.bind(this))
     }
@@ -1111,14 +1024,15 @@ module.exports = new Class({
         if(Object.getLength(charts) > 0){
           Object.each(charts, function(chart_data, chart_name){
             let {match, chart} = chart_data
-            if(!match){
-              match = path
-            }
-            else{
-              match = path+'.'+match
-            }
+            // if(!match){
+            //   match = path
+            // }
+            // else{
+            //   match = path+'.'+match
+            // }
 
-            matched = this.__match_stats_name(stats, match)
+            matched = this.__match_stats_name(stats, path, match)
+            debug_internals('MATCHED %o', matched)
 
             if(matched){
               let count_matched = Object.keys(matched)
@@ -1308,136 +1222,177 @@ module.exports = new Class({
       }
     }
   },
-  __match_stats_name: function(stats, name){
+  __match_stats_name: function(stats, path, match){
     // //console.log('__match_stats_name', name, stats)
     let stat = undefined
     if(stats){
-      if(name.indexOf('.') > -1){
-        let key = name.split('.')[0]
-        let rest = name.substring(name.indexOf('.')+1)
-        // //////console.log('__match_stats_name', stats, name)
-
-        let parse_data = function(stat_data, stat_name){
-          let matched = this.__match_stats_name(stat_data, rest)
-
-
-          // if(name == '%s.%s.%s' ){
-          //   ////console.log('__match_stats_name', name, stat_data, matched)
-          // }
-          // if(rest.indexOf('%s') > -1)
-          //   ////console.log('__match_stats_name', name, stats, matched)
-
+      try{
+        let rg = eval(path)
+        // if(name instanceof RegExp)
+        //   debug_internals('__match_stats_name regexp %o', eval(name))
+        if(rg instanceof RegExp){
           stat = {}
-          if(matched){
-            if(Array.isArray(matched)){
-              Array.each(matched, function(data, index){
-                stat[stat_name+'_'+index] = data
-              })
+          // debug_internals('__match_stats_name regexp %o %o', name, stats)
+          let counter = Object.getLength(stats) - 1
+          Object.each(stats, function(data, key){
+            if(rg.test(key)){
+              // debug_internals('__match_stats_name regexp %s', key)
+              // stat[key] = this.__match_stats_name(stats, key, match)
+              stat = Object.merge(stat, this.__match_stats_name(stats, key, match))
+            }
+
+            // if(counter == 0){
+            //   debug_internals('__match_stats_name regexp stat %o', stat)
+            //   return stat
+            // }
+
+            counter--
+          }.bind(this))
+
+
+
+        }
+        // else{
+          debug_internals('__match_stats_name regexp stat %o', stat)
+        return stat
+        // }
+
+      }
+      catch(e){
+        let name = path
+
+        if(match)
+         name += '.'+match
+
+        debug_internals('__match_stats_name error %s', name)
+        if(name.indexOf('.') > -1){
+          let key = name.split('.')[0]
+          let rest = name.substring(name.indexOf('.')+1)
+          // //////console.log('__match_stats_name', stats, name)
+
+          let parse_data = function(stat_data, stat_name){
+            let matched = this.__match_stats_name(stat_data, rest)
+
+
+            // if(name == '%s.%s.%s' ){
+            //   ////console.log('__match_stats_name', name, stat_data, matched)
+            // }
+            // if(rest.indexOf('%s') > -1)
+            //   ////console.log('__match_stats_name', name, stats, matched)
+
+            stat = {}
+            if(matched){
+              if(Array.isArray(matched)){
+                Array.each(matched, function(data, index){
+                  stat[stat_name+'_'+index] = data
+                })
+              }
+              else{
+
+                // result = {}
+                // if(key == '%s'){
+                //   Object.each(matched, function(data, name){
+                // 		stat[key+'_'+name] = data
+                // 	})
+                // }
+                // else{
+                  Object.each(matched, function(data, name){
+                    stat[name] = data
+                  })
+                // }
+              }
+
+              // if(name == 'os.networkInterfaces.0.value.%s.%s.%s' ){
+              //   ////console.log('__match_stats_name', name)
+              //   // ////console.log(stat_data)
+              //   ////console.log(stat)
+              // }
+
+              return stat
             }
             else{
-
-              // result = {}
-              // if(key == '%s'){
-              //   Object.each(matched, function(data, name){
-              // 		stat[key+'_'+name] = data
-              // 	})
-              // }
-              // else{
-                Object.each(matched, function(data, name){
-                  stat[name] = data
-                })
-              // }
+              return undefined
             }
+          }.bind(this)
 
-            // if(name == 'os.networkInterfaces.0.value.%s.%s.%s' ){
-            //   ////console.log('__match_stats_name', name)
-            //   // ////console.log(stat_data)
-            //   ////console.log(stat)
-            // }
+          if(key.indexOf('%') > -1){
+            stat = {}
+            Object.each(stats, function(stat_data, stat_name){
+              stat[stat_name] = parse_data(stat_data, stat_name)
+              // ////console.log('parsing....',stat)
+
+            })
 
             return stat
           }
           else{
-            return undefined
+            // ////console.log('parsing....',parse_data(stats[key], key))
+            return parse_data(stats[key], key)
           }
-        }.bind(this)
 
-        if(key.indexOf('%') > -1){
-          stat = {}
-          Object.each(stats, function(stat_data, stat_name){
-            stat[stat_name] = parse_data(stat_data, stat_name)
-            // ////console.log('parsing....',stat)
+          // let matched = this.__match_stats_name(stats[key], rest)
+          //
+          // if(name == '%s.%s.%s' ){
+          //   ////console.log('__match_stats_name', name, stats, matched)
+          // }
+          // // if(rest.indexOf('%s') > -1)
+          // //   ////console.log('__match_stats_name', name, stats, matched)
+          //
+          // if(matched){
+          // 	if(Array.isArray(matched)){
+          // 		Array.each(matched, function(data, index){
+          // 			stat[key+'_'+index] = data
+          // 		})
+          // 	}
+          // 	else{
+          //
+          // 		// result = {}
+          //     // if(key == '%s'){
+          //     //   Object.each(matched, function(data, name){
+          // 		// 		stat[key+'_'+name] = data
+          // 		// 	})
+          //     // }
+          //     // else{
+          // 			Object.each(matched, function(data, name){
+          // 				stat[key+'_'+name] = data
+          // 			})
+          //     // }
+          // 	}
+          //
+          // 	return stat
+          // }
+          // else{
+          //   return undefined
+          // }
+        }
+        else{
+          if(name == '%d'){//we want one stat per index
+            // name = name.replace('%d')
+            stat = []
+            Array.each(stats, function(data, index){
+              stat[index] = data
+            })
+          }
+          else if(name == '%s'){//we want one stat per key
+            stat = {}
+            // name = name.replace('.%s')
+            // //////console.log()
+            // if(name == '%s')
+            //   ////console.log('stats', stats)
 
-          })
+            Object.each(stats, function(data, key){
+              stat[key] = data
+            })
+          }
+          else{
+            stat = {}
+            stat[name] = stats[name]
+          }
 
           return stat
         }
-        else{
-          // ////console.log('parsing....',parse_data(stats[key], key))
-          return parse_data(stats[key], key)
-        }
-
-        // let matched = this.__match_stats_name(stats[key], rest)
-        //
-        // if(name == '%s.%s.%s' ){
-        //   ////console.log('__match_stats_name', name, stats, matched)
-        // }
-        // // if(rest.indexOf('%s') > -1)
-        // //   ////console.log('__match_stats_name', name, stats, matched)
-        //
-        // if(matched){
-        // 	if(Array.isArray(matched)){
-        // 		Array.each(matched, function(data, index){
-        // 			stat[key+'_'+index] = data
-        // 		})
-        // 	}
-        // 	else{
-        //
-        // 		// result = {}
-        //     // if(key == '%s'){
-        //     //   Object.each(matched, function(data, name){
-        // 		// 		stat[key+'_'+name] = data
-        // 		// 	})
-        //     // }
-        //     // else{
-        // 			Object.each(matched, function(data, name){
-        // 				stat[key+'_'+name] = data
-        // 			})
-        //     // }
-        // 	}
-        //
-        // 	return stat
-        // }
-        // else{
-        //   return undefined
-        // }
       }
-      else{
-        if(name == '%d'){//we want one stat per index
-          // name = name.replace('%d')
-          stat = []
-          Array.each(stats, function(data, index){
-            stat[index] = data
-          })
-        }
-        else if(name == '%s'){//we want one stat per key
-          stat = {}
-          // name = name.replace('.%s')
-          // //////console.log()
-          // if(name == '%s')
-          //   ////console.log('stats', stats)
 
-          Object.each(stats, function(data, key){
-            stat[key] = data
-          })
-        }
-        else{
-          stat = {}
-          stat[name] = stats[name]
-        }
-
-        return stat
-      }
 
     }
     else{
