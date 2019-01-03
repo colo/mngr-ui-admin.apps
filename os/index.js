@@ -78,7 +78,7 @@ module.exports = new Class({
     'os_blockdevices': {
       stats : { 'matched_name': true, match: '%s', chart: blockdevices_stats_chart},
     },
-    'new RegExp("^munin")': { chart: munin }
+    'new RegExp("^munin")': { 'matched_name': true, chart: munin }
 
 
   },
@@ -670,14 +670,17 @@ module.exports = new Class({
             let start_path = new_path.substring(0, new_path.indexOf('_'))
             let end_path = new_path.substring(new_path.indexOf('_')+1)
             if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
-            Object.each(obj_data, function(value, chart_name){
-              if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
 
-              if(!this.__charts_instances[host][start_path])
-                this.__charts_instances[host][start_path] = {}
+            if(!this.__charts_instances[host][start_path])
+              this.__charts_instances[host][start_path] = {}
 
-              matched[start_path+'/'+end_path][chart_name] = value
-            }.bind(this))
+            matched[start_path+'/'+end_path]= obj_data
+            // Object.each(obj_data, function(value, chart_name){
+            //   if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
+            //
+            //
+            //   matched[start_path+'/'+end_path][chart_name] = value
+            // }.bind(this))
           //   // matched[start_path+'/'+end_path] = obj_data
         }.bind(this))
 
@@ -764,7 +767,7 @@ module.exports = new Class({
           debug_internals('COUNT_DATA %o', count_data)
 
           Object.each(data, function(stat, stat_matched_name){
-            count_data.erase(stat_matched_name)
+            // count_data.erase(stat_matched_name)
 
             // //console.log('MATCHED', path_name, stat_matched_name, stat)
             // debug_internals('stat_matched_name %s %s %s',matched_chart_path, matched_chart_name, stat_matched_name)
@@ -849,7 +852,7 @@ module.exports = new Class({
                 else{
                   buffer_output[matched_chart_path][matched_chart_name] = this.__stats_tabular[host].data[matched_chart_path][matched_chart_name]
                 }
-                // count_data.erase(stat_matched_name)
+                count_data.erase(stat_matched_name)
                 if(count_data.length == 0){
                   count_matched.erase(path_name)
                   if(count_matched.length == 0)
@@ -878,9 +881,9 @@ module.exports = new Class({
                     }
 
 
-                    // count_data.erase(stat_matched_name)
+                    count_data.erase(stat_matched_name)
 
-                    // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name, stat)
+                    debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
                     if(count_data.length == 0){
                       count_matched.erase(path_name)
@@ -897,10 +900,12 @@ module.exports = new Class({
 
             }
             else{
-              debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name, stat)
 
               delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
-              // count_data.erase(stat_matched_name)
+              count_data.erase(stat_matched_name)
+
+              debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+
               if(count_data.length == 0){
                 count_matched.erase(path_name)
                 if(count_matched.length == 0){
@@ -924,7 +929,7 @@ module.exports = new Class({
         //   cb({})
         // }
 
-        count_matched.erase(path_name)
+        // count_matched.erase(path_name)
 
       }.bind(this))
     }
