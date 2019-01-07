@@ -32,14 +32,14 @@ let blockdevices_filter = function(doc, opts, next, pipeline){
 	return doc
 }
 
-let os_filter = function(doc, opts, next, pipeline){
-	Object.each(doc.data.networkInterfaces, function(value, item){
-		delete doc.data.networkInterfaces[item].if
-	})
-
-	// next(doc, opts, next, pipeline)
-	return doc
-}
+// let os_filter = function(doc, opts, next, pipeline){
+// 	Object.each(doc.data.networkInterfaces, function(value, item){
+// 		delete doc.data.networkInterfaces[item].if
+// 	})
+//
+// 	// next(doc, opts, next, pipeline)
+// 	return doc
+// }
 
 /**
 * stats processing
@@ -260,10 +260,10 @@ module.exports = function(conn, io, charts){
 	  			Array.each(docs, function(row, index){
 	  				if(row && row.metadata && row.metadata.path)
 	  					switch (row.metadata.path) {
-	  						case 'os.procs':
-	  							// row = mount_filter(row)
-	  							// delete docs[index]
-									break;
+	  						// case 'os.procs':
+	  						// 	// row = mount_filter(row)
+	  						// 	// delete docs[index]
+								// 	break;
 
 	  						case 'os.mounts':
 	  							row = mount_filter(row)
@@ -273,9 +273,9 @@ module.exports = function(conn, io, charts){
 	  							row = blockdevices_filter(row)
 	  							break;
 
-	  						case 'os':
-	  							row = os_filter(row)
-	  							break;
+	  						// case 'os':
+	  						// 	row = os_filter(row)
+	  						// 	break;
 
 	  						// default:
 	  						// 	pipeline.output(row)
