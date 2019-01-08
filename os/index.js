@@ -201,8 +201,22 @@ module.exports = new Class({
         // //console.log('found_stats', stats)
 
         let found_stats = {}
-        if(stat){//one stat only
-          found_stats = this.__find_stat(stat, Object.clone(stats))
+        if(stat){//one or many stats
+          try{
+            let _parsed = JSON.parse(stat)
+            //debug_internals('stats->send_stats: stat %o', _parsed)
+            path = []
+            if(Array.isArray(_parsed))
+              Array.each(_parsed, function(_path){
+                found_stats = Object.merge(found_stats, this.__find_stat(_path, Object.clone(stats)))
+              }.bind(this))
+          }
+          catch(e){
+            //debug_internals('stats->send_stats: error %o', e)
+            found_stats = this.__find_stat(stat, Object.clone(stats))
+          }
+
+
           // //console.log('STAT', stats, stat)
           // Object.each(stats, function(data, name){
           //   if(name != stat)
@@ -301,10 +315,30 @@ module.exports = new Class({
         this.addEvent('statsProcessed.'+req_id, send_stats)
 
 
+        // //debug_internals('stats: stat %o', stat)
+        // throw new Error()
+
 
         let path = undefined
         if(stat){
-          path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+
+          try{
+            let _parsed = JSON.parse(stat)
+
+            path = []
+            if(Array.isArray(_parsed))
+              Array.each(_parsed, function(_path){
+                let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+                //avoid duplicates (with push, you may get duplicates)
+                path.combine(arr_path)
+              }.bind(this))
+
+            debug_internals('stats: stat %o %o', path, range)
+          }
+          catch(e){
+            path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+          }
+
         }
 
         this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
@@ -396,7 +430,7 @@ module.exports = new Class({
 
 	},
   instances: function(){
-    debug_internals('instances')
+    //debug_internals('instances')
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'path'])
     let {host, path} = params
     let id = (socket) ? socket.id : req.session.id
@@ -412,11 +446,11 @@ module.exports = new Class({
     else{
 
       let send_instances = function(){
-        debug_internals('send_instances')
+        //debug_internals('send_instances')
 
         let instances = {}
 
-        debug_internals('send_instances %o', this.__charts_instances[host])
+        //debug_internals('send_instances %o', this.__charts_instances[host])
 
         if(path && this.__charts_instances[host][path]){
           instances[path] = this.__charts_instances[host][path]
@@ -470,7 +504,7 @@ module.exports = new Class({
               pipeline: pipe.pipeline,
               req_id: req_id
             }, function(payload){
-              debug_internals('cb', payload)
+              //debug_internals('cb', payload)
               if(payload.doc)
                 this.__process_os_doc(payload.doc, function(stats){
                   // this.__process_stats_charts(host, stats, req_id)
@@ -665,7 +699,7 @@ module.exports = new Class({
           let rg = eval(path)
           let obj = this.__match_stats_name(Object.clone(stats), path, match)
           // // matched = Object.merge(matched, obj)
-          debug_internals('PRE TO MATCHED OBJ %o',obj)
+          //debug_internals('PRE TO MATCHED OBJ %o',obj)
           Object.each(obj, function(obj_data, new_path){
             let start_path = new_path.substring(0, new_path.indexOf('_'))
             let end_path = new_path.substring(new_path.indexOf('_')+1)
@@ -685,7 +719,7 @@ module.exports = new Class({
         }.bind(this))
 
 
-          debug_internals('PRE TO MATCHED %o',matched)
+          //debug_internals('PRE TO MATCHED %o',matched)
 
         }
         catch(e){
@@ -700,7 +734,7 @@ module.exports = new Class({
     }.bind(this))
 
     // //console.log('MATCHED', matched)
-    debug_internals('TO MATCHED %o',matched)
+    //debug_internals('TO MATCHED %o',matched)
 
     if(!matched || Object.getLength(matched) == 0){
       cb({})
@@ -708,14 +742,14 @@ module.exports = new Class({
     else{
       let buffer_output = {}
       let count_matched = Object.keys(matched)
-      debug_internals('COUNT_MATCHED %o', count_matched)
+      //debug_internals('COUNT_MATCHED %o', count_matched)
 
 
       Object.each(matched, function(data, path_name){
         let matched_chart_path = path_name.split('/')[0]
         let matched_chart_name = path_name.split('/')[1]
 
-        // debug_internals('buffer_output %s %s',matched_chart_path, matched_chart_name)
+        // //debug_internals('buffer_output %s %s',matched_chart_path, matched_chart_name)
 
         if(!data || Object.getLength(data) == 0){
           count_matched.erase(path_name)
@@ -754,7 +788,7 @@ module.exports = new Class({
             chart_data = matched_chart_path_data
           }
 
-          // debug_internals('matched_chart %s %s %o',matched_chart_path, matched_chart_name, chart_data)
+          // //debug_internals('matched_chart %s %s %o',matched_chart_path, matched_chart_name, chart_data)
 
           let no_stat_matched_name = false
           if(chart_data.matched_name !== true)
@@ -764,13 +798,13 @@ module.exports = new Class({
             this.__charts_instances[host][matched_chart_path][matched_chart_name] = {}
 
           let count_data = Object.keys(data)
-          debug_internals('COUNT_DATA %o', count_data)
+          //debug_internals('COUNT_DATA %o', count_data)
 
           Object.each(data, function(stat, stat_matched_name){
             // count_data.erase(stat_matched_name)
 
             // //console.log('MATCHED', path_name, stat_matched_name, stat)
-            // debug_internals('stat_matched_name %s %s %s',matched_chart_path, matched_chart_name, stat_matched_name)
+            // //debug_internals('stat_matched_name %s %s %s',matched_chart_path, matched_chart_name, stat_matched_name)
 
             if(!buffer_output[matched_chart_path]) buffer_output[matched_chart_path] = {}
 
@@ -883,12 +917,12 @@ module.exports = new Class({
 
                     count_data.erase(stat_matched_name)
 
-                    debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+                    //debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
                     if(count_data.length == 0){
                       count_matched.erase(path_name)
                       if(count_matched.length == 0){
-                        debug_internals('buffer_output %o',buffer_output)
+                        //debug_internals('buffer_output %o',buffer_output)
                         cb(buffer_output)
                       }
                     }
@@ -904,12 +938,12 @@ module.exports = new Class({
               delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
               count_data.erase(stat_matched_name)
 
-              debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+              //debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
               if(count_data.length == 0){
                 count_matched.erase(path_name)
                 if(count_matched.length == 0){
-                  debug_internals('buffer_output %o',buffer_output)
+                  //debug_internals('buffer_output %o',buffer_output)
                   cb(buffer_output)
                 }
               }
@@ -935,7 +969,7 @@ module.exports = new Class({
     }
   },
   __get_stats: function(payload, cb){
-    debug_internals('__get_stats %o', payload)
+    //debug_internals('__get_stats %o', payload)
 
     let {host, pipeline, path, range, req_id} = payload
     let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
@@ -948,7 +982,7 @@ module.exports = new Class({
       if(!id || id == undefined || id == req_id){
         // //console.log('2 __get_stats', id)
         // let { type, input, input_type, app } = opts
-        debug_internals('__get_stats->save_stats %o', payload)
+        //debug_internals('__get_stats->save_stats %o', payload)
 
         if(type == 'once' || type == 'range'){
           //console.log('2 __get_stats', id)
@@ -1037,7 +1071,7 @@ module.exports = new Class({
             // }
 
             matched = this.__match_stats_name(stats, path, match)
-            debug_internals('MATCHED %o', matched)
+            //debug_internals('MATCHED %o', matched)
 
             if(matched){
               let count_matched = Object.keys(matched)
@@ -1119,7 +1153,7 @@ module.exports = new Class({
 
       // let _connect = function(){
       //   this.pipelines[host].pipeline.inputs[0].options.conn[0].module.removeEvent('onConnect', _connect)
-      //   debug_internals('CONECTING....')
+      //   //debug_internals('CONECTING....')
       //
       //   this.pipelines[host].connected = true
       //
@@ -1191,7 +1225,7 @@ module.exports = new Class({
     //     // //console.log('RESUMING....')
     //     this.pipelines[host].pipeline.inputs[0].conn.addEvent('onConnect', function(){
     //       // this.pipelines[host].pipeline.fireEvent('onResume')
-    //       debug_internals('RESUMING....')
+    //       //debug_internals('RESUMING....')
     //       console.log('RESUMING....')
     //     })
     //     // this.pipelines[host].pipeline.fireEvent('onResume')
@@ -1203,7 +1237,7 @@ module.exports = new Class({
   },
   __after_connect_pipeline: function(pipeline, id, cb){
     pipeline.pipeline.inputs[0].options.conn[0].module.removeEvents('onConnect')
-    debug_internals('CONECTING....')
+    //debug_internals('CONECTING....')
 
     pipeline.connected = true
 
@@ -1220,7 +1254,7 @@ module.exports = new Class({
         pipeline.ids.push(id)
 
       if(pipeline.suspended == true){
-        debug_internals('RESUMING....')
+        //debug_internals('RESUMING....')
         pipeline.suspended = false
         pipeline.pipeline.fireEvent('onResume')
 
@@ -1234,20 +1268,20 @@ module.exports = new Class({
       try{
         let rg = eval(path)
         // if(name instanceof RegExp)
-        //   debug_internals('__match_stats_name regexp %o', eval(name))
+        //   //debug_internals('__match_stats_name regexp %o', eval(name))
         if(rg instanceof RegExp){
           stat = {}
-          // debug_internals('__match_stats_name regexp %o %o', name, stats)
+          // //debug_internals('__match_stats_name regexp %o %o', name, stats)
           let counter = Object.getLength(stats) - 1
           Object.each(stats, function(data, key){
             if(rg.test(key)){
-              // debug_internals('__match_stats_name regexp %s', key)
+              // //debug_internals('__match_stats_name regexp %s', key)
               // stat[key] = this.__match_stats_name(stats, key, match)
               stat = Object.merge(stat, this.__match_stats_name(stats, key, match))
             }
 
             // if(counter == 0){
-            //   debug_internals('__match_stats_name regexp stat %o', stat)
+            //   //debug_internals('__match_stats_name regexp stat %o', stat)
             //   return stat
             // }
 
@@ -1258,7 +1292,7 @@ module.exports = new Class({
 
         }
         // else{
-          debug_internals('__match_stats_name regexp stat %o', stat)
+          //debug_internals('__match_stats_name regexp stat %o', stat)
         return stat
         // }
 
@@ -1269,7 +1303,7 @@ module.exports = new Class({
         if(match)
          name += '.'+match
 
-        debug_internals('__match_stats_name error %s', name)
+        //debug_internals('__match_stats_name error %s', name)
         if(name.indexOf('.') > -1){
           let key = name.split('.')[0]
           let rest = name.substring(name.indexOf('.')+1)

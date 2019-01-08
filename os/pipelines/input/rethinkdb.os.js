@@ -21,6 +21,7 @@ module.exports = new Class({
   paths: /^os.*/,
   changes_buffer: [],
   changes_buffer_expire: undefined,
+  _multi_response: [],
 
   options: {
     // rethinkdb: {
@@ -55,38 +56,34 @@ module.exports = new Class({
             if(app.options.stat_host){
 
               if(path){
-                app.between({
-                  _extras: {id: req.id, type: 'once'},
-                  uri: app.options.db+'/periodical',
-                  args: [
-                    [path, app.options.stat_host, "periodical",roundMilliseconds(Date.now() - 1000)],
-                    [path, app.options.stat_host, "periodical", roundMilliseconds(Date.now() + 0)],
-                    {
-                      index: 'sort_by_path',
-                      leftBound: 'open',
-                      rightBound: 'open'
-                    }
-                  ],
-                  // orderBy: {index: 'sort_by_path'}
-                })
-                // app.view({
-                //   _extras: {id: req.id, type: 'once'},
-    						// 	uri: app.options.db,
-                //   args: [
-                //     'sort',
-                //     'by_path',
-                //     {
-      					// 			// startkey: [start_key, app.options.stat_host, "periodical", range.start],
-      					// 			// endkey: [end_key, app.options.stat_host, "periodical",range.end],
-                //       // startkey: [path, app.options.stat_host, "periodical", range.start],
-                //       startkey: [path, app.options.stat_host, "periodical", roundMilliseconds(Date.now() + 0)],
-      					// 			endkey: [path, app.options.stat_host, "periodical",roundMilliseconds(Date.now() - 1000)],
-                //       descending: true,
-      					// 			inclusive_end: true,
-      					// 			include_docs: true
-      					// 		}
-                //   ]
-    						// })
+                let _get_by_path = function(path, extras){
+                  app.between({
+                    _extras: extras,
+                    uri: app.options.db+'/periodical',
+                    args: [
+                      [path, app.options.stat_host, "periodical",roundMilliseconds(Date.now() - 1000)],
+                      [path, app.options.stat_host, "periodical", roundMilliseconds(Date.now() + 0)],
+                      {
+                        index: 'sort_by_path',
+                        leftBound: 'open',
+                        rightBound: 'open'
+                      }
+                    ],
+                    // orderBy: {index: 'sort_by_path'}
+                  })
+                }
+
+                if(Array.isArray(path)){
+                  Array.each(path, function(_path, index){
+                    _get_by_path(_path, {id: req.id, type: 'once', multipath: {index: index, length: path.length}})
+                  })
+                }
+                else{
+                  _get_by_path(path, {id: req.id, type: 'once'})
+                }
+
+
+
               }
               else{
                 app.between({
@@ -103,24 +100,7 @@ module.exports = new Class({
                   ],
                   // orderBy: {index: 'sort_by_host'}
                 })
-                // app.view({
-                //   _extras: {id: req.id, type: 'once'},
-    						// 	uri: app.options.db,
-                //   args: [
-                //     'sort',
-                //     'by_host',
-                //     {
-      					// 			startkey: [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
-      					// 			endkey: [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
-                //       // limit: 1,
-                //       // stale: "ok",
-      					// 			descending: true,
-      					// 			inclusive_end: true,
-      					// 			include_docs: true
-      					// 		}
-                //
-                //   ]
-    						// })
+
               }
 
 
@@ -132,145 +112,6 @@ module.exports = new Class({
       ],
       range: [
 
-        /**
-        * @test, to get results cached on redis
-        **/
-				// {
-				// 	sort_by_path: function(req, next, app){
-        //     //console.log('SORT_BY_PATH RANGE', app.options.stat_host, req)
-        //     let path = req.path
-        //     let range = req.opt.range
-        //
-        //     if(app.options.stat_host){
-        //       // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
-        //       // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
-        //
-        //
-        //       // let CHUNK = 60000
-        //       let range_end = (range.end != null) ?  range.end : Date.now()
-        //       // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
-        //       let range_start = range.start
-        //
-        //
-        //
-        //       // do {
-        //
-        //         // Array.each(app.options.paths, function(path){
-        //           // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-        //
-        //             // ////console.log('rethinkdb.os range', path)
-        //
-        //               // next(
-        //             let end = range_start + 1000
-        //             let start = range_start
-        //
-        //             while(end < range_end){
-        //               console.log('SORT_BY_PATH RANGE', start, end)
-        //               app.view({
-        //   							uri: app.options.db,
-        //                 args: [
-        //                   'sort',
-        //                   'by_path',
-        //                   {
-        //     								// startkey: [start_key, app.options.stat_host, "periodical", range.start],
-        //     								// endkey: [end_key, app.options.stat_host, "periodical",range.end],
-        //                     // startkey: [path, app.options.stat_host, "periodical", range.start],
-        //                     startkey: [path, app.options.stat_host, "periodical", start],
-        //     								endkey: [path, app.options.stat_host, "periodical",end],
-        //
-        //     								inclusive_end: true,
-        //     								include_docs: true
-        //     							}
-        //                 ]
-        //   						})
-        //               end +=1000
-        //               start +=1000
-        //             }
-        //           // }
-        //
-        //         // }.bind(app))
-        //       //
-        //       //   start -= CHUNK
-        //       //   end -= CHUNK
-        //       // }
-        //       // while(start > range.start)
-        //
-        //     }
-        //
-        //
-        //
-				// 	}
-				// },
-
-        /**
-        * was in use
-        **/
-        // {
-				// 	sort_by_path: function(req, next, app){
-        //     console.log('SORT_BY_PATH RANGE', app.options.stat_host, req)
-        //     let path = req.path
-        //     let range = req.opt.range
-        //
-        //     if(app.options.stat_host){
-        //       // let start_key = (app.options.path_start_key != null) ? app.options.path_start_key: app.options.path_key
-        //       // let end_key = (app.options.path_end_key != null ) ? app.options.path_end_key : app.options.path_key
-        //
-        //
-        //       // let CHUNK = 60000
-        //       let end = (range.end != null) ?  range.end : Date.now()
-        //       // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
-        //       let start = range.start
-        //
-        //
-        //
-        //       // do {
-        //
-        //         // Array.each(app.options.paths, function(path){
-        //           // if(!app.options.paths_blacklist || app.options.paths_blacklist.test( path ) == false){
-        //
-        //             // ////console.log('rethinkdb.os range', path)
-        //
-        //               // next(
-        //             // let end = range_start + 1000
-        //             // let start = range_start
-        //
-        //             // while(end < range_end){
-        //       // console.log('SORT_BY_PATH RANGE', start, end)
-        //       app.view({
-  			// 				uri: app.options.db,
-        //         args: [
-        //           'sort',
-        //           'by_path',
-        //           {
-    		// 						// startkey: [start_key, app.options.stat_host, "periodical", range.start],
-    		// 						// endkey: [end_key, app.options.stat_host, "periodical",range.end],
-        //             // startkey: [path, app.options.stat_host, "periodical", range.start],
-        //             startkey: [path, app.options.stat_host, "periodical", roundMilliseconds(start)],
-    		// 						endkey: [path, app.options.stat_host, "periodical",roundMilliseconds(end)],
-        //
-    		// 						inclusive_end: true,
-    		// 						include_docs: true
-    		// 					}
-        //         ]
-  			// 			})
-        //               // end +=1000
-        //               // start +=1000
-        //             // }
-        //           // }
-        //
-        //         // }.bind(app))
-        //       //
-        //       //   start -= CHUNK
-        //       //   end -= CHUNK
-        //       // }
-        //       // while(start > range.start)
-        //
-        //     }
-        //
-        //
-        //
-				// 	}
-				// },
         {
           /**
           * used to get stats on "init", process'em and process charts
@@ -288,40 +129,35 @@ module.exports = new Class({
               // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
               let start = range.start
 
-              if(path){
-                app.between({
-                  _extras: {id: req.id, type: 'range'},
-                  uri: app.options.db+'/periodical',
-                  args: [
-                    [path, app.options.stat_host, "periodical", roundMilliseconds(start)],
-                    [path, app.options.stat_host, "periodical",roundMilliseconds(end)],
-                    {
-                      index: 'sort_by_path',
-                      leftBound: 'open',
-                      rightBound: 'open'
-                    }
-                  ],
-                  orderBy: {index: 'sort_by_path'}
-                })
 
-                // app.view({
-                //   _extras: {id: req.id, type: 'range'},
-    						// 	uri: app.options.db,
-                //   args: [
-                //     'sort',
-                //     'by_path',
-                //     {
-      					// 			// startkey: [start_key, app.options.stat_host, "periodical", range.start],
-      					// 			// endkey: [end_key, app.options.stat_host, "periodical",range.end],
-                //       // startkey: [path, app.options.stat_host, "periodical", range.start],
-                //       startkey: [path, app.options.stat_host, "periodical", roundMilliseconds(start)],
-      					// 			endkey: [path, app.options.stat_host, "periodical",roundMilliseconds(end)],
-                //       // descending: true,
-      					// 			inclusive_end: true,
-      					// 			include_docs: true
-      					// 		}
-                //   ]
-    						// })
+
+              if(path){
+                let _get_by_path = function(path, extras){
+                  app.between({
+                    _extras: extras,
+                    uri: app.options.db+'/periodical',
+                    args: [
+                      [path, app.options.stat_host, "periodical", roundMilliseconds(start)],
+                      [path, app.options.stat_host, "periodical",roundMilliseconds(end)],
+                      {
+                        index: 'sort_by_path',
+                        leftBound: 'open',
+                        rightBound: 'open'
+                      }
+                    ],
+                    orderBy: {index: 'sort_by_path'}
+                  })
+                }
+
+                if(Array.isArray(path)){
+                  Array.each(path, function(_path, index){
+                    _get_by_path(_path, {id: req.id, type: 'range', multipath: {index: index, length: path.length}})
+                  })
+                }
+                else{
+                  _get_by_path(path, {id: req.id, type: 'range'})
+                }
+
               }
               else{
                 app.between({
@@ -338,24 +174,7 @@ module.exports = new Class({
                   ],
                   orderBy: {index: 'sort_by_host'}
                 })
-                // app.view({
-                //   _extras: {id: req.id, type: 'range'},
-                //   uri: app.options.db,
-                //   args: [
-                //     'sort',
-                //     'by_host',
-                //     {
-                //       startkey: [app.options.stat_host, "periodical",roundMilliseconds(start)],
-                //       endkey: [app.options.stat_host, "periodical", roundMilliseconds(end)],
-                //       // limit: 1,
-                //       // stale: "ok",
-                //       // descending: true,
-                //       inclusive_end: true,
-                //       include_docs: true
-                //     }
-                //
-                //   ]
-                // })
+
               }
 
 
@@ -452,7 +271,23 @@ module.exports = new Class({
         let id = params.options._extras.id
         let event = type.charAt(0).toUpperCase() + type.slice(1)
 
-        this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
+        if(params.options._extras.multipath){
+          debug_internals('between toArray %o', this._multi_response.length)
+
+          if(params.options._extras.multipath.index == 0){
+            this._multi_response = arr
+          }
+          else{
+            this._multi_response.append(arr)
+
+            if(params.options._extras.multipath.index == params.options._extras.multipath.length - 1)
+              this.fireEvent('on'+event+'Doc', [Array.clone(this._multi_response), {id: id, type: type, input_type: this, app: null}]);
+          }
+
+        }
+        else{
+          this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
+        }
 
 
         // if(params.options._extras == 'count'){
