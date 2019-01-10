@@ -21,7 +21,7 @@ module.exports = new Class({
   paths: /^os.*/,
   changes_buffer: [],
   changes_buffer_expire: undefined,
-  _multi_response: [],
+  _multi_response: {},
 
   options: {
     // rethinkdb: {
@@ -272,17 +272,30 @@ module.exports = new Class({
         let event = type.charAt(0).toUpperCase() + type.slice(1)
 
         if(params.options._extras.multipath){
-          debug_internals('between toArray %o', this._multi_response.length)
+          let id = params.options._extras.id
+          let index = params.options._extras.multipath.index
+          if(!this._multi_response[id]) this._multi_response[id] = []
 
-          if(params.options._extras.multipath.index == 0){
-            this._multi_response = arr
-          }
-          else{
-            this._multi_response.append(arr)
+          debug_internals('between toArray %o', params.options._extras.id, params.options._extras.multipath, this._multi_response[id].length)
 
-            if(params.options._extras.multipath.index == params.options._extras.multipath.length - 1)
-              this.fireEvent('on'+event+'Doc', [Array.clone(this._multi_response), {id: id, type: type, input_type: this, app: null}]);
+          // if(params.options._extras.multipath.index == 0){
+          //   this._multi_response = arr
+          // }
+          // else{
+
+
+          this._multi_response[id].push( arr )
+
+          if(this._multi_response[id].length == params.options._extras.multipath.length){
+            let result = []
+            Array.each(this._multi_response[id], function(resp){
+              result.append(resp)
+            })
+            this.fireEvent('on'+event+'Doc', [result, {id: id, type: type, input_type: this, app: null}]);
+
+            delete this._multi_response[id]
           }
+          // }
 
         }
         else{
@@ -375,7 +388,7 @@ module.exports = new Class({
 		this.log('root', 'info', 'root started');
   },
   changes: function(err, resp, params){
-    debug_internals('changes %o %o %o', err, resp, params)
+    debug_internals('changes %o %o %o %s', err, resp, params, new Date())
 
     let _close = function(){
       resp.close()
@@ -388,6 +401,8 @@ module.exports = new Class({
       this.changes_buffer_expire = Date.now()
 
     resp.each(function(err, row){
+      // debug_internals('changes %s', new Date())
+
       if(row.type == 'add'){
         // console.log(row.new_val)
         // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
@@ -411,14 +426,14 @@ module.exports = new Class({
   },
   register_on_changes: function(){
     debug_internals('register_on_changes')
-    // this.r.db(this.options.db).table('periodical').changes({includeTypes: true}).run(this.conn, function(err, cursor){
-    //   debug_internals('changes %o', err, cursor)
-    //    cursor.each(console.log);
-    // })
+    /**
+    * @hardcoded: sqash: 1.1 => "sqash all changes between a 1100 ms"
+    * should be "aligned" with dashboard refreshs?
+    **/
     this.changes({
        _extras: {type: 'periodical'},
        uri: this.options.db+'/periodical',
-       args: {includeTypes: true},
+       args: {includeTypes: true, squash: 1.1},
        query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
 
        // query: this.r.db(this.options.db).table('periodical').between(
