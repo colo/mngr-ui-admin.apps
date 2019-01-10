@@ -168,7 +168,8 @@ let __match_stats_name = function(stats, name){
 
 }
 
-module.exports = function(conn, io, charts){
+// module.exports = function(conn, io, charts){
+module.exports = function(conn){
 	// //console.log('IO', io)
 
   let conf = {
