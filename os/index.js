@@ -41,7 +41,7 @@ module.exports = new Class({
 
   charts:{},
 
-  // __charts_instances:{},
+  __charts_instances:{},
 
 
 
@@ -167,13 +167,18 @@ module.exports = new Class({
     let range = (req) ? req.header('range') : params.range
     let type = (range) ? 'range' : 'once'
     let id = (socket) ? socket.id : req.session.id
-    let session = this.__process_session(req, socket, host)
-
+    let session = (socket) ? socket.handshake.session : req.session
+    // //console.log('SESSION', session)
     session.send_stats = session.send_stats+1 || 0
     let req_id = id +'.'+session.send_stats
     // session.save()
+    // //console.log('ARGUMENTS', arguments)
+    //console.log('PARAMS', params)
+    //console.log('QUERY', query)
+    //console.log('REQ', range)
+    //console.log('SESSION', session)
 
-    debug_internals('stats->session %o', session)
+
 
     if(host === null || host === undefined){
       this.__no_host(req, resp, socket, next, params)
@@ -262,7 +267,7 @@ module.exports = new Class({
             else{
               // //console.log('send_stats', found_stats.os_networkInterfaces_stats)
 
-              this.__process_tabular(host, found_stats, session, function(output){
+              this.__process_tabular(host, found_stats, function(output){
                 // //console.log('send_stats', output)
                 this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
                 // //console.log('TABULAR RANGE', output)
@@ -336,14 +341,13 @@ module.exports = new Class({
 
         }
 
-        this.__get_pipeline(host, socket, function(pipe){
+        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
           // if(pipe.connected == true)
             this.__get_stats({
               host: host,
               pipeline: pipe.pipeline,
               path: path,
               range: range,
-              session: session,
               req_id: req_id//use and "id" for the event
             })
         }.bind(this))
@@ -352,33 +356,11 @@ module.exports = new Class({
 
     }
   },
-  __process_session: function(req, socket, host){
-    let session = (socket) ? socket.handshake.session : req.session
-
-    if(!session.charts) session.charts = {}
-    if(!session.charts[host]){
-       session.charts[host] = Object.clone(this.__charts)
-     }
-     else{
-        session.charts[host] = Object.merge(Object.clone(this.__charts), session.charts[host])
-     }
-
-
-    // debug_internals('SESSION deserialized charts', session.charts[host]['os.uptime'])
-
-
-
-    if(!session.instances) session.instances = {}
-    if(!session.instances[host]) session.instances[host] = {}
-
-    return session
-  },
   charts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'chart'])
     let {host, chart} = params
     let id = (socket) ? socket.id : req.session.id
-    let session = this.__process_session(req, socket, host)
-
+    let session = (socket) ? socket.handshake.session : req.session
     session.send_charts = session.send_charts+1 || 0
     let req_id = id +'.'+session.send_charts
 
@@ -389,14 +371,14 @@ module.exports = new Class({
     }
     else{
 
-      let send_charts = function(to_send_charts){
+      let send_charts = function(){
         let charts = {}
 
-        if(chart && to_send_charts[host][chart]){
-          charts[chart] = to_send_charts[host][chart]
+        if(chart && this.charts[host][chart]){
+          charts[chart] = this.charts[host][chart]
         }
-        else if(to_send_charts[host]){
-          charts = to_send_charts[host]
+        else if(this.charts[host]){
+          charts = this.charts[host]
         }
 
         if(charts && Object.getLength(charts) == 0){
@@ -422,32 +404,25 @@ module.exports = new Class({
           // }
         }
 
-        // this.removeEvent('chartsProcessed.'+req_id, send_charts)
+        this.removeEvent('chartsProcessed.'+req_id, send_charts)
       }.bind(this)
 
+      if(this.charts[host] && Object.getLength(this.charts[host]) > 0){//stats processed already
+        // ////console.log('this.__stats[host]', this.__stats[host])
+        send_charts()
+      }
+      else{
+        this.addEvent('chartsProcessed.'+req_id, send_charts)
+        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
+          // if(pipe.connected)
+            this.__get_stats({
+              host:host,
+              pipeline: pipe.pipeline,
+              req_id: req_id
+            })
+        }.bind(this))
 
-
-      send_charts(session.charts)
-      // if(session.charts && session.charts[host] && Object.getLength(session.charts[host]) > 0){
-      //   // ////console.log('this.__stats[host]', this.__stats[host])
-      //
-      //   send_charts(session.charts)
-      // }
-      // else{
-      //
-      //
-      //   send_charts(session.charts)
-      //   // this.addEvent('chartsProcessed.'+req_id, send_charts)
-      //   // this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
-      //   //   // if(pipe.connected)
-      //   //     this.__get_stats({
-      //   //       host:host,
-      //   //       pipeline: pipe.pipeline,
-      //   //       req_id: req_id
-      //   //     })
-      //   // }.bind(this))
-      //
-      // }
+      }
 
 
     }
@@ -459,8 +434,7 @@ module.exports = new Class({
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'path'])
     let {host, path} = params
     let id = (socket) ? socket.id : req.session.id
-    // let session = (socket) ? socket.handshake.session : req.session
-    let session = this.__process_session(req, socket, host)
+    let session = (socket) ? socket.handshake.session : req.session
     session.send_instances = session.send_instances+1 || 0
     let req_id = id +'.'+session.send_instances
 
@@ -476,16 +450,14 @@ module.exports = new Class({
 
         let instances = {}
 
-        //debug_internals('send_instances %o', session.instances[host])
+        //debug_internals('send_instances %o', this.__charts_instances[host])
 
-        if(path && session.instances[host][path]){
-          instances[path] = session.instances[host][path]
+        if(path && this.__charts_instances[host][path]){
+          instances[path] = this.__charts_instances[host][path]
         }
-        else if(session.instances[host]){
-          instances = session.instances[host]
+        else if(this.__charts_instances[host]){
+          instances = this.__charts_instances[host]
         }
-
-        instances = JSON.parse(JSON.stringify(instances))
 
         if(instances && Object.getLength(instances) == 0){
           if(resp){
@@ -517,7 +489,7 @@ module.exports = new Class({
 
       if(
         ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )
-        && (session.instances[host] && Object.getLength(session.instances[host]) > 0)
+        && (this.__charts_instances[host] && Object.getLength(this.__charts_instances[host]) > 0)
       ){//stats processed already
         // ////console.log('this.__stats[host]', this.__stats[host])
         send_instances()
@@ -525,12 +497,11 @@ module.exports = new Class({
       else{
         // this.addEvent('instancesProcessed.'+req_id, send_instances)
 
-        this.__get_pipeline(host, socket, function(pipe){
+        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
           // if(pipe.connected)
             this.__get_stats({
               host:host,
               pipeline: pipe.pipeline,
-              session: session,
               req_id: req_id
             }, function(payload){
               //debug_internals('cb', payload)
@@ -538,7 +509,7 @@ module.exports = new Class({
                 this.__process_os_doc(payload.doc, function(stats){
                   // this.__process_stats_charts(host, stats, req_id)
 
-                  this.__process_tabular(host, stats, session, function(output){
+                  this.__process_tabular(host, stats, function(output){
                     // // //console.log('send_stats', output)
                     // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
                     // // //console.log('TABULAR RANGE', output)
@@ -595,25 +566,25 @@ module.exports = new Class({
 
 		}.bind(this));
 	},
-  __emit_stats: function(host, payload, socket){
-		// console.log('broadcast stats...', host, payload.type, socket)
-    if(socket)
-      debug_internals('__emit_stats %s %s', payload.type, socket.id)
-
+  __emit_stats: function(host, payload){
+		//console.log('broadcast stats...', host, payload.type)
     let {type, doc} = payload
 
     if(type == 'periodical' && doc.length > 0){
 
       this.__process_os_doc(doc, function(stats){
+        // this.__stats[host] = {data: stats, lastupdate: Date.now()}
+        // this.__process_stats_charts(host, stats)
 
-        // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
-        socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
+        // //console.log('broadcast stats...', this.__stats[host])
+        // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
+        this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
 
-        this.__process_tabular(host, stats, socket.handshake.session, function(output){
+        this.__process_tabular(host, stats, function(output){
           // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
 
-          // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
-          socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+          // //console.log('broadcast stats...', output)
+          this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
 
         }.bind(this), false)
@@ -682,20 +653,16 @@ module.exports = new Class({
 
     return result
   },
-  __process_tabular: function(host, stats, session, cb, cache){
-    // debug_internals('__process_tabular session %o', session)
+  __process_tabular: function(host, stats, cb, cache){
     // let charts = this.charts[host]
     // if(Object.clone(stats).os_networkInterfaces_stats && Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
     // //console.log('PRE-MATCHED', Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
 
-    /**
-    * @session, replaces this.__charts_instances -> session.instances && this.charts -> session.charts
-    **/
-    // if(!this.__charts_instances[host])
-    //   this.__charts_instances[host] = {}
+    if(!this.__charts_instances[host])
+      this.__charts_instances[host] = {}
 
     let matched = undefined
-    Object.each(session.charts[host], function(data, path){
+    Object.each(this.charts[host], function(data, path){
       let charts = {}
       if(data.chart){
         charts[path] = data
@@ -714,8 +681,8 @@ module.exports = new Class({
       * hace static properties like "prev", and you may have multiple devices overriding it
       **/
       // if(!data['_instances']) data['_instances'] = {}
-      if(!session.instances[host][path])
-        session.instances[host][path] = {}
+      if(!this.__charts_instances[host][path])
+        this.__charts_instances[host][path] = {}
 
       Object.each(charts, function(chart_data, chart_name){
         let {match, chart} = chart_data
@@ -726,8 +693,8 @@ module.exports = new Class({
         //   match = path+'.'+match
         // }
 
-        // if(!session.instances[host][path][chart_name])
-        //   session.instances[host][path][chart_name] = {}
+        // if(!this.__charts_instances[host][path][chart_name])
+        //   this.__charts_instances[host][path][chart_name] = {}
         try{
           let rg = eval(path)
           let obj = this.__match_stats_name(Object.clone(stats), path, match)
@@ -738,8 +705,8 @@ module.exports = new Class({
             let end_path = new_path.substring(new_path.indexOf('_')+1)
             if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
 
-            if(!session.instances[host][start_path])
-              session.instances[host][start_path] = {}
+            if(!this.__charts_instances[host][start_path])
+              this.__charts_instances[host][start_path] = {}
 
             matched[start_path+'/'+end_path]= obj_data
             // Object.each(obj_data, function(value, chart_name){
@@ -767,8 +734,7 @@ module.exports = new Class({
     }.bind(this))
 
     // //console.log('MATCHED', matched)
-    debug_internals('TO MATCHED %o %o',session.charts, matched)
-
+    //debug_internals('TO MATCHED %o',matched)
 
     if(!matched || Object.getLength(matched) == 0){
       cb({})
@@ -791,19 +757,19 @@ module.exports = new Class({
             cb(buffer_output)
         }
         // else if(this.charts[host][matched_chart_path]){
-        else if(session.charts[host]){
+        else if(this.charts[host]){
           let matched_chart_path_data = undefined
-          if(session.charts[host][matched_chart_path]){
-            matched_chart_path_data = session.charts[host][matched_chart_path]
+          if(this.charts[host][matched_chart_path]){
+            matched_chart_path_data = this.charts[host][matched_chart_path]
           }
           else{
-            Object.each(session.charts[host], function(host_chart_data, host_chart_path){
+            Object.each(this.charts[host], function(host_chart_data, host_chart_path){
               try{
                 let rg = eval(host_chart_path)
                 if(rg.test(matched_chart_path)){
                   if(!matched_chart_path_data) matched_chart_path_data = {}
                   matched_chart_path_data[matched_chart_name] = Object.clone(host_chart_data)
-                  session.charts[host][matched_chart_path] = Object.clone(host_chart_data)
+                  this.charts[host][matched_chart_path] = Object.clone(host_chart_data)
                 }
               }
               catch(e){}
@@ -828,8 +794,8 @@ module.exports = new Class({
           if(chart_data.matched_name !== true)
             no_stat_matched_name = true
 
-          if(no_stat_matched_name == false && !session.instances[host][matched_chart_path][matched_chart_name])
-            session.instances[host][matched_chart_path][matched_chart_name] = {}
+          if(no_stat_matched_name == false && !this.__charts_instances[host][matched_chart_path][matched_chart_name])
+            this.__charts_instances[host][matched_chart_path][matched_chart_name] = {}
 
           let count_data = Object.keys(data)
           //debug_internals('COUNT_DATA %o', count_data)
@@ -848,43 +814,41 @@ module.exports = new Class({
             let instance = undefined
             if(!matched_chart_name){
 
-              if(no_stat_matched_name && !session.instances[host][matched_chart_path]){
-                session.instances[host][matched_chart_path] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path].name = matched_chart_path
-                session.instances[host][matched_chart_path].path = matched_chart_path
+              if(no_stat_matched_name && !this.__charts_instances[host][matched_chart_path]){
+                this.__charts_instances[host][matched_chart_path] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path].name = matched_chart_path
+                this.__charts_instances[host][matched_chart_path].path = matched_chart_path
               }
-              else if(!session.instances[host][matched_chart_path][stat_matched_name]){
-                session.instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path][stat_matched_name].name = stat_matched_name
-                session.instances[host][matched_chart_path][stat_matched_name].path = matched_chart_path
+              else if(!this.__charts_instances[host][matched_chart_path][stat_matched_name]){
+                this.__charts_instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path][stat_matched_name].name = stat_matched_name
+                this.__charts_instances[host][matched_chart_path][stat_matched_name].path = matched_chart_path
               }
 
               // if(!buffer_output[matched_chart_path][stat_matched_name])
               //   buffer_output[matched_chart_path][stat_matched_name] = {}
               if(no_stat_matched_name){
-                instance = session.instances[host][matched_chart_path]
-
+                instance = this.__charts_instances[host][matched_chart_path]
               }
               else{
-                instance = session.instances[host][matched_chart_path][stat_matched_name]
+                instance = this.__charts_instances[host][matched_chart_path][stat_matched_name]
               }
-
 
 
             }
             else{
 
-              if(no_stat_matched_name == true && !session.instances[host][matched_chart_path][matched_chart_name]){
+              if(no_stat_matched_name == true && !this.__charts_instances[host][matched_chart_path][matched_chart_name]){
 
-                session.instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path][matched_chart_name].name = matched_chart_name
-                session.instances[host][matched_chart_path][matched_chart_name].path = matched_chart_path
+                this.__charts_instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path][matched_chart_name].name = matched_chart_name
+                this.__charts_instances[host][matched_chart_path][matched_chart_name].path = matched_chart_path
               }
-              else if(!session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
+              else if(!this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
 
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name].name = stat_matched_name
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name].path = matched_chart_path+'.'+matched_chart_name
+                this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
+                this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].name = stat_matched_name
+                this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name].path = matched_chart_path+'.'+matched_chart_name
               }
 
 
@@ -896,10 +860,10 @@ module.exports = new Class({
               //   buffer_output[matched_chart_path][matched_chart_name] = {}
 
               if(no_stat_matched_name == true){
-                instance = session.instances[host][matched_chart_path][matched_chart_name]
+                instance = this.__charts_instances[host][matched_chart_path][matched_chart_name]
               }
               else{
-                instance = session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
+                instance = this.__charts_instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
               }
 
 
@@ -908,7 +872,6 @@ module.exports = new Class({
 
             // this.__process_stat(chart, name, stat)
             if(stat){
-              instance = Object.merge(Object.clone(chart_data.chart), instance)
 
               // let __name = (matched_name == true ) ? stat_matched_name : key
 
@@ -932,8 +895,6 @@ module.exports = new Class({
               }
               else{
 
-                // if(matched_chart_name == 'times' && stat_matched_name == 'cpus')
-                // debug_internals('data_to_tabular->instance %o %o %s %s', instance, stat, matched_chart_name, stat_matched_name)
 
                 data_to_tabular(
                   stat,
@@ -956,12 +917,12 @@ module.exports = new Class({
 
                     count_data.erase(stat_matched_name)
 
-                    // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+                    //debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
                     if(count_data.length == 0){
                       count_matched.erase(path_name)
                       if(count_matched.length == 0){
-                        // debug_internals('buffer_output %o',buffer_output)
+                        //debug_internals('buffer_output %o',buffer_output)
                         cb(buffer_output)
                       }
                     }
@@ -974,10 +935,10 @@ module.exports = new Class({
             }
             else{
 
-              // delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
+              delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
               count_data.erase(stat_matched_name)
 
-              // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+              //debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
               if(count_data.length == 0){
                 count_matched.erase(path_name)
@@ -994,7 +955,7 @@ module.exports = new Class({
 
             // counter++
           }.bind(this))
-          // //console.log('INSTANCES', session.instances)
+          // //console.log('INSTANCES', this.__charts_instances)
 
 
         }
@@ -1010,8 +971,8 @@ module.exports = new Class({
   __get_stats: function(payload, cb){
     //debug_internals('__get_stats %o', payload)
 
-    let {host, pipeline, path, range, req_id, session} = payload
-    // let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
+    let {host, pipeline, path, range, req_id} = payload
+    let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
     let statsProcessedEventName = (req_id) ? 'statsProcessed.'+req_id : 'statsProcessed'
 
     //console.log('__get_stats', req_id)
@@ -1028,18 +989,21 @@ module.exports = new Class({
           // if(type == 'range')
 
           if(doc.length == 0){
+            ////console.log('save_stats', payload)
 
-            // this.charts[host] = {}
+            // this.__stats[host] = {data: {}, lastupdate: 0}
+            // this.__stats_tabular[host] = {data: {}, lastupdate: 0}
+            this.charts[host] = {}
             pipeline.removeEvent('onSaveDoc', save_stats)
             // this.fireEvent('chartsProcessed')
 
             this.fireEvent(statsProcessedEventName, {})
-            // this.fireEvent(chartsProcessedEventName)
+            this.fireEvent(chartsProcessedEventName)
 
           }
           else{
             this.__process_os_doc(payload.doc, function(stats){
-              this.__process_stats_charts(host, stats, session, id)
+              this.__process_stats_charts(host, stats, id)
             }.bind(this))
 
             /**
@@ -1075,22 +1039,18 @@ module.exports = new Class({
     }
 
   },
-  __process_stats_charts: function(host, stats, session, id){
-    debug_internals('__process_stats_charts-> session %o', session)
+  __process_stats_charts: function(host, stats, id){
     // this.__stats[host] = {data: stats, lastupdate: Date.now()}
-    // let chartsProcessedEventName = (id) ? 'chartsProcessed.'+id : 'chartsProcessed'
+    let chartsProcessedEventName = (id) ? 'chartsProcessed.'+id : 'chartsProcessed'
     let statsProcessedEventName = (id) ? 'statsProcessed.'+id : 'statsProcessed'
 
-    /**
-    * @session, replaced this.charts -> session.charts
-    **/
-    // if(!this.charts[host] || Object.getLength(this.charts[host]) == 0)
-    //   this.charts[host] = Object.clone(this.__charts)
+    if(!this.charts[host] || Object.getLength(this.charts[host]) == 0)
+      this.charts[host] = Object.clone(this.__charts)
 
-    let count_paths = Object.keys(session.charts[host])
+    let count_paths = Object.keys(this.charts[host])
     let matched = undefined
 
-    Object.each(session.charts[host], function(data, path){
+    Object.each(this.charts[host], function(data, path){
         let charts = {}
         if(data.chart){
           charts[path] = data
@@ -1122,8 +1082,8 @@ module.exports = new Class({
 
                 if(count_matched.length == 0){
                   count_paths.erase(path)
-                  // if(count_paths.length == 0)
-                  //   this.fireEvent(chartsProcessedEventName)
+                  if(count_paths.length == 0)
+                    this.fireEvent(chartsProcessedEventName)
                 }
 
 
@@ -1132,8 +1092,8 @@ module.exports = new Class({
             }
             else{
               count_paths.erase(path)
-              // if(count_paths.length == 0)
-              //   this.fireEvent(chartsProcessedEventName)
+              if(count_paths.length == 0)
+                this.fireEvent(chartsProcessedEventName)
             }
             // count_charts.erase(chart_name)
             // if(count_paths.length == 0 && count_charts.length == 0)
@@ -1146,8 +1106,8 @@ module.exports = new Class({
         }
         else{
           count_paths.erase(path)
-          // if(count_paths.length == 0)
-          //   this.fireEvent(chartsProcessedEventName)
+          if(count_paths.length == 0)
+            this.fireEvent(chartsProcessedEventName)
         }
 
 
@@ -1160,21 +1120,21 @@ module.exports = new Class({
 
 
   },
-  __get_pipeline: function(host, socket, cb){
+  __get_pipeline: function(host, id, cb){
     //console.log('__get_pipeline', host)
     // let _resume = undefined
     // let _connect = undefined
 
     if(!this.pipelines[host]){
       // let template = Object.clone(this.HostOSPipeline)
-      // if(!this.charts[host])
-      //   this.charts[host] = {}
-
+      if(!this.charts[host])
+        this.charts[host] = {}
 
       let template = require('./pipelines/host.os')(
+        // require(ETC+'default.conn.js')(this.options.redis),//couchdb
   			require(ETC+'default.conn.js')(),//rethinkdb
-        // this.io,
-        // this.charts[host]
+        this.io,
+        this.charts[host]
       )
       template.input[0].poll.conn[0].stat_host = host
       template.input[0].poll.id += '-'+host
@@ -1188,20 +1148,29 @@ module.exports = new Class({
       }
 
       this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
-        // debug_internals('pre __emit_stats %s %o', host, socket)
-        this.__emit_stats(host, stats, socket)
+        this.__emit_stats(host, stats)
       }.bind(this))
+
+      // let _connect = function(){
+      //   this.pipelines[host].pipeline.inputs[0].options.conn[0].module.removeEvent('onConnect', _connect)
+      //   //debug_internals('CONECTING....')
+      //
+      //   this.pipelines[host].connected = true
+      //
+      //   cb(this.pipelines[host])
+      //   _resume()
+      // }.bind(this)
 
       if(this.pipelines[host].connected == false){
         this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
           this.pipelines[host],
-          socket,
+          id,
           cb
         ))
       }
       else{
         // if(id)
-        this.__resume_pipeline(this.pipelines[host], socket)
+        this.__resume_pipeline(this.pipelines[host], id)
 
         cb(this.pipelines[host])
       }
@@ -1221,7 +1190,7 @@ module.exports = new Class({
       if(this.pipelines[host].connected == false){
         this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
           this.pipelines[host],
-          socket,
+          id,
           cb
         ))
       }
@@ -1230,13 +1199,43 @@ module.exports = new Class({
 
         cb(this.pipelines[host])
 
-        this.__resume_pipeline(this.pipelines[host], socket)
+        this.__resume_pipeline(this.pipelines[host], id)
       }
     }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // if(id){
+    //   if(!this.pipelines[host].ids.contains(id))
+    //     this.pipelines[host].ids.push(id)
+    //
+    //   if(this.pipelines[host].pipeline.inputs[0].options.suspended == true){
+    //     // //console.log('RESUMING....')
+    //     this.pipelines[host].pipeline.inputs[0].conn.addEvent('onConnect', function(){
+    //       // this.pipelines[host].pipeline.fireEvent('onResume')
+    //       //debug_internals('RESUMING....')
+    //       console.log('RESUMING....')
+    //     })
+    //     // this.pipelines[host].pipeline.fireEvent('onResume')
+    //
+    //   }
+    // }
+
+    // return this.pipelines[host]
   },
-  __after_connect_pipeline: function(pipeline, socket, cb){
+  __after_connect_pipeline: function(pipeline, id, cb){
     pipeline.pipeline.inputs[0].options.conn[0].module.removeEvents('onConnect')
     //debug_internals('CONECTING....')
 
@@ -1244,15 +1243,15 @@ module.exports = new Class({
 
     cb(pipeline)
 
-    this.__resume_pipeline(pipeline, socket)
+    this.__resume_pipeline(pipeline, id)
 
 
 
   },
-  __resume_pipeline: function(pipeline, socket){
-    if(socket){
-      if(!pipeline.ids.contains(socket.id))
-        pipeline.ids.push(socket.id)
+  __resume_pipeline: function(pipeline, id){
+    if(id){
+      if(!pipeline.ids.contains(id))
+        pipeline.ids.push(id)
 
       if(pipeline.suspended == true){
         //debug_internals('RESUMING....')
@@ -1524,7 +1523,6 @@ module.exports = new Class({
   * from mngr-ui-admin-lte/chart.vue
   **/
   __process_stat: function(chart, name, stat){
-    // debug_internals('__process_stat %o %s %o', chart, name, stat)
     // console.log('__process_stat', chart, name, stat)
     if(!Array.isArray(stat))
       stat = [stat]
@@ -1549,8 +1547,7 @@ module.exports = new Class({
           let prop_to_filter = Object.keys(filter)[0]
           let value_to_filter = filter[prop_to_filter]
 
-          value_to_filter.test = Function.from(value_to_filter.test)
-
+          // //////console.log('stat[0].value[prop_to_filter]', name, stat)
           if(
             stat[0].value[prop_to_filter]
             && value_to_filter.test(stat[0].value[prop_to_filter]) == true
@@ -1565,12 +1562,11 @@ module.exports = new Class({
       }
 
       if(filtered == true){
-        if(chart.pre_process){
-          chart.pre_process = Function.from(chart.pre_process)
 
-          chart = chart.pre_process(chart, name, stat)
-        }
+        chart = chart.pre_process(chart, name, stat)
 
+        // chart.label = this.__process_chart_label(chart, name, stat) || name
+        // let chart_name = this.__process_chart_name(chart, stat) || name
 
         this.__process_chart(chart, name, stat)
       }
@@ -1578,11 +1574,9 @@ module.exports = new Class({
     }
     else{
 
-      if(chart.pre_process){
-        chart.pre_process = Function.from(chart.pre_process)
-
-        chart = chart.pre_process(chart, name, stat)
-      }
+      // chart.label = this.__process_chart_label(chart, name, stat) || name
+      // let chart_name = this.__process_chart_name(chart, stat) || name
+      chart = chart.pre_process(chart, name, stat)
 
       this.__process_chart(
         chart,
