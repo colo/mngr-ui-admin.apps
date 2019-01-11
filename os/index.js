@@ -336,7 +336,7 @@ module.exports = new Class({
 
         }
 
-        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
+        this.__get_pipeline(host, socket, function(pipe){
           // if(pipe.connected == true)
             this.__get_stats({
               host: host,
@@ -355,23 +355,13 @@ module.exports = new Class({
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
 
-    let functionReviver = function(key, value) {
-        if (key === "") return value;
-
-        if (typeof value === 'string') {
-            var rfunc = /function[^\(]*\(([^\)]*)\)[^\{]*{([^\}]*)\}/,
-                match = value.match(rfunc);
-
-            if (match) {
-                var args = match[1].split(',').map(function(arg) { return arg.replace(/\s+/, ''); });
-                return new Function(args, match[2]);
-            }
-        }
-        return value;
-    }
-
     if(!session.charts) session.charts = {}
-    if(!session.charts[host]) session.charts[host] = Object.clone(this.__charts)
+    if(!session.charts[host]){
+       session.charts[host] = Object.clone(this.__charts)
+     }
+     else{
+        session.charts[host] = Object.merge(Object.clone(this.__charts), session.charts[host])
+     }
 
 
     // debug_internals('SESSION deserialized charts', session.charts[host]['os.uptime'])
@@ -495,6 +485,8 @@ module.exports = new Class({
           instances = session.instances[host]
         }
 
+        instances = JSON.parse(JSON.stringify(instances))
+
         if(instances && Object.getLength(instances) == 0){
           if(resp){
             resp.status(404).json({host: host, err: 'not found'})
@@ -533,7 +525,7 @@ module.exports = new Class({
       else{
         // this.addEvent('instancesProcessed.'+req_id, send_instances)
 
-        this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
+        this.__get_pipeline(host, socket, function(pipe){
           // if(pipe.connected)
             this.__get_stats({
               host:host,
@@ -603,25 +595,25 @@ module.exports = new Class({
 
 		}.bind(this));
 	},
-  __emit_stats: function(host, payload){
-		console.log('broadcast stats...', host, payload.type)
+  __emit_stats: function(host, payload, socket){
+		// console.log('broadcast stats...', host, payload.type, socket)
+    if(socket)
+      debug_internals('__emit_stats %s %s', payload.type, socket.id)
+
     let {type, doc} = payload
 
     if(type == 'periodical' && doc.length > 0){
 
       this.__process_os_doc(doc, function(stats){
-        // this.__stats[host] = {data: stats, lastupdate: Date.now()}
-        // this.__process_stats_charts(host, stats)
 
-        // //console.log('broadcast stats...', this.__stats[host])
-        // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: this.__stats[host].data, tabular: false})
-        this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
+        // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
+        socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
 
-        this.__process_tabular(host, stats, function(output){
+        this.__process_tabular(host, stats, socket.handshake.session, function(output){
           // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
 
-          // //console.log('broadcast stats...', output)
-          this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+          // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+          socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
 
         }.bind(this), false)
@@ -775,7 +767,7 @@ module.exports = new Class({
     }.bind(this))
 
     // //console.log('MATCHED', matched)
-    //debug_internals('TO MATCHED %o',matched)
+    debug_internals('TO MATCHED %o %o',session.charts, matched)
 
 
     if(!matched || Object.getLength(matched) == 0){
@@ -871,10 +863,12 @@ module.exports = new Class({
               //   buffer_output[matched_chart_path][stat_matched_name] = {}
               if(no_stat_matched_name){
                 instance = session.instances[host][matched_chart_path]
+
               }
               else{
                 instance = session.instances[host][matched_chart_path][stat_matched_name]
               }
+
 
 
             }
@@ -914,6 +908,7 @@ module.exports = new Class({
 
             // this.__process_stat(chart, name, stat)
             if(stat){
+              instance = Object.merge(Object.clone(chart_data.chart), instance)
 
               // let __name = (matched_name == true ) ? stat_matched_name : key
 
@@ -938,7 +933,7 @@ module.exports = new Class({
               else{
 
                 // if(matched_chart_name == 'times' && stat_matched_name == 'cpus')
-                debug_internals('data_to_tabular->instance %o %o %s %s', instance, stat, matched_chart_name, stat_matched_name)
+                // debug_internals('data_to_tabular->instance %o %o %s %s', instance, stat, matched_chart_name, stat_matched_name)
 
                 data_to_tabular(
                   stat,
@@ -961,7 +956,7 @@ module.exports = new Class({
 
                     count_data.erase(stat_matched_name)
 
-                    debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+                    // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
                     if(count_data.length == 0){
                       count_matched.erase(path_name)
@@ -979,10 +974,10 @@ module.exports = new Class({
             }
             else{
 
-              delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
+              // delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
               count_data.erase(stat_matched_name)
 
-              debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
+              // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
 
               if(count_data.length == 0){
                 count_matched.erase(path_name)
@@ -1165,7 +1160,7 @@ module.exports = new Class({
 
 
   },
-  __get_pipeline: function(host, id, cb){
+  __get_pipeline: function(host, socket, cb){
     //console.log('__get_pipeline', host)
     // let _resume = undefined
     // let _connect = undefined
@@ -1193,19 +1188,20 @@ module.exports = new Class({
       }
 
       this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
-        this.__emit_stats(host, stats)
+        // debug_internals('pre __emit_stats %s %o', host, socket)
+        this.__emit_stats(host, stats, socket)
       }.bind(this))
 
       if(this.pipelines[host].connected == false){
         this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
           this.pipelines[host],
-          id,
+          socket,
           cb
         ))
       }
       else{
         // if(id)
-        this.__resume_pipeline(this.pipelines[host], id)
+        this.__resume_pipeline(this.pipelines[host], socket)
 
         cb(this.pipelines[host])
       }
@@ -1225,7 +1221,7 @@ module.exports = new Class({
       if(this.pipelines[host].connected == false){
         this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
           this.pipelines[host],
-          id,
+          socket,
           cb
         ))
       }
@@ -1234,13 +1230,13 @@ module.exports = new Class({
 
         cb(this.pipelines[host])
 
-        this.__resume_pipeline(this.pipelines[host], id)
+        this.__resume_pipeline(this.pipelines[host], socket)
       }
     }
 
 
   },
-  __after_connect_pipeline: function(pipeline, id, cb){
+  __after_connect_pipeline: function(pipeline, socket, cb){
     pipeline.pipeline.inputs[0].options.conn[0].module.removeEvents('onConnect')
     //debug_internals('CONECTING....')
 
@@ -1248,15 +1244,15 @@ module.exports = new Class({
 
     cb(pipeline)
 
-    this.__resume_pipeline(pipeline, id)
+    this.__resume_pipeline(pipeline, socket)
 
 
 
   },
-  __resume_pipeline: function(pipeline, id){
-    if(id){
-      if(!pipeline.ids.contains(id))
-        pipeline.ids.push(id)
+  __resume_pipeline: function(pipeline, socket){
+    if(socket){
+      if(!pipeline.ids.contains(socket.id))
+        pipeline.ids.push(socket.id)
 
       if(pipeline.suspended == true){
         //debug_internals('RESUMING....')
