@@ -29,33 +29,36 @@ module.exports = new Class({
 						debug_internals('search_hosts');
 
             app.distinct({
-              _extras: 'hosts',
+              _extras: {type: 'hosts'},
               uri: app.options.db+'/periodical',
               args: {index: 'host'}
             })
 
 					}
 				},
+
       ],
 
       periodical: [
         {
 					search_hosts: function(req, next, app){
-						debug_internals('search_hosts ');
+						debug_internals('search_hosts');
 
             app.distinct({
-              _extras: 'hosts',
+              _extras: {type: 'hosts'},
               uri: app.options.db+'/periodical',
               args: {index: 'host'}
             })
 
 					}
 				},
+
       ],
 
 		},
 
 		routes: {
+
       distinct: [{
         path: ':database/:table',
         callbacks: ['distinct']
@@ -91,6 +94,7 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input started');
   },
+  
   distinct: function(err, resp, params){
     debug_internals('distinct', params.options)
 
@@ -114,7 +118,8 @@ module.exports = new Class({
 			);
     }
     else{
-
+      // let type = params.options._extras.type
+      let extras = params.options._extras
       resp.toArray(function(err, arr){
         debug_internals('distinct count', arr)
 
@@ -145,7 +150,7 @@ module.exports = new Class({
   			// 	}
   			// }
         // else
-        if(params.options._extras == 'hosts'){
+        // if(extras.type == 'hosts'){
           if(arr.length == 0){
   					debug_internals('No hosts yet');
   				}
@@ -158,10 +163,10 @@ module.exports = new Class({
   					// }.bind(this));
 
   					debug_internals('HOSTs %o', arr)
-            this.fireEvent('onDoc', [Array.clone(arr), {input_type: this, app: null}]);
+            this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
             // this.fireEvent('onDoc', [Array.clone(arr)]);
   				}
-        }
+        // }
 
       }.bind(this))
 

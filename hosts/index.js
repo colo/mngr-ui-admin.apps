@@ -12,7 +12,7 @@ const ETC =  process.env.NODE_ENV === 'production'
 
 let Pipeline = require('js-pipeline')
 
-let HostsPipeline = require('./pipelines/hosts')(require(ETC+'default.conn.js')())
+let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
 // let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
 // let data_to_tabular  = require( 'node-tabular-data' ).data_to_tabular
@@ -95,6 +95,7 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
+      prop: /stats/
       // stat:
 		},
 
@@ -119,7 +120,7 @@ module.exports = new Class({
 					// 	version: '',
 					// }
           {
-            path: ':anything?',
+            path: ':host?/:prop?',
             callbacks: ['hosts'],
             version: '',
           }
@@ -177,62 +178,82 @@ module.exports = new Class({
     suspended: undefined
   },
 
-  hosts: {
-    value: undefined,
-    timestamp: 0
-  },
+  // hosts: {
+  //   value: undefined,
+  //   timestamp: 0
+  // },
+
+  // hosts_props: {},
 
   ON_HOSTS_UPDATED: 'onHostsUpdated',
 
   hosts: function(){
-    let {req, resp, socket, next, params} = this._arguments(arguments, ['host'])
-    let {host} = params
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop'])
+    let {host, prop} = params
     let query = (req) ? req.query : { format: params.format }
     let id = (socket) ? socket.id : req.session.id
-    let session = (socket) ? socket.handshake.session : req.session
+    let session = this.__process_session(req, socket)
 
-    session.send_hosts = session.send_hosts+1 || 0
-    let req_id = id +'.'+session.send_hosts
+    session.send_resp = session.send_resp+1 || 0
+    let req_id = id +'.'+session.send_resp
 
-    let send_hosts = {}
-    send_hosts[req_id] = function(hosts){
-      if(hosts && hosts.length > 0){
+    let send_resp = {}
+    send_resp[req_id] = function(data){
+      let {type} = data
+      debug_internals('send_resp %o', data[type])
+      session[type].value = data[type]
+      session[type].timestamp = Date.now()
+
+      if(session[type].value && session[type].value.length > 0){
         if(resp){
-          resp.json(hosts)
+          resp.json(session[type].value)
         }
         else{
-          socket.binary(false).emit('hosts', hosts)
+          socket.binary(false).emit(type, session[type].value)
         }
       }
       else{
         if(resp){
-          resp.status(404).json({status: 'no hosts'})
+          resp.status(404).json({status: 'no '+type})
         }
         else{
-          socket.binary(false).emit('hosts', {status: 'no hosts'})
+          socket.binary(false).emit(type, {status: 'no '+type})
         }
 
       }
 
-      this.removeEvent(this.ON_HOSTS_UPDATED, send_hosts[req_id])
-      delete send_hosts[req_id]
+      this.removeEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], send_resp[req_id])
+      delete send_resp[req_id]
     }.bind(this)
 
 
     //expired?
-    if(this.hosts.value && this.hosts.value.length > 0 && this.hosts.timestamp > (Date.now() - this.options.expire)){
-      send_hosts[req_id](this.hosts.value)
+    if(session[type].value && session[type].value.length > 0 && session[type].timestamp > (Date.now() - this.options.expire)){
+      send_resp[req_id](session.hosts.value)
     }
     else{
       this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
-        debug_internals('send_hosts', pipe)
-        this.addEvent(this.ON_HOSTS_UPDATED, send_hosts[req_id])
-        pipe.hosts.fireEvent('onOnce')
+        debug_internals('send_resp', pipe)
+        this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
+        // pipe.hosts.fireEvent('onOnce')
+        // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
+        pipe.hosts.inputs[0].fireEvent('onOnce')//fire onlye the 'hosts' input
 
       }.bind(this))
     }
 
     // debug_internals('hosts %o', this.hosts)
+  },
+  __process_session: function(req, socket, host){
+    let session = (socket) ? socket.handshake.session : req.session
+
+    if(!session.hosts)
+      session.hosts = {
+        value: undefined,
+        timestamp: 0
+      }
+
+    return session
   },
   __get_pipeline: function(id, cb){
 
@@ -247,14 +268,16 @@ module.exports = new Class({
       }
 
       this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
-        this.hosts = {
-          value: doc.hosts,
-          timestamp: Date.now()
-        }
+        let {type} = doc
+        // this[type] = {
+        //   value: doc[type],
+        //   timestamp: Date.now()
+        // }
 
-        debug_internals('hosts %o', this.hosts)
+        debug_internals('onSaveDoc %o', doc)
 
-        this.fireEvent(this.ON_HOSTS_UPDATED, [this.hosts.value])
+        this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
+        // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
         // this.__emit_stats(host, stats)
       }.bind(this))
 
@@ -269,7 +292,6 @@ module.exports = new Class({
         id,
         cb
       ))
-
 
 
     }

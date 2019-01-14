@@ -1,6 +1,5 @@
 'use strict'
 
-// const App = require ( '../../node_modules/node-app-rethinkdb-client/index' )
 const App = require ( 'node-app-rethinkdb-client/index' )
 
 let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Host:Input'),
@@ -18,181 +17,67 @@ const roundMilliseconds = function(timestamp){
 module.exports = new Class({
   Extends: App,
 
-  paths: /^os.*/,
   changes_buffer: [],
   changes_buffer_expire: undefined,
-  _multi_response: {},
 
   options: {
-    // rethinkdb: {
-    //   request: require('cachemachine')({redis: true, hostname: 'elk'})
-    // },
-
-    paths: [],
-    stat_host: null,
-    range_path: undefined,
-
-    path_key: null,
-    path_start_key: null,
-    path_end_key: null,
-
-    // paths_blacklist: /^os\.procs.*/,
-    paths_blacklist: undefined,
-
-    range: [
-      Date.now() - 300000,
-      Date.now()
-    ],
 
 		requests : {
       once: [
+
         {
-          /**
-          * used to get stats on "init", process'em and process charts
-          **/
-					sort_by_host_or_path: function(req, next, app){
-            console.log('sort_by_host_or_path ONCE %o %s', req, app.options.stat_host)
-            let path = req.path
-            if(app.options.stat_host){
+					search_paths: function(req, next, app){
+						debug_internals('search_paths');
 
-              if(path){
-                let _get_by_path = function(path, extras){
-                  app.between({
-                    _extras: extras,
-                    uri: app.options.db+'/periodical',
-                    args: [
-                      [path, app.options.stat_host, "periodical",roundMilliseconds(Date.now() - 1000)],
-                      [path, app.options.stat_host, "periodical", roundMilliseconds(Date.now() + 0)],
-                      {
-                        index: 'sort_by_path',
-                        leftBound: 'open',
-                        rightBound: 'open'
-                      }
-                    ],
-                    // orderBy: {index: 'sort_by_path'}
-                  })
-                }
+            app.reduce({
+              _extras: {type: 'paths', host: 'colo'},
+              uri: app.options.db+'/periodical',
+              args: function(left, right) {
+                  return left.merge(right)
+              },
 
-                if(Array.isArray(path)){
-                  Array.each(path, function(_path, index){
-                    _get_by_path(_path, {id: req.id, type: 'once', multipath: {index: index, length: path.length}})
-                  })
-                }
-                else{
-                  _get_by_path(path, {id: req.id, type: 'once'})
-                }
-
-
-
-              }
-              else{
-                app.between({
-                  _extras: {id: req.id, type: 'once'},
-                  uri: app.options.db+'/periodical',
-                  args: [
-                    [app.options.stat_host, "periodical", roundMilliseconds(Date.now() - 1000)],
-                    [app.options.stat_host, "periodical",roundMilliseconds(Date.now() + 0)],
-                    {
-                      index: 'sort_by_host',
-                      leftBound: 'open',
-                      rightBound: 'open'
-                    }
-                  ],
-                  // orderBy: {index: 'sort_by_host'}
-                })
-
-              }
-
-
-
-            }
+              query: app.r.db(this.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
+                return this.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              }.bind(app))
+            })
 
 					}
-				}
+				},
       ],
-      range: [
 
+      periodical: [
         {
-          /**
-          * used to get stats on "init", process'em and process charts
-          **/
-					sort_by_host_or_path: function(req, next, app){
-            // console.log('sort_by_host_or_path RANGE', app.options.stat_host, req)
+					search_paths: function(req, next, app){
+						debug_internals('search_paths');
 
-             let path = req.path
-             let range = req.opt.range
+            app.reduce({
+              _extras: {type: 'paths', host: 'colo'},
+              uri: app.options.db+'/periodical',
+              args: function(left, right) {
+                  return left.merge(right)
+              },
 
-
-            if(app.options.stat_host){
-              // let CHUNK = 60000
-              let end = (range.end != null) ?  range.end : Date.now()
-              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
-              let start = range.start
-
-
-
-              if(path){
-                let _get_by_path = function(path, extras){
-                  app.between({
-                    _extras: extras,
-                    uri: app.options.db+'/periodical',
-                    args: [
-                      [path, app.options.stat_host, "periodical", roundMilliseconds(start)],
-                      [path, app.options.stat_host, "periodical",roundMilliseconds(end)],
-                      {
-                        index: 'sort_by_path',
-                        leftBound: 'open',
-                        rightBound: 'open'
-                      }
-                    ],
-                    orderBy: {index: 'sort_by_path'}
-                  })
-                }
-
-                if(Array.isArray(path)){
-                  Array.each(path, function(_path, index){
-                    _get_by_path(_path, {id: req.id, type: 'range', multipath: {index: index, length: path.length}})
-                  })
-                }
-                else{
-                  _get_by_path(path, {id: req.id, type: 'range'})
-                }
-
-              }
-              else{
-                app.between({
-                  _extras: {id: req.id, type: 'range'},
-                  uri: app.options.db+'/periodical',
-                  args: [
-                    [app.options.stat_host, "periodical",roundMilliseconds(start)],
-                    [app.options.stat_host, "periodical", roundMilliseconds(end)],
-                    {
-                      index: 'sort_by_host',
-                      leftBound: 'open',
-                      rightBound: 'open'
-                    }
-                  ],
-                  orderBy: {index: 'sort_by_host'}
-                })
-
-              }
-
-
-            }
+              query: app.r.db(this.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
+                return this.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              }.bind(app))
+            })
 
 					}
-				}
+				},
 
-			],
-
+      ],
 
 		},
 
 		routes: {
-      between: [{
+      reduce: [{
         path: ':database/:table',
-        callbacks: ['between']
+        callbacks: ['reduce']
       }],
+      // distinct: [{
+      //   path: ':database/:table',
+      //   callbacks: ['distinct']
+      // }],
       changes: [{
         path: ':database/:table',
         callbacks: ['changes']
@@ -202,69 +87,20 @@ module.exports = new Class({
 
 
   },
-  between: function(err, resp, params){
 
-    if(err){
-    }
-    else{
-      resp.toArray(function(err, arr){
-        // debug_internals('between toArray', arr)
-
-
-        let type = params.options._extras.type
-        let id = params.options._extras.id
-        let event = type.charAt(0).toUpperCase() + type.slice(1)
-
-        if(params.options._extras.multipath){
-          let id = params.options._extras.id
-          let index = params.options._extras.multipath.index
-          if(!this._multi_response[id]) this._multi_response[id] = []
-
-          debug_internals('between toArray %o', params.options._extras.id, params.options._extras.multipath, this._multi_response[id].length)
-
-
-
-          this._multi_response[id].push( arr )
-
-          if(this._multi_response[id].length == params.options._extras.multipath.length){
-            let result = []
-            Array.each(this._multi_response[id], function(resp){
-              result.append(resp)
-            })
-            this.fireEvent('on'+event+'Doc', [result, {id: id, type: type, input_type: this, app: null}]);
-
-            delete this._multi_response[id]
-          }
-          // }
-
-        }
-        else{
-          this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
-        }
-
-
-
-      }.bind(this))
-    }
-
-
-
-    // debug_internals('count', this.r.count(resp))
-
-  },
   initialize: function(options){
-    let paths = []
-    Array.each(options.paths, function(path){
-      if(this.paths.test(path) == true)
-        paths.push(path)
-    }.bind(this))
-
-    options.paths = paths
+    // let paths = []
+    // Array.each(options.paths, function(path){
+    //   if(this.paths.test(path) == true)
+    //     paths.push(path)
+    // }.bind(this))
+    //
+    // options.paths = paths
 
   	this.parent(options);//override default options
 
 
-    this.addEvent('onResume', this.register_on_changes.bind(this))
+    // this.addEvent('onResume', this.register_on_changes.bind(this))
 
 		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Host:Input_init');//start profiling
 
@@ -273,62 +109,178 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
   },
-  changes: function(err, resp, params){
-    debug_internals('changes %o %o %o %s', err, resp, params, new Date())
+  reduce: function(err, resp, params){
+    debug_internals('reduce', params.options)
 
-    let _close = function(){
-      resp.close()
-      this.removeEvent('onSuspend', _close)
-    }.bind(this)
+    if(err){
+      debug_internals('distinct err', err)
 
-    this.addEvent('onSuspend', _close)
+			if(params.uri != ''){
+				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
+			}
+			else{
+				this.fireEvent('onGetError', err);
+			}
 
-    if(!this.changes_buffer_expire)
-      this.changes_buffer_expire = Date.now()
+			this.fireEvent(this.ON_DOC_ERROR, err);
 
-    resp.each(function(err, row){
-      // debug_internals('changes %s', new Date())
+			this.fireEvent(
+				this[
+					'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
+				],
+				err
+			);
+    }
+    else{
+      let extras = params.options._extras
+      // let keys = this.r.object(resp).keys()
+      debug_internals('reduce', Object.keys(resp))
+      // resp.toArray(function(err, arr){
+      //
+      //   // debug_internals('getAll', this.r.map(arr, function(doc) {
+      //   //   return this.r.object(doc("metadata")("path"), true) // return { metadata.path: true}
+      //   // }.bind(this)).reduce(function(left, right) {
+      //   //     return left.merge(right)
+      //   // }.bind(this)).keys())
+      //
+      // }.bind(this))
 
-      if(row.type == 'add'){
-        // console.log(row.new_val)
-        // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
-        this.changes_buffer.push(row.new_val)
-      }
 
-      if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
-        // console.log('onPeriodicalDoc', this.changes_buffer.length)
-        this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
-        this.changes_buffer_expire = Date.now()
-        this.changes_buffer = []
-      }
-
-        // let type = params.options._extras.type
-        // let id = params.options._extras.id
-        // let event = type.charAt(0).toUpperCase() + type.slice(1)
-        //
-        // this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
-
-    }.bind(this));
+    }
   },
-  register_on_changes: function(){
-    debug_internals('register_on_changes')
-    /**
-    * @hardcoded: sqash: 1.1 => "sqash all changes between a 1100 ms"
-    * should be "aligned" with dashboard refreshs?
-    **/
-    this.changes({
-       _extras: {type: 'periodical'},
-       uri: this.options.db+'/periodical',
-       args: {includeTypes: true, squash: 1.1},
-       query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
-
-
-    })
-
-  }
-  // connect: function(){
+  // distinct: function(err, resp, params){
+  //   debug_internals('distinct', params.options)
   //
-	// },
+  //   if(err){
+  //     debug_internals('distinct err', err)
+  //
+	// 		if(params.uri != ''){
+	// 			this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
+	// 		}
+	// 		else{
+	// 			this.fireEvent('onGetError', err);
+	// 		}
+  //
+	// 		this.fireEvent(this.ON_DOC_ERROR, err);
+  //
+	// 		this.fireEvent(
+	// 			this[
+	// 				'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
+	// 			],
+	// 			err
+	// 		);
+  //   }
+  //   else{
+  //     // let type = params.options._extras.type
+  //     let extras = params.options._extras
+  //     resp.toArray(function(err, arr){
+  //       debug_internals('distinct count', arr)
+  //
+  //
+  //       // if(params.options._extras == 'path'){
+  //       //   if(arr.length == 0){
+  // 			// 		debug_internals('No paths yet');
+  // 			// 	}
+  // 			// 	else{
+  //       //
+  //       //     this.paths = []
+  //       //
+  // 			// 		Array.each(arr, function(row, index){
+  // 			// 			// debug_internals('Path %s', row);
+  //       //
+  //       //       if(
+  //       //         (
+  //       //           !this.blacklist_path
+  //       //           || (this.blacklist_path && this.blacklist_path.test(row) == false)
+  //       //         )
+  //       //         && !this.paths.contains(row)
+  //       //       )
+  //       //         this.paths.push(row)
+  //       //
+  // 			// 		}.bind(this));
+  //       //
+  // 			// 		debug_internals('PATHs %o', this.paths);
+  // 			// 	}
+  // 			// }
+  //       // else
+  //       // if(extras.type == 'hosts'){
+  //         if(arr.length == 0){
+  // 					debug_internals('No hosts yet');
+  // 				}
+  // 				else{
+  //
+  // 					// Array.each(arr, function(row, index){
+  // 					// 	let host = row
+  //           //   if(this.hosts[host] == undefined) this.hosts[host] = {}
+  //           //
+  // 					// }.bind(this));
+  //
+  // 					debug_internals('HOSTs %o', arr)
+  //           this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
+  //           // this.fireEvent('onDoc', [Array.clone(arr)]);
+  // 				}
+  //       // }
+  //
+  //     }.bind(this))
+  //
+  //
+  //   }
+  // },
+  // changes: function(err, resp, params){
+  //   debug_internals('changes %o %o %o %s', err, resp, params, new Date())
+  //
+  //   let _close = function(){
+  //     resp.close()
+  //     this.removeEvent('onSuspend', _close)
+  //   }.bind(this)
+  //
+  //   this.addEvent('onSuspend', _close)
+  //
+  //   if(!this.changes_buffer_expire)
+  //     this.changes_buffer_expire = Date.now()
+  //
+  //   resp.each(function(err, row){
+  //     // debug_internals('changes %s', new Date())
+  //
+  //     if(row.type == 'add'){
+  //       // console.log(row.new_val)
+  //       // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+  //       this.changes_buffer.push(row.new_val)
+  //     }
+  //
+  //     if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
+  //       // console.log('onPeriodicalDoc', this.changes_buffer.length)
+  //       this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+  //       this.changes_buffer_expire = Date.now()
+  //       this.changes_buffer = []
+  //     }
+  //
+  //       // let type = params.options._extras.type
+  //       // let id = params.options._extras.id
+  //       // let event = type.charAt(0).toUpperCase() + type.slice(1)
+  //       //
+  //       // this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
+  //
+  //   }.bind(this));
+  // },
+  // register_on_changes: function(){
+  //   debug_internals('register_on_changes')
+  //   /**
+  //   * @hardcoded: sqash: 1.1 => "sqash all changes between a 1100 ms"
+  //   * should be "aligned" with dashboard refreshs?
+  //   **/
+  //   this.changes({
+  //      _extras: {type: 'periodical'},
+  //      uri: this.options.db+'/periodical',
+  //      args: {includeTypes: true, squash: 1.1},
+  //      // query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
+  //      query: this.r.db(this.options.db).table('periodical').distinct({index: 'host'})
+  //
+  //
+  //   })
+  //
+  // }
+
 
 
 });
