@@ -197,12 +197,14 @@ module.exports = new Class({
     session.send_resp = session.send_resp+1 || 0
     let req_id = id +'.'+session.send_resp
 
+    debug_internals('hosts params %s %s', host, prop)
+
     let send_resp = {}
     send_resp[req_id] = function(data){
       let {type} = data
       debug_internals('send_resp %o', data[type])
       session[type].value = data[type]
-      session[type].timestamp = Date.now()
+      session[type].timestamp = (data.timestamp > session[type].timestamp) ? data.timestamp : session[type].timestamp
 
       if(session[type].value && session[type].value.length > 0){
         if(resp){
@@ -226,18 +228,24 @@ module.exports = new Class({
       delete send_resp[req_id]
     }.bind(this)
 
+    let type = undefined
+    if(!host)
+      type = 'hosts'
 
     //expired?
     if(session[type].value && session[type].value.length > 0 && session[type].timestamp > (Date.now() - this.options.expire)){
-      send_resp[req_id](session.hosts.value)
+      let _resp = {}
+      _resp.type = type
+      _resp[type] = session[type].value
+      send_resp[req_id](_resp)
     }
     else{
       this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
         debug_internals('send_resp', pipe)
-        this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
+        this.addEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], send_resp[req_id])
         // pipe.hosts.fireEvent('onOnce')
         // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-        pipe.hosts.inputs[0].fireEvent('onOnce')//fire onlye the 'hosts' input
+        pipe.hosts.inputs[type].fireEvent('onOnce')//fire onlye the 'hosts' input
 
       }.bind(this))
     }
@@ -260,15 +268,18 @@ module.exports = new Class({
     if(!this.pipeline.hosts){
 
       let hosts = new Pipeline(HostsPipeline)
+      debug_internals('__get_pipeline %o', hosts.inputs)
+
       this.pipeline = {
         hosts: hosts,
         // ids: [],
         // connected: false,
-        suspended: hosts.inputs[0].options.suspended
+        suspended: hosts.inputs['hosts'].options.suspended
       }
 
       this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
         let {type} = doc
+        doc.timestamp = Date.now()
         // this[type] = {
         //   value: doc[type],
         //   timestamp: Date.now()
@@ -287,7 +298,7 @@ module.exports = new Class({
 
 
 
-      this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+      this.pipeline.hosts.inputs['hosts'].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
         this.pipeline,
         id,
         cb
@@ -297,7 +308,7 @@ module.exports = new Class({
     }
     else{
       if(this.pipeline.connected == false){
-        this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+        this.pipeline.hosts.inputs['hosts'].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
           this.pipeline,
           id,
           cb
@@ -311,7 +322,7 @@ module.exports = new Class({
   },
   __after_connect_pipeline: function(pipeline, id, cb){
     debug_internals('__after_connect_pipeline')
-    pipeline.hosts.inputs[0].options.conn[0].module.removeEvents('onConnect')
+    pipeline.hosts.inputs['hosts'].options.conn[0].module.removeEvents('onConnect')
     pipeline.connected = true
 
     this.__resume_pipeline(pipeline, id, cb)

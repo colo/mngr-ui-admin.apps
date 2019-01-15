@@ -14,8 +14,8 @@ module.exports = function(conn){
 	// //console.log('IO', io)
 
   let conf = {
-  	input: [
-  		{
+  	input: {
+  		hosts: {
   			poll: {
   				suspended: true,//start suspended
   				id: "input.hosts",
@@ -41,10 +41,10 @@ module.exports = function(conn){
       		},
   			},
   		},
-      {
+      paths: {
   			poll: {
   				suspended: true,//start suspended
-  				id: "input.host",
+  				id: "input.paths",
   				conn: [
             Object.merge(
               Object.clone(conn),
@@ -67,7 +67,7 @@ module.exports = function(conn){
       		},
   			},
   		}
-  	],
+  	},
     filters: [
   		// decompress,
   		function(docs, opts, next, pipeline){
