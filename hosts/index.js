@@ -11,6 +11,30 @@ const ETC =  process.env.NODE_ENV === 'production'
       : path.join(process.cwd(), '/devel/etc/')
 
 let Pipeline = require('js-pipeline')
+let jscaching = require('js-caching')
+
+let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
+let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
+
+// let cache = new jscaching({
+//   suspended: false,
+//   stores: [
+//     {
+//       id: 'rethinkdb',
+//       conn: [
+//         {
+//           host: 'elk',
+//           port: 28015,
+//           db: 'servers',
+//           table: 'cache',
+//           module: RethinkDBStoreIn,
+//         },
+//       ],
+//       module: RethinkDBStoreOut,
+//     }
+//   ],
+// })
+
 
 let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
@@ -86,10 +110,31 @@ module.exports = new Class({
   // },
 
 
+  cache: undefined,
 
 	options: {
     id: 'hosts',
     path: 'hosts',
+
+    cache_store: {
+      suspended: false,
+      ttl: 5000,
+      stores: [
+        {
+          id: 'rethinkdb',
+          conn: [
+            {
+              host: 'elk',
+              port: 28015,
+              db: 'servers',
+              table: 'cache',
+              module: RethinkDBStoreIn,
+            },
+          ],
+          module: RethinkDBStoreOut,
+        }
+      ],
+    },
 
     authorization: undefined,
 
@@ -186,6 +231,7 @@ module.exports = new Class({
   // hosts_props: {},
 
   ON_HOSTS_UPDATED: 'onHostsUpdated',
+  ON_HOST_UPDATED: 'onHostUpdated',
 
   hosts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop'])
@@ -194,24 +240,25 @@ module.exports = new Class({
     let id = (socket) ? socket.id : req.session.id
     let session = this.__process_session(req, socket)
 
+    debug_internals('hosts params %s %s', host, prop)
+
     session.send_resp = session.send_resp+1 || 0
     let req_id = id +'.'+session.send_resp
-
-    debug_internals('hosts params %s %s', host, prop)
 
     let send_resp = {}
     send_resp[req_id] = function(data){
       let {type} = data
-      debug_internals('send_resp %o', data[type])
-      session[type].value = data[type]
-      session[type].timestamp = (data.timestamp > session[type].timestamp) ? data.timestamp : session[type].timestamp
 
-      if(session[type].value && session[type].value.length > 0){
+      // debug_internals('send_resp %o', data)
+      // session[type].value = data[type]
+      // session[type].timestamp = Date.now()
+
+      if(data[type] && (data[type].length > 0 || Object.getLength(data[type]) > 0)){
         if(resp){
-          resp.json(session[type].value)
+          resp.json(data[type])
         }
         else{
-          socket.binary(false).emit(type, session[type].value)
+          socket.binary(false).emit(type, data[type])
         }
       }
       else{
@@ -224,42 +271,99 @@ module.exports = new Class({
 
       }
 
-      this.removeEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], send_resp[req_id])
+      // this.removeEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], send_resp[req_id])
       delete send_resp[req_id]
     }.bind(this)
 
-    let type = undefined
     if(!host)
-      type = 'hosts'
+      this.__get_hosts(req_id, socket, send_resp[req_id])
 
-    //expired?
-    if(session[type].value && session[type].value.length > 0 && session[type].timestamp > (Date.now() - this.options.expire)){
-      let _resp = {}
-      _resp.type = type
-      _resp[type] = session[type].value
-      send_resp[req_id](_resp)
-    }
-    else{
-      this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
-        debug_internals('send_resp', pipe)
-        this.addEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], send_resp[req_id])
-        // pipe.hosts.fireEvent('onOnce')
-        // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-        pipe.hosts.inputs[type].fireEvent('onOnce')//fire onlye the 'hosts' input
+    else if (host && !prop)
+      this.__get_host(host, req_id, socket, send_resp[req_id])
 
-      }.bind(this))
-    }
+  },
+  __get_host: function(host, req_id, socket, cb){
+    this.cache.get('host.'+host, function(err, result){
+      debug_internals('get host %o %o', err, result)
+      if(!result){
+        this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+            // debug_internals('send_resp', pipe)
 
-    // debug_internals('hosts %o', this.hosts)
+            let _get_resp = {}
+            _get_resp[req_id] = function(resp){
+              debug_internals('_get_resp %o', resp)
+
+              this.cache.set('host.'+host, resp['host'])
+              // send_resp[req_id](resp)
+
+              cb(resp)
+
+              this.removeEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+              delete _get_resp[req_id]
+            }.bind(this)
+
+            this.addEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+
+            // this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
+
+            // pipe.hosts.fireEvent('onOnce')
+            // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
+            pipe.hosts.inputs[1].fireEvent('onOnce')//fire only the 'hosts' input
+
+          }.bind(this))
+      }
+      else{
+        // send_resp[req_id]({type: 'hosts', hosts: result})
+        cb({type: 'host', host: result})
+      }
+
+    }.bind(this))
+  },
+  __get_hosts: function(req_id, socket, cb){
+    this.cache.get('hosts', function(err, result){
+      debug_internals('get hosts %o %o', err, result)
+      if(!result){
+        this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+            // debug_internals('send_resp', pipe)
+
+            let _get_resp = {}
+            _get_resp[req_id] = function(resp){
+              debug_internals('_get_resp %o', resp['hosts'])
+
+              this.cache.set('hosts', resp['hosts'])
+              // send_resp[req_id](resp)
+
+              cb(resp)
+
+              this.removeEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
+              delete _get_resp[req_id]
+            }.bind(this)
+
+            this.addEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
+
+            // this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
+
+            // pipe.hosts.fireEvent('onOnce')
+            // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
+            pipe.hosts.inputs[0].fireEvent('onOnce')//fire only the 'hosts' input
+
+          }.bind(this))
+      }
+      else{
+        // send_resp[req_id]({type: 'hosts', hosts: result})
+        cb({type: 'hosts', hosts: result})
+      }
+
+    }.bind(this))
   },
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
 
-    if(!session.hosts)
-      session.hosts = {
-        value: undefined,
-        timestamp: 0
-      }
+    // if(!session.hosts)
+    //   session.hosts = {
+    //     value: undefined,
+    //     timestamp: 0
+    //   }
 
     return session
   },
@@ -268,24 +372,21 @@ module.exports = new Class({
     if(!this.pipeline.hosts){
 
       let hosts = new Pipeline(HostsPipeline)
-      debug_internals('__get_pipeline %o', hosts.inputs)
-
       this.pipeline = {
         hosts: hosts,
         // ids: [],
-        // connected: false,
-        suspended: hosts.inputs['hosts'].options.suspended
+        connected: [],
+        suspended: hosts.inputs[0].options.suspended
       }
 
       this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
         let {type} = doc
-        doc.timestamp = Date.now()
         // this[type] = {
         //   value: doc[type],
         //   timestamp: Date.now()
         // }
 
-        debug_internals('onSaveDoc %o', doc)
+        // debug_internals('onSaveDoc %o', doc)
 
         this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
         // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
@@ -296,23 +397,59 @@ module.exports = new Class({
       //   this.__emit_stats(host, stats)
       // }.bind(this))
 
+      this.__after_connect_inputs(
+        this.__resume_pipeline.pass([this.pipeline, id, cb])
+        // this.__after_connect_pipeline(
+        //   this.pipeline,
+        //   id,
+        //   cb
+        // )
+      )
 
+      // let _client_connect = function(index){
+      //   debug_internals('__get_pipeline %o', index)
+      //
+      //   // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+      //   //   this.pipeline,
+      //   //   id,
+      //   //   cb
+      //   // ))
+      //   this.pipeline.connected.push(true)
+      //   if(this.pipeline.hosts.inputs.length == this.pipeline.connected.length){
+      //     this.__after_connect_pipeline(
+      //       this.pipeline,
+      //       id,
+      //       cb
+      //     )
+      //   }
+      //
+      //
+      //   this.pipeline.hosts.inputs[index].removeEvent('onClientConnect',_client_connect)
+      // }.bind(this)
 
-      this.pipeline.hosts.inputs['hosts'].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
-        this.pipeline,
-        id,
-        cb
-      ))
+      // Array.each(this.pipeline.hosts.inputs, function(input, index){
+      //   input.addEvent('onClientConnect', _client_connect.pass(index));
+      // }.bind(this))
+      // this.pipeline.hosts.inputs[0].addEvent('onClientConnect', _client_connect);
+
 
 
     }
     else{
-      if(this.pipeline.connected == false){
-        this.pipeline.hosts.inputs['hosts'].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
-          this.pipeline,
-          id,
-          cb
-        ))
+        if(this.pipeline.hosts.inputs.length != this.pipeline.connected.length){
+          this.__after_connect_inputs(
+            this.__resume_pipeline.pass([this.pipeline, id, cb])
+            // this.__after_connect_pipeline(
+            //   this.pipeline,
+            //   id,
+            //   cb
+            // )
+          )
+        // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+        //   this.pipeline,
+        //   id,
+        //   cb
+        // ))
       }
       else{
         this.__resume_pipeline(this.pipeline, id, cb)
@@ -320,13 +457,36 @@ module.exports = new Class({
     }
 
   },
-  __after_connect_pipeline: function(pipeline, id, cb){
-    debug_internals('__after_connect_pipeline')
-    pipeline.hosts.inputs['hosts'].options.conn[0].module.removeEvents('onConnect')
-    pipeline.connected = true
+  __after_connect_inputs: function(cb){
 
-    this.__resume_pipeline(pipeline, id, cb)
+    let _client_connect = function(index){
+      debug_internals('__get_pipeline %o', index, cb)
+
+      // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+      //   this.pipeline,
+      //   id,
+      //   cb
+      // ))
+      this.pipeline.connected.push(true)
+      if(this.pipeline.hosts.inputs.length == this.pipeline.connected.length){
+        cb()
+      }
+
+
+      this.pipeline.hosts.inputs[index].removeEvent('onClientConnect',_client_connect)
+    }.bind(this)
+
+    Array.each(this.pipeline.hosts.inputs, function(input, index){
+      input.addEvent('onClientConnect', _client_connect.pass(index));
+    }.bind(this))
   },
+  // __after_connect_pipeline: function(pipeline, id, cb){
+  //   debug_internals('__after_connect_pipeline')
+  //   pipeline.hosts.inputs[0].options.conn[0].module.removeEvents('onConnect')
+  //   // pipeline.connected = true
+  //
+  //   this.__resume_pipeline(pipeline, id, cb)
+  // },
   __resume_pipeline: function(pipeline, id, cb){
     if(id){
       if(!pipeline.ids.contains(id))
@@ -348,6 +508,7 @@ module.exports = new Class({
 
 		this.profile('hosts_init');//start profiling
 
+    this.cache = new jscaching(this.options.cache_store)
 
 
     // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', function(){

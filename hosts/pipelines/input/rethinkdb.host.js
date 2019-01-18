@@ -30,14 +30,14 @@ module.exports = new Class({
 						debug_internals('search_paths');
 
             app.reduce({
-              _extras: {type: 'paths', host: 'colo'},
+              _extras: {prop: 'paths', host: 'colo'},
               uri: app.options.db+'/periodical',
               args: function(left, right) {
                   return left.merge(right)
               },
 
-              query: app.r.db(this.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
-                return this.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              query: app.r.db(app.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
+                return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               }.bind(app))
             })
 
@@ -45,27 +45,27 @@ module.exports = new Class({
 				},
       ],
 
-      periodical: [
-        {
-					search_paths: function(req, next, app){
-						debug_internals('search_paths');
-
-            app.reduce({
-              _extras: {type: 'paths', host: 'colo'},
-              uri: app.options.db+'/periodical',
-              args: function(left, right) {
-                  return left.merge(right)
-              },
-
-              query: app.r.db(this.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
-                return this.r.object(doc("metadata")("path"), true) // return { <country>: true}
-              }.bind(app))
-            })
-
-					}
-				},
-
-      ],
+      // periodical: [
+      //   {
+			// 		search_paths: function(req, next, app){
+			// 			debug_internals('search_paths');
+      //
+      //       app.reduce({
+      //         _extras: {prop: 'paths', host: 'colo'},
+      //         uri: app.options.db+'/periodical',
+      //         args: function(left, right) {
+      //             return left.merge(right)
+      //         },
+      //
+      //         query: app.r.db(app.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
+      //           return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+      //         }.bind(app))
+      //       })
+      //
+			// 		}
+			// 	},
+      //
+      // ],
 
 		},
 
@@ -133,8 +133,15 @@ module.exports = new Class({
     }
     else{
       let extras = params.options._extras
-      // let keys = this.r.object(resp).keys()
+      let host = extras.host
+      let prop = extras.prop
+
       debug_internals('reduce', Object.keys(resp))
+
+      let result = {}
+      result[prop] = Object.keys(resp)
+      this.fireEvent('onDoc', [result, Object.merge({input_type: this, app: null}, {host: host, type: 'host', prop: prop})])
+
       // resp.toArray(function(err, arr){
       //
       //   // debug_internals('getAll', this.r.map(arr, function(doc) {
@@ -148,84 +155,6 @@ module.exports = new Class({
 
     }
   },
-  // distinct: function(err, resp, params){
-  //   debug_internals('distinct', params.options)
-  //
-  //   if(err){
-  //     debug_internals('distinct err', err)
-  //
-	// 		if(params.uri != ''){
-	// 			this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
-	// 		}
-	// 		else{
-	// 			this.fireEvent('onGetError', err);
-	// 		}
-  //
-	// 		this.fireEvent(this.ON_DOC_ERROR, err);
-  //
-	// 		this.fireEvent(
-	// 			this[
-	// 				'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
-	// 			],
-	// 			err
-	// 		);
-  //   }
-  //   else{
-  //     // let type = params.options._extras.type
-  //     let extras = params.options._extras
-  //     resp.toArray(function(err, arr){
-  //       debug_internals('distinct count', arr)
-  //
-  //
-  //       // if(params.options._extras == 'path'){
-  //       //   if(arr.length == 0){
-  // 			// 		debug_internals('No paths yet');
-  // 			// 	}
-  // 			// 	else{
-  //       //
-  //       //     this.paths = []
-  //       //
-  // 			// 		Array.each(arr, function(row, index){
-  // 			// 			// debug_internals('Path %s', row);
-  //       //
-  //       //       if(
-  //       //         (
-  //       //           !this.blacklist_path
-  //       //           || (this.blacklist_path && this.blacklist_path.test(row) == false)
-  //       //         )
-  //       //         && !this.paths.contains(row)
-  //       //       )
-  //       //         this.paths.push(row)
-  //       //
-  // 			// 		}.bind(this));
-  //       //
-  // 			// 		debug_internals('PATHs %o', this.paths);
-  // 			// 	}
-  // 			// }
-  //       // else
-  //       // if(extras.type == 'hosts'){
-  //         if(arr.length == 0){
-  // 					debug_internals('No hosts yet');
-  // 				}
-  // 				else{
-  //
-  // 					// Array.each(arr, function(row, index){
-  // 					// 	let host = row
-  //           //   if(this.hosts[host] == undefined) this.hosts[host] = {}
-  //           //
-  // 					// }.bind(this));
-  //
-  // 					debug_internals('HOSTs %o', arr)
-  //           this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
-  //           // this.fireEvent('onDoc', [Array.clone(arr)]);
-  // 				}
-  //       // }
-  //
-  //     }.bind(this))
-  //
-  //
-  //   }
-  // },
   // changes: function(err, resp, params){
   //   debug_internals('changes %o %o %o %s', err, resp, params, new Date())
   //

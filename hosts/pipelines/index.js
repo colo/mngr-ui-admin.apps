@@ -14,8 +14,8 @@ module.exports = function(conn){
 	// //console.log('IO', io)
 
   let conf = {
-  	input: {
-  		hosts: {
+  	input: [
+  		{
   			poll: {
   				suspended: true,//start suspended
   				id: "input.hosts",
@@ -28,7 +28,7 @@ module.exports = function(conn){
               }
             )
   				],
-  				connect_retry_count: 5,
+  				connect_retry_count: -1,
   				connect_retry_periodical: 1000,
   				// requests: {
   				// 	periodical: 1000,
@@ -41,10 +41,10 @@ module.exports = function(conn){
       		},
   			},
   		},
-      paths: {
+      {
   			poll: {
   				suspended: true,//start suspended
-  				id: "input.paths",
+  				id: "input.host",
   				conn: [
             Object.merge(
               Object.clone(conn),
@@ -54,7 +54,7 @@ module.exports = function(conn){
               }
             )
   				],
-  				connect_retry_count: 5,
+  				connect_retry_count: -1,
   				connect_retry_periodical: 1000,
   				// requests: {
   				// 	periodical: 1000,
@@ -67,13 +67,13 @@ module.exports = function(conn){
       		},
   			},
   		}
-  	},
+  	],
     filters: [
   		// decompress,
   		function(docs, opts, next, pipeline){
         // debug_internals(arguments)
         let { id, type, input, input_type, app } = opts
-        let out = opts
+        let out = {type: type}
         out[type] = docs
         pipeline.output(out)
       }
