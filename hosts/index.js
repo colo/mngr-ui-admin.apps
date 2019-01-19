@@ -140,7 +140,7 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
-      prop: /stats/
+      // prop: /stats/
       // stat:
 		},
 
@@ -249,16 +249,23 @@ module.exports = new Class({
     send_resp[req_id] = function(data){
       let {type} = data
 
-      // debug_internals('send_resp %o', data)
+      debug_internals('send_resp %s', prop)
       // session[type].value = data[type]
       // session[type].timestamp = Date.now()
+      if(prop && data[type])
+        data[type] = data[type][prop]
 
-      if(data[type] && (data[type].length > 0 || Object.getLength(data[type]) > 0)){
+      let result = data[type]
+
+      if(prop) type = 'property'
+
+      if(result && (result.length > 0 || Object.getLength(result) > 0)){
+
         if(resp){
-          resp.json(data[type])
+          resp.json(result)
         }
         else{
-          socket.binary(false).emit(type, data[type])
+          socket.binary(false).emit(type, result)
         }
       }
       else{
@@ -278,11 +285,11 @@ module.exports = new Class({
     if(!host)
       this.__get_hosts(req_id, socket, send_resp[req_id])
 
-    else if (host && !prop)
-      this.__get_host(host, req_id, socket, send_resp[req_id])
+    else if (host)
+      this.__get_host(host, prop, req_id, socket, send_resp[req_id])
 
   },
-  __get_host: function(host, req_id, socket, cb){
+  __get_host: function(host, prop, req_id, socket, cb){
     this.cache.get('host.'+host, function(err, result){
       debug_internals('get host %o %o', err, result)
       if(!result){
@@ -308,7 +315,7 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[1].fireEvent('onOnce')//fire only the 'hosts' input
+            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop})//fire only the 'hosts' input
 
           }.bind(this))
       }

@@ -27,45 +27,47 @@ module.exports = new Class({
 
         {
 					search_paths: function(req, next, app){
-						debug_internals('search_paths');
+						if(req.host && (req.prop == 'paths' || !req.prop)){
+              debug_internals('search_paths', req.host, req.prop);
+              app.reduce({
+                _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                uri: app.options.db+'/periodical',
+                args: function(left, right) {
+                    return left.merge(right)
+                },
 
-            app.reduce({
-              _extras: {prop: 'paths', host: 'colo'},
-              uri: app.options.db+'/periodical',
-              args: function(left, right) {
-                  return left.merge(right)
-              },
+                query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
+                  return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+                }.bind(app))
+              })
+            }
 
-              query: app.r.db(app.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
-                return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-              }.bind(app))
-            })
+					}
+				},
+        {
+					catch_all: function(req, next, app){
+						if(req.prop && !app.properties.contains(req.prop)){
+              debug_internals('catch_all', req.host, req.prop)
+              app.unknown_property({options: {_extras: {prop: req.prop, host: req.host, type: 'prop'}}})
+            }
+
+
+              // app.reduce({
+              //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+              //   uri: app.options.db+'/periodical',
+              //   args: function(left, right) {
+              //       return left.merge(right)
+              //   },
+              //
+              //   query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              //   }.bind(app))
+              // })
 
 					}
 				},
       ],
 
-      // periodical: [
-      //   {
-			// 		search_paths: function(req, next, app){
-			// 			debug_internals('search_paths');
-      //
-      //       app.reduce({
-      //         _extras: {prop: 'paths', host: 'colo'},
-      //         uri: app.options.db+'/periodical',
-      //         args: function(left, right) {
-      //             return left.merge(right)
-      //         },
-      //
-      //         query: app.r.db(app.options.db).table('periodical').getAll('colo', {index: 'host'}).map(function(doc) {
-      //           return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-      //         }.bind(app))
-      //       })
-      //
-			// 		}
-			// 	},
-      //
-      // ],
 
 		},
 
@@ -88,6 +90,9 @@ module.exports = new Class({
 
   },
 
+  hosts: {},
+  properties: ['paths'],
+
   initialize: function(options){
     // let paths = []
     // Array.each(options.paths, function(path){
@@ -109,11 +114,19 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
   },
+  unknown_property: function(params){
+    debug_internals('unknown_property', params.options)
+    let extras = params.options._extras
+    let host = extras.host
+    let prop = extras.prop
+    let type = extras.type
+    this.fireEvent('onDoc', [null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
+  },
   reduce: function(err, resp, params){
     debug_internals('reduce', params.options)
 
     if(err){
-      debug_internals('distinct err', err)
+      // debug_internals('reduce err', err)
 
 			if(params.uri != ''){
 				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
@@ -131,29 +144,34 @@ module.exports = new Class({
 				err
 			);
     }
-    else{
-      let extras = params.options._extras
-      let host = extras.host
-      let prop = extras.prop
-
-      debug_internals('reduce', Object.keys(resp))
-
-      let result = {}
-      result[prop] = Object.keys(resp)
-      this.fireEvent('onDoc', [result, Object.merge({input_type: this, app: null}, {host: host, type: 'host', prop: prop})])
-
-      // resp.toArray(function(err, arr){
-      //
-      //   // debug_internals('getAll', this.r.map(arr, function(doc) {
-      //   //   return this.r.object(doc("metadata")("path"), true) // return { metadata.path: true}
-      //   // }.bind(this)).reduce(function(left, right) {
-      //   //     return left.merge(right)
-      //   // }.bind(this)).keys())
-      //
-      // }.bind(this))
+    // else{
+    let extras = params.options._extras
+    let host = extras.host
+    let prop = extras.prop
+    let type = extras.type
 
 
+    if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+
+    if(resp) debug_internals('reduce', Object.keys(resp))
+
+    // let result = {}
+    this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
+
+    if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+      let found = false
+      Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+        if(data)
+          found = true
+      })
+
+      this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
+      delete this.hosts[host]
     }
+
+
+
+    // }
   },
   // changes: function(err, resp, params){
   //   debug_internals('changes %o %o %o %s', err, resp, params, new Date())
