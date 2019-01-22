@@ -16,99 +16,14 @@ let jscaching = require('js-caching')
 let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
 let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
 
-// let cache = new jscaching({
-//   suspended: false,
-//   stores: [
-//     {
-//       id: 'rethinkdb',
-//       conn: [
-//         {
-//           host: 'elk',
-//           port: 28015,
-//           db: 'servers',
-//           table: 'cache',
-//           module: RethinkDBStoreIn,
-//         },
-//       ],
-//       module: RethinkDBStoreOut,
-//     }
-//   ],
-// })
-
-
 let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
-// let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
-// let data_to_tabular  = require( 'node-tabular-data' ).data_to_tabular
-//
-// let uptime_chart = require('mngr-ui-admin-charts/os/uptime')
-// let loadavg_chart = require('mngr-ui-admin-charts/os/loadavg')
-// let cpus_times_chart = require('mngr-ui-admin-charts/os/cpus_times')
-// let cpus_percentage_chart = require('mngr-ui-admin-charts/os/cpus_percentage')
-// let freemem_chart = require('mngr-ui-admin-charts/os/freemem')
-// let mounts_percentage_chart = require('mngr-ui-admin-charts/os/mounts_percentage')
-// let blockdevices_stats_chart = require('mngr-ui-admin-charts/os/blockdevices_stats')
-// let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces')
-// let networkInterfaces_stats_chart = require('mngr-ui-admin-charts/os/networkInterfaces_stats')
-// // let procs_count_chart = require('mngr-ui-admin-charts/os/procs_count')
-// let procs_top_chart = require('mngr-ui-admin-charts/os/procs_top')
-// let munin = require('mngr-ui-admin-charts/munin/default')
 
 let debug = require('debug')('mngr-ui-admin:apps:hosts'),
     debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Internals');
 
 module.exports = new Class({
   Extends: App,
-
-  // HostPipeline: undefined,
-  // pipelines: {},
-  // __stats: {},
-  // __stats_tabular: {},
-  //
-  // charts:{},
-  //
-  // __charts_instances:{},
-
-
-
-  // __charts: {
-  //   'os.uptime': {chart: uptime_chart},
-  //   'os.loadavg': {chart: loadavg_chart},
-  //   'os.cpus': {
-  //     times: { chart: cpus_times_chart },
-  //     percentage : { chart: cpus_percentage_chart }
-  //   },
-  //   'os_procs_uid_stats':{
-  //     top: {'matched_name': true, match: '%s', chart: procs_top_chart },
-  //   },
-  //   'os_procs_cmd_stats':{
-  //     top: {'matched_name': true, match: '%s', chart: procs_top_chart },
-  //   },
-  //   'os_procs_stats':{
-  //     top: {'matched_name': true, match: '%s', chart: procs_top_chart },
-  //   },
-  //   // 'os_procs': {
-  //   //   count: {'matched_name': true, match: '%s', chart: procs_count_chart },
-  //   // },
-  //   /**
-  //   * matched_name: true; will use that name as the key, else if will use the chart key
-  //   * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
-  //   * ex matched_name != true: os.cpus{ cpus_percentage: {}}
-  //   **/
-  //   'os_networkInterfaces_stats': {
-  //     properties: {'matched_name': true, match: '%s', chart: networkInterfaces_stats_chart},
-  //   },
-  //   'os_mounts':{
-  //     percentage : { 'matched_name': true, match: '%s', chart: mounts_percentage_chart},
-  //   },
-  //   'os_blockdevices': {
-  //     stats : { 'matched_name': true, match: '%s', chart: blockdevices_stats_chart},
-  //   },
-  //   'new RegExp("^munin")': { 'matched_name': true, chart: munin }
-  //
-  //
-  // },
-
 
   cache: undefined,
 
@@ -164,6 +79,11 @@ module.exports = new Class({
 					// 	callbacks: ['stats'],
 					// 	version: '',
 					// }
+          {
+            path: ':host/stats/:key',
+            callbacks: ['host_stats_key'],
+            version: '',
+          },
           {
             path: ':host?/:prop?',
             callbacks: ['hosts'],
@@ -233,6 +153,9 @@ module.exports = new Class({
   ON_HOSTS_UPDATED: 'onHostsUpdated',
   ON_HOST_UPDATED: 'onHostUpdated',
 
+  host_stats_key: function(){
+    debug_internals('host_stats_key %o', arguments)
+  },
   hosts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop'])
     let {host, prop} = params

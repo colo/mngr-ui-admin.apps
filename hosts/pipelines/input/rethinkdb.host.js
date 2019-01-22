@@ -45,6 +45,21 @@ module.exports = new Class({
 					}
 				},
         {
+					search_stats: function(req, next, app){
+						if(req.host && (req.prop == 'stats' || !req.prop)){
+              debug_internals('search_stats', req.host, req.prop);
+              app.map({
+                _extras: {prop: 'stats', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                uri: app.options.db+'/periodical',
+                args: function(x){ return x('reduction') },
+
+                query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).group(app.r.row('metadata')('path')).max(app.r.row('metadata')('timestamp')).ungroup()
+              })
+            }
+
+					}
+				},
+        {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.properties.contains(req.prop)){
               debug_internals('catch_all', req.host, req.prop)
@@ -74,7 +89,11 @@ module.exports = new Class({
 		routes: {
       reduce: [{
         path: ':database/:table',
-        callbacks: ['reduce']
+        callbacks: ['paths']
+      }],
+      map: [{
+        path: ':database/:table',
+        callbacks: ['stats']
       }],
       // distinct: [{
       //   path: ':database/:table',
@@ -91,7 +110,7 @@ module.exports = new Class({
   },
 
   hosts: {},
-  properties: ['paths'],
+  properties: ['paths', 'stats'],
 
   initialize: function(options){
     // let paths = []
@@ -122,8 +141,8 @@ module.exports = new Class({
     let type = extras.type
     this.fireEvent('onDoc', [null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
   },
-  reduce: function(err, resp, params){
-    debug_internals('reduce', params.options)
+  stats: function(err, resp, params){
+    debug_internals('stats', params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -153,9 +172,82 @@ module.exports = new Class({
 
     if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-    if(resp) debug_internals('reduce', Object.keys(resp))
+    if(resp) debug_internals('stats', resp)
+
+    let stats = {}
+    resp.toArray(function(err, arr){
+
+      // Array.each(arr, function(doc){
+      //   stats[doc.metadata.path] = {value: doc.data, timestamp: doc.metadata.timestamp}
+      // })
+
+      this.hosts[host][prop] = arr
+
+      if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+        let found = false
+        Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+          if(data)
+            found = true
+        })
+
+        this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
+        delete this.hosts[host]
+      }
+
+    }.bind(this))
+    // // let result = {}
+    // this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
+    //
+    // if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+    //   let found = false
+    //   Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+    //     if(data)
+    //       found = true
+    //   })
+    //
+    //   this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
+    //   delete this.hosts[host]
+    // }
+
+
+
+    // }
+  },
+  paths: function(err, resp, params){
+    debug_internals('paths', params.options)
+
+    if(err){
+      // debug_internals('reduce err', err)
+
+			if(params.uri != ''){
+				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
+			}
+			else{
+				this.fireEvent('onGetError', err);
+			}
+
+			this.fireEvent(this.ON_DOC_ERROR, err);
+
+			this.fireEvent(
+				this[
+					'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
+				],
+				err
+			);
+    }
+    // else{
+    let extras = params.options._extras
+    let host = extras.host
+    let prop = extras.prop
+    let type = extras.type
+
+
+    if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+
+    if(resp) debug_internals('paths', Object.keys(resp))
 
     // let result = {}
+    // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
     this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
 
     if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
