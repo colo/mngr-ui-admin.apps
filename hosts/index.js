@@ -164,6 +164,11 @@ module.exports = new Class({
   hosts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'paths'])
     let {host, prop, paths} = params
+    let query = (req) ? req.query : { format: params.format }
+    let range = (req) ? req.header('range') : params.range
+    let type = (range) ? 'range' : 'once'
+    let id = (socket) ? socket.id : req.session.id
+    let session = this.__process_session(req, socket)
 
     if(paths){
 
@@ -192,17 +197,6 @@ module.exports = new Class({
 
     debug_internals('stats: paths %o ', paths)
 
-    // if(paths && !Array.isArray(paths))
-    //   paths = [paths]
-
-    let query = (req) ? req.query : { format: params.format }
-
-    let range = (req) ? req.header('range') : params.range
-    let type = (range) ? 'range' : 'once'
-
-    let id = (socket) ? socket.id : req.session.id
-    let session = this.__process_session(req, socket)
-
     debug_internals('hosts params %s %s', host, prop)
 
     session.send_resp = session.send_resp+1 || 0
@@ -216,7 +210,8 @@ module.exports = new Class({
       // session[type].timestamp = Date.now()
       let result = data[type]
 
-      debug_internals('send_resp %s', prop, result)
+      debug_internals('send_resp %s', prop, result, query)
+      // if(result.stats && query == '')
 
       if(prop && result){
         result = result[prop]

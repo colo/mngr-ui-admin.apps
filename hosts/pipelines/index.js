@@ -35,49 +35,49 @@ let blockdevices_filter = function(doc, opts, next, pipeline){
 	return doc
 }
 
-let __process_stat_doc = function(doc, cb){
-  //console.log('__process_os_doc', doc)
-
-  let paths = {}
-
-  if(Array.isArray(doc)){
-    Array.each(doc, function(row){
-
-      // if(row != null && row.metadata.host == this.host){
-      if(row != null){
-        let {keys, path, host} = extract_data_os(row)
-
-        // //////console.log('ROW', keys, path)
-
-        if(!paths[path])
-          paths[path] = {}
-
-
-        Object.each(keys, function(data, key){
-          // ////////console.log('ROW', key, data)
-          if(!paths[path][key])
-            paths[path][key] = []
-
-          paths[path][key].push(data)
-        })
-      }
-    })
-  }
-  // else if(doc.metadata.host == this.host){
-  else{
-    let {keys, path, host} = extract_data_os(doc)
-    if(!paths[path])
-      paths[path] = {}
-
-    paths[path] = keys
-  }
-
-  cb(paths)
-
-
-}
-
-let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
+// let __process_stat_doc = function(doc, cb){
+//   //console.log('__process_os_doc', doc)
+//
+//   let paths = {}
+//
+//   if(Array.isArray(doc)){
+//     Array.each(doc, function(row){
+//
+//       // if(row != null && row.metadata.host == this.host){
+//       if(row != null){
+//         let {keys, path, host} = extract_data_os(row)
+//
+//         // //////console.log('ROW', keys, path)
+//
+//         if(!paths[path])
+//           paths[path] = {}
+//
+//
+//         Object.each(keys, function(data, key){
+//           // ////////console.log('ROW', key, data)
+//           if(!paths[path][key])
+//             paths[path][key] = []
+//
+//           paths[path][key].push(data)
+//         })
+//       }
+//     })
+//   }
+//   // else if(doc.metadata.host == this.host){
+//   else{
+//     let {keys, path, host} = extract_data_os(doc)
+//     if(!paths[path])
+//       paths[path] = {}
+//
+//     paths[path] = keys
+//   }
+//
+//   cb(paths)
+//
+//
+// }
+//
+// let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
 
 module.exports = function(payload){
 	// //console.log('IO', io)
@@ -154,37 +154,58 @@ module.exports = function(payload){
 
         out[type] = docs
 
-        // let stats = {}
-        if(type == 'host' && docs && docs.stats && docs.stats.length > 0){
-          Array.each(docs.stats, function(row, index){
-            if(row && row.metadata && row.metadata.path)
-              switch (row.metadata.path) {
-                // case 'os.procs':
-                // 	// row = mount_filter(row)
-                // 	// delete docs[index]
-                // 	break;
 
-                case 'os.mounts':
-                  row = mount_filter(row)
-                  break;
 
-                case 'os.blockdevices':
-                  row = blockdevices_filter(row)
-                  break;
+        if(type == 'host' && docs && docs.stats && Object.getLength(docs.stats) > 0){
 
-              }
+          let counter = 0
+          Object.each(docs.stats, function(stat, name){
+            if(!Array.isArray(stat))
+              stat = [stat]
 
-              // stats[row.metadata.path] = {value: row.data, timestamp: row.metadata.timestamp}
+            Array.each(stat, function(row, index){
+              if(row && row.metadata && row.metadata.path)
+                switch (row.metadata.path) {
+                  // case 'os.procs':
+                  // 	// row = mount_filter(row)
+                  // 	// delete docs[index]
+                  // 	break;
 
-              if(index == docs.stats.length -1 ){
-                // docs.stats = docs.stats.clean()
-                // out[type].stats = stats
-                pipeline.output(out)
-                // __process_stat_doc(docs.stats, function(stats){
-                //   out[type].stats = stats
-                //   pipeline.output(out)
-                // })
-              }
+                  case 'os.mounts':
+                    row = mount_filter(row)
+                    break;
+
+                  case 'os.blockdevices':
+                    row = blockdevices_filter(row)
+                    break;
+
+                }
+
+                // stats[row.metadata.path] = {value: row.data, timestamp: row.metadata.timestamp}
+
+                if(index == stat.length -1){
+                  stat.clean()
+
+                  // __process_stat_doc(stat, function(processed){
+                  //   out[type].stats[name] = processed
+                  //   // pipeline.output(out)
+                  // })
+                }
+            })
+
+            out[type].stats[name] = stat
+
+            if(counter == Object.getLength(docs.stats) -1 ){
+              // docs.stats = docs.stats.clean()
+              // out[type].stats = stats
+              pipeline.output(out)
+              // __process_stat_doc(docs.stats, function(stats){
+              //   out[type].stats = stats
+              //   pipeline.output(out)
+              // })
+            }
+
+            counter++
           })
 
 
