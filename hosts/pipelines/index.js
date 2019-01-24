@@ -79,8 +79,11 @@ let __process_stat_doc = function(doc, cb){
 
 let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
 
-module.exports = function(conn){
+module.exports = function(payload){
 	// //console.log('IO', io)
+  let {conn, host} = payload
+
+  debug_internals('require %o', payload)
 
   let conf = {
   	input: [
@@ -120,7 +123,8 @@ module.exports = function(conn){
               {
                 // path_key: 'os',
                 module: InputPollerRethinkDBHost,
-              }
+              },
+              host
             )
   				],
   				connect_retry_count: -1,
@@ -142,11 +146,16 @@ module.exports = function(conn){
   		function(docs, opts, next, pipeline){
         // debug_internals(arguments)
         let { id, type, input, input_type, app } = opts
-        let out = {type: type}
+        delete opts.input
+        delete opts.input_type
+        delete opts.app
+
+        let out = Object.clone(opts)
+
         out[type] = docs
 
         // let stats = {}
-        if(type == 'host' && docs.stats){
+        if(type == 'host' && docs && docs.stats && docs.stats.length > 0){
           Array.each(docs.stats, function(row, index){
             if(row && row.metadata && row.metadata.path)
               switch (row.metadata.path) {

@@ -16,7 +16,7 @@ let jscaching = require('js-caching')
 let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
 let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
 
-let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
+// let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
 
 let debug = require('debug')('mngr-ui-admin:apps:hosts'),
@@ -31,9 +31,13 @@ module.exports = new Class({
     id: 'hosts',
     path: 'hosts',
 
+    host: {
+      properties: ['paths', 'stats'],
+    },
+
     cache_store: {
       suspended: false,
-      ttl: 5000,
+      ttl: 1999,
       stores: [
         {
           id: 'rethinkdb',
@@ -55,7 +59,7 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
-      // prop: /stats/
+      prop: /stats|paths/
       // stat:
 		},
 
@@ -79,13 +83,13 @@ module.exports = new Class({
 					// 	callbacks: ['stats'],
 					// 	version: '',
 					// }
+          // {
+          //   path: ':host/stats/:key',
+          //   callbacks: ['host_stats_key'],
+          //   version: '',
+          // },
           {
-            path: ':host/stats/:key',
-            callbacks: ['host_stats_key'],
-            version: '',
-          },
-          {
-            path: ':host?/:prop?',
+            path: ':host?/:prop?/:paths?',
             callbacks: ['hosts'],
             version: '',
           }
@@ -152,14 +156,50 @@ module.exports = new Class({
 
   ON_HOSTS_UPDATED: 'onHostsUpdated',
   ON_HOST_UPDATED: 'onHostUpdated',
+  ON_HOST_RANGE: 'onHostRange',
 
-  host_stats_key: function(){
-    debug_internals('host_stats_key %o', arguments)
-  },
+  // host_stats_key: function(){
+  //   debug_internals('host_stats_key %o', arguments)
+  // },
   hosts: function(){
-    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop'])
-    let {host, prop} = params
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'paths'])
+    let {host, prop, paths} = params
+
+    if(paths){
+
+      try{
+        let _parsed = JSON.parse(paths)
+        debug_internals('stats: paths _parsed %o ', _parsed)
+
+        paths = []
+        if(Array.isArray(_parsed))
+          Array.each(_parsed, function(_path){
+            // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+            //avoid duplicates (with push, you may get duplicates)
+            paths.combine([_path])
+          }.bind(this))
+
+
+      }
+      catch(e){
+        // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+      }
+
+      if(!Array.isArray(paths))
+        paths = [paths]
+
+    }
+
+    debug_internals('stats: paths %o ', paths)
+
+    // if(paths && !Array.isArray(paths))
+    //   paths = [paths]
+
     let query = (req) ? req.query : { format: params.format }
+
+    let range = (req) ? req.header('range') : params.range
+    let type = (range) ? 'range' : 'once'
+
     let id = (socket) ? socket.id : req.session.id
     let session = this.__process_session(req, socket)
 
@@ -172,13 +212,25 @@ module.exports = new Class({
     send_resp[req_id] = function(data){
       let {type} = data
 
-      debug_internals('send_resp %s', prop)
       // session[type].value = data[type]
       // session[type].timestamp = Date.now()
-      if(prop && data[type])
-        data[type] = data[type][prop]
-
       let result = data[type]
+
+      debug_internals('send_resp %s', prop, result)
+
+      if(prop && result){
+        result = result[prop]
+
+        if(prop == 'stats' && paths){
+          let tmp_result = Object.clone(result)
+          result = {}
+          Array.each(paths, function(path){
+            result[path] = tmp_result[path]
+          })
+        }
+      }
+
+
 
       if(prop) type = 'property'
 
@@ -205,32 +257,88 @@ module.exports = new Class({
       delete send_resp[req_id]
     }.bind(this)
 
-    if(!host)
+    if(host === null || prop === null){//null means didn't pass the params filter, undefined is allright
+      send_resp[req_id]({
+        type: (prop === null) ? 'property' : 'host'
+      })
+    }
+    else if(!host)
       this.__get_hosts(req_id, socket, send_resp[req_id])
-
-    else if (host)
+    else if(!range)
       this.__get_host(host, prop, req_id, socket, send_resp[req_id])
+    else
+      this.__get_host_range({
+        host: host,
+        prop: prop,
+        paths: paths,
+        range: range,
+        req_id: req_id,
+        socket: socket,
+        cb: send_resp[req_id]
+      })
+
+  },
+  __get_host_range: function(payload){
+    let {host, prop, paths, range, req_id, socket, cb} = payload
+
+    this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+        // debug_internals('send_resp', pipe)
+
+        let _get_resp = {}
+        _get_resp[req_id] = function(resp){
+          if(resp.id == req_id){
+            debug_internals('_get_resp range %o %o', resp)
+
+            cb(resp)
+
+            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            delete _get_resp[req_id]
+          }
+        }.bind(this)
+
+        this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+
+
+        pipe.hosts.inputs[1].fireEvent('onRange', {
+          host: host,
+          prop: prop,
+          paths: paths,
+          id: req_id,
+          Range: range
+        })//fire only the 'hosts' input
+
+      }.bind(this))
 
   },
   __get_host: function(host, prop, req_id, socket, cb){
+
     this.cache.get('host.'+host, function(err, result){
       debug_internals('get host %o %o', err, result)
-      if(!result){
+
+      let _get_resp = {}
+      _get_resp[req_id] = function(resp){
+        if(resp.id == req_id){
+          debug_internals('_get_resp %o %o', resp, result)
+
+          if(result)//cache result
+            resp['host'] = Object.merge(result, resp['host'])
+
+          this.cache.set('host.'+host, resp['host'])
+          // send_resp[req_id](resp)
+
+          cb(resp)
+
+          this.removeEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+          delete _get_resp[req_id]
+        }
+      }.bind(this)
+
+      if(
+        !result //nothing on cache
+        || (prop && !result[prop]) //or request a prop and doens't exist on cache
+      ){
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
             // debug_internals('send_resp', pipe)
-
-            let _get_resp = {}
-            _get_resp[req_id] = function(resp){
-              debug_internals('_get_resp %o', resp)
-
-              this.cache.set('host.'+host, resp['host'])
-              // send_resp[req_id](resp)
-
-              cb(resp)
-
-              this.removeEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
-              delete _get_resp[req_id]
-            }.bind(this)
 
             this.addEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
 
@@ -238,9 +346,40 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop})//fire only the 'hosts' input
+            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
 
           }.bind(this))
+      }
+       //there is a cache, should return full host, but it doens't have all properties
+      else if(result && (!prop && Object.getLength(result) != this.options.host.properties.length)){
+        let props_result = {}
+        let _merge_resp = {}
+        Array.each(this.options.host.properties, function(prop, index){
+          if(!result[prop]){//if prop not in cache
+
+            this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+
+              //merge props responses
+              _merge_resp[prop] = function(resp){
+                debug_internals('_merge_resp', resp, prop)
+                props_result = Object.merge(props_result, resp)
+                this.removeEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
+
+                //end of array props? send response
+                if(index == this.options.host.properties.length -1)
+                  _get_resp[req_id](props_result)
+
+              }.bind(this)
+
+              this.addEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
+
+              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
+
+            }.bind(this))
+          }
+
+
+        }.bind(this))
       }
       else{
         // send_resp[req_id]({type: 'hosts', hosts: result})
@@ -258,15 +397,17 @@ module.exports = new Class({
 
             let _get_resp = {}
             _get_resp[req_id] = function(resp){
-              debug_internals('_get_resp %o', resp['hosts'])
+              if(resp.id == req_id){
+                debug_internals('_get_resp %o', resp.id)
 
-              this.cache.set('hosts', resp['hosts'])
-              // send_resp[req_id](resp)
+                this.cache.set('hosts', resp['hosts'], 5000)
+                // send_resp[req_id](resp)
 
-              cb(resp)
+                cb(resp)
 
-              this.removeEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
-              delete _get_resp[req_id]
+                this.removeEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
+                delete _get_resp[req_id]
+              }
             }.bind(this)
 
             this.addEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
@@ -275,7 +416,7 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[0].fireEvent('onOnce')//fire only the 'hosts' input
+            pipe.hosts.inputs[0].fireEvent('onOnce', {id: req_id})//fire only the 'hosts' input
 
           }.bind(this))
       }
@@ -301,6 +442,11 @@ module.exports = new Class({
 
     if(!this.pipeline.hosts){
 
+      const HostsPipeline = require('./pipelines/index')({
+        conn: require(ETC+'default.conn.js')(),
+        host: this.options.host
+      })
+
       let hosts = new Pipeline(HostsPipeline)
       this.pipeline = {
         hosts: hosts,
@@ -310,7 +456,7 @@ module.exports = new Class({
       }
 
       this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
-        let {type} = doc
+        let {type, range} = doc
         // this[type] = {
         //   value: doc[type],
         //   timestamp: Date.now()
@@ -318,7 +464,11 @@ module.exports = new Class({
 
         // debug_internals('onSaveDoc %o', doc)
 
-        this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
+        if(!range)
+          this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
+        else
+          this.fireEvent(this['ON_'+type.toUpperCase()+'_RANGE'], doc)
+
         // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
         // this.__emit_stats(host, stats)
       }.bind(this))

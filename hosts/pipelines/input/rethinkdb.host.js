@@ -30,7 +30,7 @@ module.exports = new Class({
 						if(req.host && (req.prop == 'paths' || !req.prop)){
               debug_internals('search_paths', req.host, req.prop);
               app.reduce({
-                _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
                 uri: app.options.db+'/periodical',
                 args: function(left, right) {
                     return left.merge(right)
@@ -49,11 +49,16 @@ module.exports = new Class({
 						if(req.host && (req.prop == 'stats' || !req.prop)){
               debug_internals('search_stats', req.host, req.prop);
               app.map({
-                _extras: {prop: 'stats', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {id: req.id, prop: 'stats', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
                 uri: app.options.db+'/periodical',
-                args: function(x){ return x('reduction') },
+                args: function(x){ return [x('group'), x('reduction')] },
 
-                query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).group(app.r.row('metadata')('path')).max(app.r.row('metadata')('timestamp')).ungroup()
+                query: app.r.db(app.options.db).
+                table('periodical').
+                getAll(req.host, {index: 'host'}).
+                group(app.r.row('metadata')('path')).
+                max(app.r.row('metadata')('timestamp')).
+                ungroup()
               })
             }
 
@@ -61,9 +66,9 @@ module.exports = new Class({
 				},
         {
 					catch_all: function(req, next, app){
-						if(req.prop && !app.properties.contains(req.prop)){
+						if(req.prop && !app.options.properties.contains(req.prop)){
               debug_internals('catch_all', req.host, req.prop)
-              app.unknown_property({options: {_extras: {prop: req.prop, host: req.host, type: 'prop'}}})
+              app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
             }
 
 
@@ -83,6 +88,163 @@ module.exports = new Class({
 				},
       ],
 
+      range: [
+
+        {
+					search_paths: function(req, next, app){
+						if(req.host && (req.prop == 'paths' || !req.prop)){
+              debug_internals('search_paths range', req.host, req.prop, req.opt.range)
+
+              let range = req.opt.range
+              let end = (range.end != null) ?  range.end : Date.now()
+              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
+              let start = range.start
+
+              app.reduce({
+                _extras: {
+                  id: req.id,
+                  prop: 'paths',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop',
+                  range: req.opt.range
+                },
+                uri: app.options.db+'/periodical',
+                args: function(left, right) {
+                    return left.merge(right)
+                },
+
+                query: app.r.db(app.options.db).
+                table('periodical').
+                between(
+                  [req.host, 'periodical', roundMilliseconds(start)],
+                  [req.host, 'periodical', roundMilliseconds(end)],
+                  {index: 'sort_by_host'}
+                ).
+                map(function(doc) {
+                  return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+                }.bind(app))
+              })
+            }
+
+					}
+				},
+        {
+					search_stats: function(req, next, app){
+						if(req.host && (req.prop == 'stats' || !req.prop)){
+              debug_internals('search_stats range %o', req);
+
+              let paths = req.paths
+              let range = req.opt.range
+              let end = (range.end != null) ?  range.end : Date.now()
+              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
+              let start = range.start
+
+              if(paths){
+                let _get_by_path = function(path, extras){
+                  app.map({
+                    _extras: extras,
+                    uri: app.options.db+'/periodical',
+                    args: function(x){ return [x('group'),x('reduction')] },
+
+                    query: app.r.db(app.options.db).
+                    table('periodical').
+                    between(
+                      [path, req.host, 'periodical', roundMilliseconds(start)],
+                      [path, req.host, 'periodical', roundMilliseconds(end)],
+                      {index: 'sort_by_path'}
+                    ).
+                    group(app.r.row('metadata')('path')).
+                    ungroup()
+                  })
+                  // app.between({
+                  //   _extras: extras,
+                  //   uri: app.options.db+'/periodical',
+                  //   args: [
+                  //     [path, req.host, "periodical", roundMilliseconds(start)],
+                  //     [path, req.host, "periodical",roundMilliseconds(end)],
+                  //     {
+                  //       index: 'sort_by_path',
+                  //       leftBound: 'open',
+                  //       rightBound: 'open'
+                  //     }
+                  //   ],
+                  //   orderBy: {index: 'sort_by_path'}
+                  // })
+                }
+
+                if(Array.isArray(paths)){
+                  Array.each(paths, function(_path, index){
+                    _get_by_path(_path,{
+                      id: req.id,
+                      prop: 'stats',
+                      host: req.host,
+                      type: (!req.prop) ? 'host' : 'prop',
+                      range: req.opt.range,
+                      multipath: {index: index, length: paths.length}
+                    })
+                  })
+                }
+                else{
+                  _get_by_path(paths, {
+                    id: req.id,
+                    prop: 'stats',
+                    host: req.host,
+                    type: (!req.prop) ? 'host' : 'prop',
+                    range: req.opt.range
+                  })
+                }
+
+              }
+              else{
+                app.map({
+                  _extras: {
+                    id: req.id,
+                    prop: 'stats',
+                    host: req.host,
+                    type: (!req.prop) ? 'host' : 'prop',
+                    range: req.opt.range
+                  },
+                  uri: app.options.db+'/periodical',
+                  args: function(x){ return [x('group'),x('reduction')] },
+
+                  query: app.r.db(app.options.db).
+                  table('periodical').
+                  between(
+                    [req.host, 'periodical', roundMilliseconds(start)],
+                    [req.host, 'periodical', roundMilliseconds(end)],
+                    {index: 'sort_by_host'}
+                  ).
+                  group(app.r.row('metadata')('path')).
+                  ungroup()
+                })
+              }
+            }
+
+					}
+				},
+        {
+					catch_all: function(req, next, app){
+						if(req.prop && !app.options.properties.contains(req.prop)){
+              debug_internals('catch_all', req.host, req.prop)
+              app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
+            }
+
+
+              // app.reduce({
+              //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+              //   uri: app.options.db+'/periodical',
+              //   args: function(left, right) {
+              //       return left.merge(right)
+              //   },
+              //
+              //   query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              //   }.bind(app))
+              // })
+
+					}
+				},
+      ],
 
 		},
 
@@ -92,6 +254,10 @@ module.exports = new Class({
         callbacks: ['paths']
       }],
       map: [{
+        path: ':database/:table',
+        callbacks: ['stats']
+      }],
+      between: [{
         path: ':database/:table',
         callbacks: ['stats']
       }],
@@ -106,11 +272,12 @@ module.exports = new Class({
 
 		},
 
-
+    // properties: ['paths', 'stats'],
+    properties: [],
   },
 
   hosts: {},
-  properties: ['paths', 'stats'],
+  _multi_response: {},
 
   initialize: function(options){
     // let paths = []
@@ -139,10 +306,17 @@ module.exports = new Class({
     let host = extras.host
     let prop = extras.prop
     let type = extras.type
-    this.fireEvent('onDoc', [null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
+    let id = extras.id
+
+    this.fireEvent('onDoc', [null, Object.merge(
+      {input_type: this, app: null},
+      // {host: host, type: 'host', prop: prop, id: id}
+      extras,
+      {type: 'host'}
+    )])
   },
   stats: function(err, resp, params){
-    debug_internals('stats', params.options)
+    debug_internals('stats', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -168,37 +342,85 @@ module.exports = new Class({
     let host = extras.host
     let prop = extras.prop
     let type = extras.type
-
+    let id = extras.id
+    let multipath = extras.multipath
 
     if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-    if(resp) debug_internals('stats', resp)
+    // if(resp) debug_internals('stats', resp)
 
     let stats = {}
     resp.toArray(function(err, arr){
 
-      // Array.each(arr, function(doc){
-      //   stats[doc.metadata.path] = {value: doc.data, timestamp: doc.metadata.timestamp}
-      // })
+      // this.hosts[host][prop] = arr
+      this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
 
-      this.hosts[host][prop] = arr
+        if(multipath){
+          let index = multipath.index
+          if(!this._multi_response[id]) this._multi_response[id] = []
 
-      if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
-        let found = false
-        Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-          if(data)
-            found = true
-        })
+          debug_internals('multipath %o', id, multipath, this._multi_response[id].length, result)
 
-        this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
-        delete this.hosts[host]
-      }
+          this._multi_response[id].push( result )
+
+          if(this._multi_response[id].length == multipath.length){
+            let final_result = {}
+            Array.each(this._multi_response[id], function(resp){
+              final_result = Object.merge(final_result,resp)
+            })
+
+            debug_internals('multipath final %o', final_result)
+
+            // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
+            this.fireEvent('onDoc', [
+              (Object.getLength(final_result) > 0) ? {stats: final_result} : null,
+              Object.merge(
+                {input_type: this, app: null},
+                // {host: host, type: 'host', prop: prop, id: id}
+                extras,
+                {type: 'host'}
+              )
+            ])
+            // delete this.hosts[host]
+
+            delete this._multi_response[id]
+          }
+          // }
+
+        }
+        else{
+          this.hosts[host][prop] = result
+
+          if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
+            let found = false
+            Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+              if(data !== null && (!Array.isArray(data) || data.length > 0))
+                found = true
+            })
+
+            debug_internals('stats firing host...', this.hosts[host])
+
+            this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+              {input_type: this, app: null},
+              // {host: host, type: 'host', prop: prop, id: id}
+              extras,
+              {type: 'host'}
+            )])
+            delete this.hosts[host]
+          }
+        }
+
+
+
+      }.bind(this))
+
+
 
     }.bind(this))
     // // let result = {}
     // this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
     //
-    // if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+    // if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
     //   let found = false
     //   Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
     //     if(data)
@@ -214,7 +436,7 @@ module.exports = new Class({
     // }
   },
   paths: function(err, resp, params){
-    debug_internals('paths', params.options)
+    debug_internals('paths', err, resp, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -240,7 +462,7 @@ module.exports = new Class({
     let host = extras.host
     let prop = extras.prop
     let type = extras.type
-
+    let id = extras.id
 
     if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
@@ -250,14 +472,25 @@ module.exports = new Class({
     // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
     this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
 
-    if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+    if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
       let found = false
       Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-        if(data)
+        if(data !== null && (!Array.isArray(data) || data.length > 0))
           found = true
       })
 
-      this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
+      debug_internals('paths firing host...', this.hosts[host], Object.merge(
+        extras,
+        {type: 'host'}
+        // {host: host, type: 'host', prop: prop, id: id}
+      ))
+
+      this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+        {input_type: this, app: null},
+        extras,
+        {type: 'host'}
+        // {host: host, type: 'host', prop: prop, id: id}
+      )])
       delete this.hosts[host]
     }
 

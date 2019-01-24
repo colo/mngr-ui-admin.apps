@@ -29,7 +29,7 @@ module.exports = new Class({
 						debug_internals('search_hosts');
 
             app.distinct({
-              _extras: {type: 'hosts'},
+              _extras: {type: 'hosts', id: req.id},
               uri: app.options.db+'/periodical',
               args: {index: 'host'}
             })
@@ -94,7 +94,7 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input started');
   },
-  
+
   distinct: function(err, resp, params){
     debug_internals('distinct', params.options)
 
