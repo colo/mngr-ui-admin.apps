@@ -45,11 +45,11 @@ module.exports = new Class({
 					}
 				},
         {
-					search_stats: function(req, next, app){
-						if(req.host && (req.prop == 'stats' || !req.prop)){
-              debug_internals('search_stats', req.host, req.prop);
+					search_data: function(req, next, app){
+						if(req.host && (req.prop == 'data' || !req.prop)){
+              debug_internals('search_data', req.host, req.prop);
               app.map({
-                _extras: {id: req.id, prop: 'stats', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
                 uri: app.options.db+'/periodical',
                 args: function(x){ return [x('group'), x('reduction')] },
 
@@ -129,9 +129,9 @@ module.exports = new Class({
 					}
 				},
         {
-					search_stats: function(req, next, app){
-						if(req.host && (req.prop == 'stats' || !req.prop)){
-              debug_internals('search_stats range %o', req);
+					search_data: function(req, next, app){
+						if(req.host && (req.prop == 'data' || !req.prop)){
+              debug_internals('search_data range %o', req);
 
               let paths = req.paths
               let range = req.opt.range
@@ -174,9 +174,10 @@ module.exports = new Class({
 
                 if(Array.isArray(paths)){
                   Array.each(paths, function(_path, index){
+                    _path = _path.replace(/_/g, '.')//if path are format=stat, transform
                     _get_by_path(_path,{
                       id: req.id,
-                      prop: 'stats',
+                      prop: 'data',
                       host: req.host,
                       type: (!req.prop) ? 'host' : 'prop',
                       range: req.opt.range,
@@ -187,7 +188,7 @@ module.exports = new Class({
                 else{
                   _get_by_path(paths, {
                     id: req.id,
-                    prop: 'stats',
+                    prop: 'data',
                     host: req.host,
                     type: (!req.prop) ? 'host' : 'prop',
                     range: req.opt.range
@@ -199,7 +200,7 @@ module.exports = new Class({
                 app.map({
                   _extras: {
                     id: req.id,
-                    prop: 'stats',
+                    prop: 'data',
                     host: req.host,
                     type: (!req.prop) ? 'host' : 'prop',
                     range: req.opt.range
@@ -255,11 +256,11 @@ module.exports = new Class({
       }],
       map: [{
         path: ':database/:table',
-        callbacks: ['stats']
+        callbacks: ['data']
       }],
       between: [{
         path: ':database/:table',
-        callbacks: ['stats']
+        callbacks: ['data']
       }],
       // distinct: [{
       //   path: ':database/:table',
@@ -272,7 +273,7 @@ module.exports = new Class({
 
 		},
 
-    // properties: ['paths', 'stats'],
+    // properties: ['paths', 'data'],
     properties: [],
   },
 
@@ -315,8 +316,8 @@ module.exports = new Class({
       {type: 'host'}
     )])
   },
-  stats: function(err, resp, params){
-    debug_internals('stats', err, params.options)
+  data: function(err, resp, params){
+    debug_internals('data', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -347,9 +348,9 @@ module.exports = new Class({
 
     if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-    // if(resp) debug_internals('stats', resp)
+    // if(resp) debug_internals('data', resp)
 
-    let stats = {}
+    let data = {}
     resp.toArray(function(err, arr){
 
       // this.hosts[host][prop] = arr
@@ -373,7 +374,7 @@ module.exports = new Class({
 
             // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
             this.fireEvent('onDoc', [
-              (Object.getLength(final_result) > 0) ? {stats: final_result} : null,
+              (Object.getLength(final_result) > 0) ? {data: final_result} : null,
               Object.merge(
                 {input_type: this, app: null},
                 // {host: host, type: 'host', prop: prop, id: id}
@@ -394,11 +395,11 @@ module.exports = new Class({
           if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
             let found = false
             Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-              if(data !== null && (!Array.isArray(data) || data.length > 0))
+              if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
                 found = true
             })
 
-            debug_internals('stats firing host...', this.hosts[host])
+            debug_internals('data firing host...', this.hosts[host])
 
             this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
               {input_type: this, app: null},
@@ -475,7 +476,7 @@ module.exports = new Class({
     if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
       let found = false
       Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-        if(data !== null && (!Array.isArray(data) || data.length > 0))
+        if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
           found = true
       })
 

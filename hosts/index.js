@@ -22,6 +22,8 @@ let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
 let debug = require('debug')('mngr-ui-admin:apps:hosts'),
     debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Internals');
 
+let data_to_stat = require('node-tabular-data').data_to_stat
+
 module.exports = new Class({
   Extends: App,
 
@@ -32,7 +34,7 @@ module.exports = new Class({
     path: 'hosts',
 
     host: {
-      properties: ['paths', 'stats'],
+      properties: ['paths', 'data'],
     },
 
     cache_store: {
@@ -59,7 +61,7 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
-      prop: /stats|paths/
+      prop: /data|paths/
       // stat:
 		},
 
@@ -174,7 +176,7 @@ module.exports = new Class({
 
       try{
         let _parsed = JSON.parse(paths)
-        debug_internals('stats: paths _parsed %o ', _parsed)
+        debug_internals('data: paths _parsed %o ', _parsed)
 
         paths = []
         if(Array.isArray(_parsed))
@@ -195,7 +197,7 @@ module.exports = new Class({
 
     }
 
-    debug_internals('stats: paths %o ', paths)
+    debug_internals('data: paths %o ', paths)
 
     debug_internals('hosts params %s %s', host, prop)
 
@@ -211,20 +213,54 @@ module.exports = new Class({
       let result = data[type]
 
       debug_internals('send_resp %s', prop, result, query)
-      // if(result.stats && query == '')
+
+      if(( query.format == 'stat' || query.format == 'tabular') && result && result.paths)
+        Array.each(result.paths, function(path, index){
+          result.paths[index] = path.replace(/\./g, '_')
+        })
+
+
 
       if(prop && result){
         result = result[prop]
 
-        if(prop == 'stats' && paths){
+        if(prop == 'data' && paths){
           let tmp_result = Object.clone(result)
+          if( query.format == 'stat' || query.format == 'tabular'){
+            tmp_result = this.__transform_data('stat', tmp_result)
+          }
+
           result = {}
+
           Array.each(paths, function(path){
-            result[path] = tmp_result[path]
+            // if( query.format == 'stat' || query.format == 'tabular') ){
+            //
+            //   delete result.data
+            // }
+            // else{
+              result[path] = tmp_result[path]
+            // }
+
           })
+
+        }
+        else if(prop == 'data' && ( query.format == 'stat' || query.format == 'tabular') ){
+          result = this.__transform_data('stat', result)
+        }
+      }
+      else if(result && result.data && ( query.format == 'stat' || query.format == 'tabular') ){
+        result.stat = this.__transform_data('stat', result.data)
+        delete result.data
+        if( query.format == 'tabular'){
+          result.tabular = this.__transform_data('tabular', result.stat)
+          delete result.stat
         }
       }
 
+      // if(result.stat && query.format == 'tabular'){
+      //   // result.tabular = this.__transform_data(result.stat)
+      //   delete result.stat
+      // }
 
 
       if(prop) type = 'property'
@@ -272,6 +308,64 @@ module.exports = new Class({
         cb: send_resp[req_id]
       })
 
+  },
+  __transform_data: function(type, data){
+    let trasnformed = {}
+    Object.each(data, function(d, path){
+      let transform = this.__traverse_path_require(type, path)
+      if(transform){
+        debug_internals('transform', transform)
+        // data_to_tabular
+        data_to_stat(d, transform, path,function(stat){
+          path = path.replace(/\./g, '_')
+          let to_merge = {}
+          to_merge[path] = stat
+          debug_internals('transformed custom', type, to_merge)
+          trasnformed = Object.merge(trasnformed, to_merge)
+        })
+        // trasnformed = Object.merge(trasnformed, transform(d))
+      }
+      else{
+        require('./libs/'+type)(d, path, function(name, stat){
+          path = path.replace(/\./g, '_')
+          let to_merge = {}
+          to_merge[path] = stat
+          debug_internals('transformed default', type, to_merge)
+          trasnformed = Object.merge(trasnformed, to_merge)
+        })
+
+      }
+    }.bind(this))
+
+    return trasnformed
+  },
+  __traverse_path_require(type, path, original_path){
+    original_path = original_path || path
+    debug_internals('__traverse_path_require %s', path, original_path)
+    try{
+      let chart = require('./libs/'+type+'/'+path)
+      //use something like func.match as a regex to match
+      if(!chart.match || chart.match.test(original_path)){
+        return chart
+      }
+
+      return undefined
+    }
+    catch(e){
+      if(path.indexOf('.') > -1){
+        let pre_path = path.substring(0, path.lastIndexOf('.'))
+        return this.__traverse_path_require(type, pre_path, original_path)
+      }
+
+      return undefined
+    }
+
+
+    // let path = path.split('.')
+    // if(!Array.isArray(path))
+    //   path = [path]
+    //
+    // Array.each()
   },
   __get_host_range: function(payload){
     let {host, prop, paths, range, req_id, socket, cb} = payload

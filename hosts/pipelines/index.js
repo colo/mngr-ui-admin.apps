@@ -156,10 +156,10 @@ module.exports = function(payload){
 
 
 
-        if(type == 'host' && docs && docs.stats && Object.getLength(docs.stats) > 0){
+        if(type == 'host' && docs && docs.data && Object.getLength(docs.data) > 0){
 
           let counter = 0
-          Object.each(docs.stats, function(stat, name){
+          Object.each(docs.data, function(stat, name){
             if(!Array.isArray(stat))
               stat = [stat]
 
@@ -181,26 +181,26 @@ module.exports = function(payload){
 
                 }
 
-                // stats[row.metadata.path] = {value: row.data, timestamp: row.metadata.timestamp}
+                // data[row.metadata.path] = {value: row.data, timestamp: row.metadata.timestamp}
 
                 if(index == stat.length -1){
                   stat.clean()
 
                   // __process_stat_doc(stat, function(processed){
-                  //   out[type].stats[name] = processed
+                  //   out[type].data[name] = processed
                   //   // pipeline.output(out)
                   // })
                 }
             })
 
-            out[type].stats[name] = stat
+            out[type].data[name] = stat
 
-            if(counter == Object.getLength(docs.stats) -1 ){
-              // docs.stats = docs.stats.clean()
-              // out[type].stats = stats
+            if(counter == Object.getLength(docs.data) -1 ){
+              // docs.data = docs.data.clean()
+              // out[type].data = data
               pipeline.output(out)
-              // __process_stat_doc(docs.stats, function(stats){
-              //   out[type].stats = stats
+              // __process_stat_doc(docs.data, function(data){
+              //   out[type].data = data
               //   pipeline.output(out)
               // })
             }
