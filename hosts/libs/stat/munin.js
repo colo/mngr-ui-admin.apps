@@ -3,12 +3,7 @@
 let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:stat:munin'),
     debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:stat:munin:Internals');
 
-
-module.exports = {
-  // name: 'os.cpus_times',
-  // name: function(vm, chart, stats){
-  //   return vm.host+'_os_cpus_times'
-  // },
+let chart = {
   match: /^munin/,
 
   watch: {
@@ -27,5 +22,14 @@ module.exports = {
 
     }
   }
+}
 
+module.exports = function(path){
+
+  if(!chart.match || chart.match.test(path)){
+    return chart
+  }
+  else{
+    return undefined
+  }
 }

@@ -3,13 +3,7 @@
 let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:stat:os:procs'),
     debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:stat:os:procs:Internals');
 
-
-module.exports = {
-  // name: 'os.cpus_times',
-  // name: function(vm, chart, stats){
-  //   return vm.host+'_os_cpus_times'
-  // },
-  // match: /^os\.procs\.+((?!stats).)*/,
+let chart = {
   match: /^((?!stats).)*$/,
 
   watch: {
@@ -28,5 +22,14 @@ module.exports = {
 
     }
   }
+}
 
+module.exports = function(path){
+
+  if(!chart.match || chart.match.test(path)){
+    return chart
+  }
+  else{
+    return undefined
+  }
 }
