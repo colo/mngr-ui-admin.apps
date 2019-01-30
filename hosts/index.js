@@ -161,6 +161,8 @@ module.exports = new Class({
   ON_HOST_UPDATED: 'onHostUpdated',
   ON_HOST_RANGE: 'onHostRange',
 
+  CHART_INSTANCE_TTL: 60000,
+  HOSTS_TTL: 5000,
   // host_stats_key: function(){
   //   // debug_internals('host_stats_key %o', arguments)
   // },
@@ -318,7 +320,7 @@ module.exports = new Class({
             // debug_internals('query.format == tabular', result.stat)
 
             this.__transform_data('tabular', result.stat, host, function(tabular){
-              debug_internals('query.format == tabular', tabular)
+              // debug_internals('query.format == tabular', tabular)
               result.tabular = tabular
               delete result.stat
               send_result(result)
@@ -376,6 +378,19 @@ module.exports = new Class({
     if(!data || data == null && typeof cb == 'function')
       cb(transformed)
 
+    let transform_result_length = 0
+    Object.each(data, function(d, path){
+      let transform = this.__traverse_path_require(type, path)
+
+        if(transform && typeof transform == 'function'){
+          transform_result_length += Object.getLength(transform(d))
+        }
+        else{
+          transform_result_length++
+        }
+    }.bind(this))
+
+    let transform_result_counter = 0
 
     Object.each(data, function(d, path){
       let transform = this.__traverse_path_require(type, path)
@@ -383,9 +398,9 @@ module.exports = new Class({
       if(transform){
 
         if(typeof transform == 'function'){
-          let transform_result = transform(d)
+          let transform_result = transform(d, path)
 
-          let transform_result_counter = 0
+
           Object.each(transform_result, function(chart, path_key){
 
             /**
@@ -395,7 +410,7 @@ module.exports = new Class({
 
 
             if(type == 'tabular'){
-              debug_internals('transform_result', transform_result)
+              // debug_internals('transform_result', transform_result)
 
               this.cache.get(cache_key+'.'+type+'.'+path+'.'+path_key, function(err, chart_instance){
                 chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
@@ -411,18 +426,18 @@ module.exports = new Class({
 
                   transformed = Object.merge(transformed, to_merge)
 
-                  debug_internals('chart_instance CACHE %o', name, transform_result_counter, Object.getLength(transform_result), counter, Object.getLength(data))
+                  debug_internals('chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
 
                   // chart_instance = this.cache.clean(chart_instance)
 
                   // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
 
-                  this.cache.set(cache_key+'.'+type+'.'+path+'.'+path_key, JSON.stringify(chart_instance), 10000, function(err, result){
+                  this.cache.set(cache_key+'.'+type+'.'+path+'.'+path_key, JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL, function(err, result){
                     // debug_internals('cache save chart_instance %o', err, result)
                   })
 
                   if(
-                    transform_result_counter == Object.getLength(transform_result) - 1
+                    transform_result_counter == transform_result_length - 1
                     && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                   )
                     cb(transformed)
@@ -445,7 +460,7 @@ module.exports = new Class({
                 transformed = Object.merge(transformed, to_merge)
 
                 if(
-                  transform_result_counter == Object.getLength(transform_result) - 1
+                  transform_result_counter == transform_result_length - 1
                   && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                 )
                   cb(transformed)
@@ -464,28 +479,31 @@ module.exports = new Class({
         }
         else{//not a function
 
+          /**
+          * @todo: 'tabular' not tested, also counter should consider this case (only consider functions type)
+          **/
           if(type == 'tabular'){
             this.cache.get(cache_key+'.'+type+'.'+path, function(err, chart_instance){
               chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
 
               chart_instance = Object.merge(transform, chart_instance)
               // debug_internals('chart_instance NOT FUNC %o', chart_instance)
-              debug_internals('transformed custom CACHE', chart_instance)
+              debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path)
               // throw new Error()
               convert(d, chart_instance, path, function(name, stat){
                 name = name.replace(/\./g, '_')
                 let to_merge = {}
                 to_merge[name] = stat
 
-                // debug_internals('transformed custom CACHE', type, to_merge)
+                debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path, to_merge)
 
                 // transformed = Object.merge(transformed, to_merge)
 
                 // chart_instance = this.cache.clean(chart_instance)
 
-                this.cache.set(cache_key+'.'+type+'.'+path, JSON.stringify(chart_instance), function(err, result){
+                this.cache.set(cache_key+'.'+type+'.'+path, JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL, function(err, result){
                   // debug_internals('cache save chart_instance %o', result)
-                }, 10000)
+                })
 
                 if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
                   cb(transformed)
@@ -517,18 +535,81 @@ module.exports = new Class({
 
       }
       else{//default
-        require('./libs/'+type)(d, path, function(name, stat){
-          name = name.replace(/\./g, '_')
-          let to_merge = {}
-          to_merge[name] = stat
-          debug_internals('transformed default', type, to_merge)
-          transformed = Object.merge(transformed, to_merge)
-          // transformed = Object.merge(transformed, stat)
+        if(type == 'tabular'){
+          // debug_internals('transform_result', transform_result)
+          let chart = Object.clone(require('./libs/'+type))
+          this.cache.get(cache_key+'.'+type+'.'+path, function(err, chart_instance){
+            chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
-          if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
-            cb(transformed)
+            chart_instance = Object.merge(chart, chart_instance)
 
-        })
+            // chart_instance(d, path, function(name, stat){
+            //   name = name.replace(/\./g, '_')
+            //   let to_merge = {}
+            //   to_merge[name] = stat
+            //   debug_internals('transformed default instance', name, to_merge)
+            //   transformed = Object.merge(transformed, to_merge)
+            //   // transformed = Object.merge(transformed, stat)
+            //
+            //   this.cache.set(cache_key+'.'+type+'.'+path, JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL, function(err, result){
+            //     // debug_internals('cache save chart_instance %o', err, result)
+            //   })
+            //
+            //   if(
+            //     transform_result_counter == transform_result_length - 1
+            //     && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+            //   )
+            //     cb(transformed)
+            //
+            //   transform_result_counter++
+            //
+            // })
+
+            convert(d, chart_instance, path, function(name, stat){
+              name = name.replace(/\./g, '_')
+              let to_merge = {}
+              to_merge[name] = stat
+
+              transformed = Object.merge(transformed, to_merge)
+
+              debug_internals('default chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
+
+              // chart_instance = this.cache.clean(chart_instance)
+
+              // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
+
+              this.cache.set(cache_key+'.'+type+'.'+path, JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL, function(err, result){
+                // debug_internals('cache save chart_instance %o', err, result)
+              })
+
+              if(
+                transform_result_counter == transform_result_length - 1
+                && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+              )
+                cb(transformed)
+
+              transform_result_counter++
+            }.bind(this))
+
+
+
+          }.bind(this))
+        }
+        else{
+          require('./libs/'+type)(d, path, function(name, stat){
+            name = name.replace(/\./g, '_')
+            let to_merge = {}
+            to_merge[name] = stat
+            debug_internals('transformed default', type, to_merge)
+            transformed = Object.merge(transformed, to_merge)
+            // transformed = Object.merge(transformed, stat)
+
+            if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+              cb(transformed)
+
+          })
+        }
+
 
       }
 
@@ -546,16 +627,12 @@ module.exports = new Class({
   },
   __traverse_path_require(type, path, original_path){
     original_path = original_path || path
-    path = path.replace(/_/, '.')
-    original_path = original_path.replace(/_/, '.')
+    path = path.replace(/_/g, '.')
+    original_path = original_path.replace(/_/g, '.')
 
-    // debug_internals('__traverse_path_require %s', path, original_path)
+    debug_internals('__traverse_path_require %s', path, original_path)
     try{
       let chart = require('./libs/'+type+'/'+path)(original_path)
-      //use something like func.match as a regex to match
-      // if(!chart.match || chart.match.test(original_path)){
-      //   return chart
-      // }
 
       return chart
     }
@@ -697,7 +774,7 @@ module.exports = new Class({
               if(resp.id == req_id){
                 // debug_internals('_get_resp %o', resp.id)
 
-                this.cache.set('hosts', resp['hosts'], 5000)
+                this.cache.set('hosts', resp['hosts'], this.HOSTS_TTL)
                 // send_resp[req_id](resp)
 
                 cb(resp)

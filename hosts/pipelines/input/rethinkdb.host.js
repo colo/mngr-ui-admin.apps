@@ -153,6 +153,7 @@ module.exports = new Class({
                       [path, req.host, 'periodical', roundMilliseconds(end)],
                       {index: 'sort_by_path'}
                     ).
+                    // orderBy(r.asc.row('metadata')('timestamp')).
                     group(app.r.row('metadata')('path')).
                     ungroup()
                   })

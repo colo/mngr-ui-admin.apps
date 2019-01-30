@@ -1,13 +1,24 @@
 'use strict'
 
-let DefaultDygraphLine = require('mngr-ui-admin-charts/defaults/dygraph.line')
+let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:os.mounts'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:os.mounts:Internals')
 
-let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:Internals');
 
-// let data_to_tabular = require( 'node-tabular-data' ).data_to_tabular
+let chart = require('mngr-ui-admin-charts/os/mounts_percentage')
 
-let chart = Object.clone(DefaultDygraphLine)
+// module.exports = function(path){
+//   debug_internals('net', path)
+//
+//   if(!chart.match || chart.match.test(path)){
+//     return chart
+//   }
+//   else{
+//     return undefined
+//   }
+// }
+
+
+let match = /^os\.mounts$/
 
 let __process_stat = function(chart, name, stat){
   // console.log('__process_stat', chart, name, stat)
@@ -71,29 +82,42 @@ let __process_chart = function(chart, name, stat){
 
 }
 
+let return_charts = function(stats){
+  debug_internals('return_charts', stats)
+  let charts = {}
 
-// module.exports = function(stat, name, cb){
-module.exports = function(stat, name){
-  return __process_stat(chart, name, stat)
-  // cb(chart)
+  Object.each(stats, function(stat, name){
+    // debug_internals('return_charts name stat', name, stat)
+    charts[name] = __process_stat(Object.clone(chart), name, stat)
+    // switch(name){
+    //   case 'cpus':
+    //     charts['cpus.times'] = __process_stat(os_charts[name].times, 'os.cpus.times', stat)
+    //     charts['cpus.percentage'] = __process_stat(os_charts[name].percentage, 'os.cpus.percentage', stat)
+    //
+    //     break;
+    //
+    //   default:
+    //     if(os_charts[name])
+    //       charts[name] = __process_stat(os_charts[name], 'os.'+name, stat)
+    //
+    // //   // case 'loadavg':
+    // //   // case 'uptime':
+    // }
+  })
 
-  // data_to_tabular(doc, {}, name, function(name, tabular){
-  //   Array.each(tabular, function(val, index){
-  //     Array.each(val, function(row, i_row){
-  //       if(isNaN(row))
-  //         val[i_row] = undefined
-  //     })
-  //     tabular[index] = val.clean()
-  //   })
-  //
-  //   debug_internals(name, tabular)
-  //
-  //   if(tabular.length == 0 || (tabular[0].length <= 1)){
-  //     cb(name, undefined)
-  //   }
-  //   else{
-  //     cb(name, tabular)
-  //   }
-  //
-  // })
+  // debug_internals('return_charts', charts)
+
+  return charts
+}
+
+module.exports = function(path){
+  debug_internals('mounts', path)
+
+
+  if(!match || match.test(path)){
+    return return_charts
+  }
+  else{
+    return undefined
+  }
 }

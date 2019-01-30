@@ -163,6 +163,11 @@ module.exports = function(payload){
             if(!Array.isArray(stat))
               stat = [stat]
 
+            //should be sorted on DB....
+            stat.sort(function(a,b) {
+              return (a.metadata.timestamp > b.metadata.timestamp) ? 1 : ((b.metadata.timestamp > a.metadata.timestamp) ? -1 : 0)
+            })
+
             Array.each(stat, function(row, index){
               if(row && row.metadata && row.metadata.path)
                 switch (row.metadata.path) {

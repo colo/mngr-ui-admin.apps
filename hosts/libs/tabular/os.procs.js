@@ -1,13 +1,13 @@
 'use strict'
 
-let DefaultDygraphLine = require('mngr-ui-admin-charts/defaults/dygraph.line')
+let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:os.procs'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:os.procs:Internals');
 
-let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:Internals');
+let chart = require('mngr-ui-admin-charts/os/procs_top')
 
-// let data_to_tabular = require( 'node-tabular-data' ).data_to_tabular
 
-let chart = Object.clone(DefaultDygraphLine)
+let match = /stats/
+let allowed_names = /cpu|mem|elapsed|time|count/
 
 let __process_stat = function(chart, name, stat){
   // console.log('__process_stat', chart, name, stat)
@@ -71,29 +71,43 @@ let __process_chart = function(chart, name, stat){
 
 }
 
+let return_charts = function(stats, path){
+  debug_internals('return_charts', stats)
+  let charts = {}
 
-// module.exports = function(stat, name, cb){
-module.exports = function(stat, name){
-  return __process_stat(chart, name, stat)
-  // cb(chart)
+  Object.each(stats, function(stat, name){
+    // debug_internals('return_charts name stat', name, stat)
+    if(allowed_names.test(name))
+      charts[name] = __process_stat(Object.clone(chart), path+'.'+name, stat)
+    // switch(name){
+    //   case 'cpus':
+    //     charts['cpus.times'] = __process_stat(os_charts[name].times, 'os.cpus.times', stat)
+    //     charts['cpus.percentage'] = __process_stat(os_charts[name].percentage, 'os.cpus.percentage', stat)
+    //
+    //     break;
+    //
+    //   default:
+    //     if(os_charts[name])
+    //       charts[name] = __process_stat(os_charts[name], 'os.'+name, stat)
+    //
+    // //   // case 'loadavg':
+    // //   // case 'uptime':
+    // }
+  })
 
-  // data_to_tabular(doc, {}, name, function(name, tabular){
-  //   Array.each(tabular, function(val, index){
-  //     Array.each(val, function(row, i_row){
-  //       if(isNaN(row))
-  //         val[i_row] = undefined
-  //     })
-  //     tabular[index] = val.clean()
-  //   })
-  //
-  //   debug_internals(name, tabular)
-  //
-  //   if(tabular.length == 0 || (tabular[0].length <= 1)){
-  //     cb(name, undefined)
-  //   }
-  //   else{
-  //     cb(name, tabular)
-  //   }
-  //
-  // })
+  // debug_internals('return_charts', charts)
+
+  return charts
+}
+
+module.exports = function(path){
+  debug_internals('os.procs*', path)
+
+
+  if(!match || match.test(path)){
+    return return_charts
+  }
+  else{
+    return undefined
+  }
 }
