@@ -7,7 +7,7 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular'),
 
 // let data_to_tabular = require( 'node-tabular-data' ).data_to_tabular
 
-let chart = Object.clone(DefaultDygraphLine)
+// let chart = Object.clone(DefaultDygraphLine)
 
 let __process_stat = function(chart, name, stat){
   // console.log('__process_stat', chart, name, stat)
@@ -74,7 +74,7 @@ let __process_chart = function(chart, name, stat){
 
 // module.exports = function(stat, name, cb){
 module.exports = function(stat, name){
-  return __process_stat(chart, name, stat)
+  return __process_stat(Object.clone(DefaultDygraphLine), name, stat)
   // cb(chart)
 
   // data_to_tabular(doc, {}, name, function(name, tabular){
