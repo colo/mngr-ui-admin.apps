@@ -391,6 +391,11 @@ module.exports = new Class({
 
         }
         else{
+
+          if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+
+          debug_internals('data firing host...', this.hosts, host)
+
           this.hosts[host][prop] = result
 
           if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){

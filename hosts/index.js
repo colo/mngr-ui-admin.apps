@@ -63,7 +63,7 @@ module.exports = new Class({
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
       prop: /data|paths|instances/,
-      events: /hosts/,
+      events: /hosts|paths/,
       // stat:
 		},
 
@@ -382,8 +382,22 @@ module.exports = new Class({
       let {type} = data
       let result = data[type]
 
-      let send_result = function(result){
-        if(prop) type = 'property'
+      let send_result = function(data){
+        if(prop) type = prop
+
+        let result = {
+          type: type,
+          range: range,
+          host: host
+        }
+
+        if(query.format) type = query.format
+        
+        result[type] = data
+
+        // if(prop) type = 'property'
+
+
 
         if(result && (result.length > 0 || Object.getLength(result) > 0)){
 
