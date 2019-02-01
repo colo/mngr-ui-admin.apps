@@ -132,11 +132,11 @@ module.exports = new Class({
   				else{
             let equal = false
 
-  					// if(extras.id == undefined && this.hosts.length > 0 && this.hosts.length == arr.length){
-            //   equal = arr.every(function(item, index){
-            //     return this.hosts.contains(item)
-            //   }.bind(this))
-            // }
+  					if(extras.id == undefined && this.hosts.length > 0 && this.hosts.length == arr.length){
+              equal = arr.every(function(item, index){
+                return this.hosts.contains(item)
+              }.bind(this))
+            }
 
             if(equal == false){
               debug_internals('HOSTs %o', arr)
