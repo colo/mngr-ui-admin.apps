@@ -17,8 +17,9 @@ const roundMilliseconds = function(timestamp){
 module.exports = new Class({
   Extends: App,
 
-  changes_buffer: [],
-  changes_buffer_expire: undefined,
+  // changes_buffer: [],
+  // changes_buffer_expire: undefined,
+  hosts: [],
 
   options: {
 
@@ -45,7 +46,7 @@ module.exports = new Class({
 						debug_internals('search_hosts');
 
             app.distinct({
-              _extras: {type: 'hosts'},
+              _extras: {type: 'hosts', id: undefined},
               uri: app.options.db+'/periodical',
               args: {index: 'host'}
             })
@@ -64,7 +65,8 @@ module.exports = new Class({
         callbacks: ['distinct']
       }],
       changes: [{
-        path: ':database/:table',
+        // path: ':database/:table',
+        path: '',
         callbacks: ['changes']
       }],
 
@@ -85,7 +87,8 @@ module.exports = new Class({
   	this.parent(options);//override default options
 
 
-    // this.addEvent('onResume', this.register_on_changes.bind(this))
+    // this.addEvent('onConnect', this.register_on_changes.bind(this))
+    // this.register_on_changes.bind(this)
 
 		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input_init');//start profiling
 
@@ -123,48 +126,24 @@ module.exports = new Class({
       resp.toArray(function(err, arr){
         debug_internals('distinct count', arr)
 
-
-        // if(params.options._extras == 'path'){
-        //   if(arr.length == 0){
-  			// 		debug_internals('No paths yet');
-  			// 	}
-  			// 	else{
-        //
-        //     this.paths = []
-        //
-  			// 		Array.each(arr, function(row, index){
-  			// 			// debug_internals('Path %s', row);
-        //
-        //       if(
-        //         (
-        //           !this.blacklist_path
-        //           || (this.blacklist_path && this.blacklist_path.test(row) == false)
-        //         )
-        //         && !this.paths.contains(row)
-        //       )
-        //         this.paths.push(row)
-        //
-  			// 		}.bind(this));
-        //
-  			// 		debug_internals('PATHs %o', this.paths);
-  			// 	}
-  			// }
-        // else
-        // if(extras.type == 'hosts'){
           if(arr.length == 0){
   					debug_internals('No hosts yet');
   				}
   				else{
+            let equal = false
 
-  					// Array.each(arr, function(row, index){
-  					// 	let host = row
-            //   if(this.hosts[host] == undefined) this.hosts[host] = {}
-            //
-  					// }.bind(this));
+  					// if(extras.id == undefined && this.hosts.length > 0 && this.hosts.length == arr.length){
+            //   equal = arr.every(function(item, index){
+            //     return this.hosts.contains(item)
+            //   }.bind(this))
+            // }
 
-  					debug_internals('HOSTs %o', arr)
-            this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
-            // this.fireEvent('onDoc', [Array.clone(arr)]);
+            if(equal == false){
+              debug_internals('HOSTs %o', arr)
+              this.hosts = arr
+              this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
+            }
+
   				}
         // }
 
@@ -186,27 +165,26 @@ module.exports = new Class({
   //   if(!this.changes_buffer_expire)
   //     this.changes_buffer_expire = Date.now()
   //
+  //   let extras = params.options._extras
+  //
   //   resp.each(function(err, row){
-  //     // debug_internals('changes %s', new Date())
+  //
+  //     debug_internals('changes %s', new Date(), row)
   //
   //     if(row.type == 'add'){
   //       // console.log(row.new_val)
   //       // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
-  //       this.changes_buffer.push(row.new_val)
+  //       if(!this.changes_buffer.contains(row.new_val.metadata.host))
+  //         this.changes_buffer.push(row.new_val.metadata.host)
   //     }
   //
   //     if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
   //       // console.log('onPeriodicalDoc', this.changes_buffer.length)
-  //       this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+  //       // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+  //       this.fireEvent('onDoc', [Array.clone(this.changes_buffer), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
   //       this.changes_buffer_expire = Date.now()
   //       this.changes_buffer = []
   //     }
-  //
-  //       // let type = params.options._extras.type
-  //       // let id = params.options._extras.id
-  //       // let event = type.charAt(0).toUpperCase() + type.slice(1)
-  //       //
-  //       // this.fireEvent('on'+event+'Doc', [Array.clone(arr), {id: id, type: type, input_type: this, app: null}]);
   //
   //   }.bind(this));
   // },
@@ -217,14 +195,29 @@ module.exports = new Class({
   //   * should be "aligned" with dashboard refreshs?
   //   **/
   //   this.changes({
-  //      _extras: {type: 'periodical'},
-  //      uri: this.options.db+'/periodical',
+  //      _extras: {type: 'hosts', id: undefined},
+  //      // uri: this.options.db+'/periodical',
   //      args: {includeTypes: true, squash: 1.1},
-  //      // query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
-  //      query: this.r.db(this.options.db).table('periodical').distinct({index: 'host'})
+  //      // query: this.r.db(this.options.db).table('periodical').distinct({index: 'host'})
+  //      query: this.r.db(this.options.db).
+  //       table('periodical').
+  //       pluck({'metadata': 'host'})
   //
   //
   //   })
+  //   // app.between({
+  //   //   _extras: 'host',
+  //   //   uri: app.options.db+'/periodical',
+  //   //   args: [
+  //   //     roundMilliseconds(Date.now() - 1000),
+  //   //     roundMilliseconds(Date.now()),
+  //   //     {
+  //   //       index: 'timestamp',
+  //   //       leftBound: 'open',
+  //   //       rightBound: 'open'
+  //   //     }
+  //   //   ]
+  //   // })
   //
   // }
 

@@ -62,7 +62,8 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
-      prop: /data|paths|instances/
+      prop: /data|paths|instances/,
+      events: /hosts/,
       // stat:
 		},
 
@@ -118,6 +119,14 @@ module.exports = new Class({
 					callbacks: ['hosts'],
 					// middlewares: [], //socket.use(fn)
 				}],
+        'on': [
+          {
+  					// path: ':param',
+  					// once: true, //socket.once
+  					callbacks: ['register'],
+  					// middlewares: [], //socket.use(fn)
+  				}
+        ],
 				// charts: [{
 				// 	// path: ':param',
 				// 	// once: true, //socket.once
@@ -164,6 +173,88 @@ module.exports = new Class({
   CHART_INSTANCE_TTL: 60000,
   HOSTS_TTL: 5000,
 
+  events: {},
+
+  __emit: function(doc){
+    debug_internals('__emit', doc, this.events)
+    if(!doc.id){//if doc.id, then this event was fired by a client request...ommit!
+      let {type} = doc
+      if(type && doc[type] && this.events[type]){
+        Array.each(this.events[type], function(socketId){
+          // sending to individual socketid (private message)
+          this.io.binary(false).to(`${socketId}`).emit(type, doc[type])
+        }.bind(this))
+
+      }
+      // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+
+
+    }
+  },
+  register: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
+    let {events} = params
+    let id = (socket) ? socket.id : req.session.id
+    let session = this.__process_session(req, socket)
+    session.send_register_resp = session.send_register_resp+1 || 0
+    let req_id = id +'.'+session.send_register_resp
+
+    let send_resp = {}
+    send_resp[req_id] = function(err, result){
+      debug_internals('register.send_resp %o', err, result)
+      if(err){
+        if(resp){
+          resp.status(err.code).json(err)
+        }
+        else{
+          socket.binary(false).emit('on', err)
+        }
+      }
+      else{
+        if(resp){
+          resp.json(result)
+        }
+        else{
+          socket.binary(false).emit('on', result)
+        }
+      }
+
+      delete send_resp[req_id]
+    }
+
+    if(events && events !== null){
+      try{
+        let _parsed = JSON.parse(events)
+        // debug_internals('data: paths _parsed %o ', _parsed)
+
+        events = []
+        if(Array.isArray(_parsed))
+          Array.each(_parsed, function(event){
+            // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+            //avoid duplicates (with push, you may get duplicates)
+            events.combine([event])
+          }.bind(this))
+
+
+      }
+      catch(e){
+        // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+      }
+
+      if(!Array.isArray(events))
+        events = [events]
+
+      Array.each(events, function(event){
+        if(!this.events[event]) this.events[event] = []
+        if(!this.events[event].contains(id)) this.events[event].push(id)
+      }.bind(this))
+
+      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.toString()+' events'})
+    }
+    else{
+      send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
+    }
+  },
   host_instances: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'instances'])
     let {host, prop, instances} = params
@@ -978,7 +1069,7 @@ module.exports = new Class({
       let hosts = new Pipeline(HostsPipeline)
       this.pipeline = {
         hosts: hosts,
-        // ids: [],
+        ids: [],
         connected: [],
         suspended: hosts.inputs[0].options.suspended
       }
@@ -1000,6 +1091,8 @@ module.exports = new Class({
         // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
         // this.__emit_stats(host, stats)
       }.bind(this))
+
+      this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
 
       // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
       //   this.__emit_stats(host, stats)
@@ -1103,7 +1196,8 @@ module.exports = new Class({
       if(pipeline.suspended == true){
         // debug_internals('RESUMING....')
         pipeline.suspended = false
-        pipeline.pipeline.fireEvent('onResume')
+
+        pipeline.hosts.fireEvent('onResume')
 
       }
     }
