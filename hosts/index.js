@@ -88,7 +88,7 @@ module.exports = new Class({
 					// 	version: '',
 					// }
           {
-            path: ':host/instances/:instances',
+            path: ':host/instances/:instances?',
             callbacks: ['host_instances'],
             version: '',
           },
@@ -113,6 +113,12 @@ module.exports = new Class({
 			// rooms: ['root'], //atomatically join connected sockets to this rooms
 			routes: {
 
+        'instances': [{
+					// path: ':host/instances/:instances?',
+					// once: true, //socket.once
+					callbacks: ['host_instances'],
+					// middlewares: [], //socket.use(fn)
+				}],
         '/': [{
 					// path: ':param',
 					// once: true, //socket.once
@@ -264,6 +270,45 @@ module.exports = new Class({
     let id = (socket) ? socket.id : req.session.id
     let session = this.__process_session(req, socket)
 
+    session.send_instances_resp = session.send_instances_resp+1 || 0
+    let req_id = id +'.'+session.send_instances_resp
+
+    let send_resp = {}
+    send_resp[req_id] = function(data){
+      // if(prop) type = prop
+
+      let result = {
+        type: 'instances',
+        // range: range,
+        host: host
+      }
+
+      // if(query.format) type = query.format
+
+      result['instances'] = data
+
+      if(result && (result.length > 0 || Object.getLength(result) > 0)){
+
+        if(resp){
+          resp.json(result)
+        }
+        else{
+          socket.binary(false).emit('instances', result)
+        }
+      }
+      else{
+        if(resp){
+          resp.status(404).json({status: 'no instances'})
+        }
+        else{
+          socket.binary(false).emit('instances', {status: 'no instances'})
+        }
+
+      }
+
+      delete send_resp[req_id]
+    }
+
     if(instances){
 
       try{
@@ -287,43 +332,61 @@ module.exports = new Class({
       if(!Array.isArray(instances))
         instances = [instances]
 
+
+      this.__get_instances(instances, host, send_resp[req_id])
+    }
+    else{
+
+      this.cache.get(host+'.instances', function(err, instances){
+        if(instances){
+          // result.instances = instances
+          this.__get_instances(instances, host, send_resp[req_id])
+        }
+        else{
+          send_resp[req_id](null)
+        }
+        // if(instances)
+        //   result.instances = instances
+        //
+        // send_result(result)
+      }.bind(this))
+
     }
 
     debug_internals('host_instances %o', instances)
-    session.send_instances_resp = session.send_instances_resp+1 || 0
-    let req_id = id +'.'+session.send_instances_resp
 
-    let send_resp = {}
-    send_resp[req_id] = function(result){
-      if(result && (result.length > 0 || Object.getLength(result) > 0)){
 
-        if(resp){
-          resp.json(result)
-        }
-        else{
-          socket.binary(false).emit(type, result)
-        }
-      }
-      else{
-        if(resp){
-          resp.status(404).json({status: 'no instances'})
-        }
-        else{
-          socket.binary(false).emit(type, {status: 'no instances'})
-        }
+    // let result = {}
+    // Array.each(instances, function(instance, index){
+    //
+    //   this.cache.get(host+'.tabular.'+instance, function(err, data){
+    //     if(data) result[instance] = JSON.parse(data)
+    //
+    //     if(index == instances.length - 1) send_resp[req_id](result)
+    //     // let result = {type: 'property'}
+    //     // result.property = { instances: instances }
+    //     // debug_internals('host %s prop %s %o', host, prop, result)
+    //
+    //
+    //   })
+    //
+    // }.bind(this))
+    // this.__get_instances(instances, host, send_resp[req_id])
 
-      }
 
-      delete send_resp[req_id]
-    }
 
+  },
+  __get_instances: function(instances, host, cb){
     let result = {}
     Array.each(instances, function(instance, index){
 
       this.cache.get(host+'.tabular.'+instance, function(err, data){
         if(data) result[instance] = JSON.parse(data)
 
-        if(index == instances.length - 1) send_resp[req_id](result)
+        if(index == instances.length - 1){
+          cb(result)
+          return result
+        }
         // let result = {type: 'property'}
         // result.property = { instances: instances }
         // debug_internals('host %s prop %s %o', host, prop, result)
@@ -332,8 +395,6 @@ module.exports = new Class({
       })
 
     }.bind(this))
-
-
 
   },
   hosts: function(){
@@ -392,7 +453,7 @@ module.exports = new Class({
         }
 
         if(query.format) type = query.format
-        
+
         result[type] = data
 
         // if(prop) type = 'property'
@@ -509,22 +570,38 @@ module.exports = new Class({
               delete result.stat
               // send_result(result)
               this.cache.get(host+'.instances', function(err, instances){
-                if(instances)
-                  result.instances = instances
-
-                send_result(result)
-              })
+                if(instances){
+                  // result.instances = instances
+                  this.__get_instances(instances, host, function(instances){
+                    result.instances = instances
+                    send_result(result)
+                  })
+                }
+                else{
+                  send_result(result)
+                }
+              }.bind(this))
             }.bind(this))
 
           }
           else{
             // send_result(result)
             this.cache.get(host+'.instances', function(err, instances){
-              if(instances)
-                result.instances = instances
-
-              send_result(result)
-            })
+              // if(instances)
+              //   result.instances = instances
+              //
+              // send_result(result)
+              if(instances){
+                // result.instances = instances
+                this.__get_instances(instances, host, function(instances){
+                  result.instances = instances
+                  send_result(result)
+                })
+              }
+              else{
+                send_result(result)
+              }
+            }.bind(this))
           }
 
         }.bind(this))
@@ -532,12 +609,25 @@ module.exports = new Class({
 
       }
       else{
-        this.cache.get(host+'.instances', function(err, instances){
-          if(instances)
-            result.instances = instances
+        if(!result || result == null)
+          result = { instances: null }
 
-          send_result(result)
-        })
+        this.cache.get(host+'.instances', function(err, instances){
+          if(instances){
+            // result.instances = instances
+            this.__get_instances(instances, host, function(instances){
+              result.instances = instances
+              send_result(result)
+            })
+          }
+          else{
+            send_result(result)
+          }
+          // if(instances)
+          //   result.instances = instances
+          //
+          // send_result(result)
+        }.bind(this))
 
       }
 
@@ -558,16 +648,30 @@ module.exports = new Class({
     else if(!host)
       this.__get_hosts(req_id, socket, send_resp[req_id])
 
-    else if(prop === 'instances'){
-      this.cache.get(host+'.instances', function(err, instances){
-        let result = {type: 'property'}
-        result.property = { instances: instances }
-        debug_internals('host %s prop %s %o', host, prop, result)
-
-        send_resp[req_id](result)
-      })
-
-    }
+    // else if(prop === 'instances'){
+    //   this.cache.get(host+'.instances', function(err, instances){
+    //     let result = {type: 'property'}
+    //     result.property = { instances: null }
+    //     if(instances){
+    //       // result.instances = instances
+    //       this.__get_instances(instances, host, function(instances){
+    //         result.instances = instances
+    //         // send_result(result)
+    //         send_resp[req_id](result)
+    //       })
+    //     }
+    //     else{
+    //       send_resp[req_id](result)
+    //     }
+    //
+    //     // let result = {type: 'property'}
+    //     // result.property = { instances: instances }
+    //     // debug_internals('host %s prop %s %o', host, prop, result)
+    //
+    //     // send_resp[req_id](result)
+    //   }.bind(this))
+    //
+    // }
     else if(!range)
       this.__get_host(host, prop, req_id, socket, send_resp[req_id])
     else
