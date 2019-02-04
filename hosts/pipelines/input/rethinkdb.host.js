@@ -394,7 +394,7 @@ module.exports = new Class({
 
           if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-          debug_internals('data firing host...', this.hosts, host)
+          // debug_internals('data firing host...', this.hosts, host)
 
           this.hosts[host][prop] = result
 
@@ -405,7 +405,7 @@ module.exports = new Class({
                 found = true
             })
 
-            debug_internals('data firing host...', this.hosts[host])
+            // debug_internals('data firing host...', this.hosts[host])
 
             this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
               {input_type: this, app: null},

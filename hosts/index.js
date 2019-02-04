@@ -501,8 +501,14 @@ module.exports = new Class({
             this.__transform_data('stat', result, host, function(stat){
               let tmp_result = {}
               Array.each(paths, function(path){
-                tmp_result[path] = stat[path]
-              })
+                tmp_result = Object.merge(tmp_result, this.__find_stat(path, stat))
+                // if(path.indexOf('.') > -1){
+                //
+                // }
+                // else{
+                //   tmp_result[path] = stat[path]
+                // }
+              }.bind(this))
 
               if( query.format == 'tabular'){
                 this.__transform_data('tabular', tmp_result, host, function(tabular){
@@ -685,6 +691,20 @@ module.exports = new Class({
         cb: send_resp[req_id]
       })
 
+  },
+  __find_stat(stat, stats){
+    let result = {}
+    if(stat.indexOf('.') > -1){
+      let key = stat.split('.')[0]
+      let rest = stat.substring(stat.indexOf('.') + 1)
+      // //console.log('REST', key, rest)
+      result[key] = this.__find_stat(rest, stats[key])
+    }
+    else if(stats){
+      result[stat] = stats[stat]
+    }
+
+    return result
   },
   __transform_data: function(type, data, cache_key, cb){
     // debug_internals('__transform_data', type)
