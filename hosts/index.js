@@ -406,7 +406,10 @@ module.exports = new Class({
     let id = (socket) ? socket.id : req.session.id
     let session = this.__process_session(req, socket)
 
+    let __query_paths = undefined
+
     if(paths){
+      __query_paths = []
 
       try{
         let _parsed = JSON.parse(paths)
@@ -415,8 +418,10 @@ module.exports = new Class({
         paths = []
         if(Array.isArray(_parsed))
           Array.each(_parsed, function(_path){
+            let __query_path = (_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')) : _path
             // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
             //avoid duplicates (with push, you may get duplicates)
+            __query_paths.combine([__query_path])
             paths.combine([_path])
           }.bind(this))
 
@@ -426,10 +431,13 @@ module.exports = new Class({
         // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
       }
 
-      if(!Array.isArray(paths))
+      if(!Array.isArray(paths)){
+        __query_paths = (paths.indexOf('.') > -1) ? [paths.substring(0, paths.indexOf('.'))]: [paths]
         paths = [paths]
+      }
 
     }
+
 
     // debug_internals('data: paths %o ', paths)
 
@@ -452,7 +460,7 @@ module.exports = new Class({
           host: host
         }
 
-        if(query.format) type = query.format
+        if(prop == 'data' && query.format) type = query.format
 
         result[type] = data
 
@@ -502,15 +510,11 @@ module.exports = new Class({
               let tmp_result = {}
               Array.each(paths, function(path){
                 tmp_result = Object.merge(tmp_result, this.__find_stat(path, stat))
-                // if(path.indexOf('.') > -1){
-                //
-                // }
-                // else{
-                //   tmp_result[path] = stat[path]
-                // }
+
               }.bind(this))
 
               if( query.format == 'tabular'){
+                debug_internals('to tabular', tmp_result)
                 this.__transform_data('tabular', tmp_result, host, function(tabular){
                   // result.tabular = tabular
                   // delete result.stat
@@ -565,6 +569,7 @@ module.exports = new Class({
       else if(result && result.data && ( query.format == 'stat' || query.format == 'tabular') ){
         this.__transform_data('stat', result.data, host, function(stat){
           result.stat = stat
+          result.paths = Object.keys(stat)
           delete result.data
 
           if( query.format == 'tabular'){
@@ -678,13 +683,23 @@ module.exports = new Class({
     //   }.bind(this))
     //
     // }
-    else if(!range)
-      this.__get_host(host, prop, req_id, socket, send_resp[req_id])
+    else if(!range){
+      // this.__get_host(host, prop, req_id, socket, send_resp[req_id])
+      this.__get_host({
+        host: host,
+        prop: prop,
+        query: query,
+        req_id: req_id,
+        socket: socket,
+        cb: send_resp[req_id]
+      })
+    }
     else
       this.__get_host_range({
         host: host,
         prop: prop,
-        paths: paths,
+        query: query,
+        paths: __query_paths,
         range: range,
         req_id: req_id,
         socket: socket,
@@ -1044,7 +1059,7 @@ module.exports = new Class({
         let _get_resp = {}
         _get_resp[req_id] = function(resp){
           if(resp.id == req_id){
-            // debug_internals('_get_resp range %o %o', resp)
+            debug_internals('_get_resp range %o %o', resp)
 
             cb(resp)
 
@@ -1067,7 +1082,9 @@ module.exports = new Class({
       }.bind(this))
 
   },
-  __get_host: function(host, prop, req_id, socket, cb){
+  // __get_host: function(host, prop, req_id, socket, cb){
+  __get_host: function(payload){
+    let {host, prop, query, req_id, socket, cb} = payload
 
     this.cache.get('host.'+host, function(err, result){
       // debug_internals('get host %o %o', err, result)
