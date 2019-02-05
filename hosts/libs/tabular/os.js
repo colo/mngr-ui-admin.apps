@@ -101,24 +101,25 @@ let return_charts = function(stats){
   debug_internals('return_charts', stats)
   let charts = {}
 
-  Object.each(stats, function(stat, name){
-    // debug_internals('return_charts name stat', name, stat)
+  if(stats && stats !== null)
+    Object.each(stats, function(stat, name){
+      // debug_internals('return_charts name stat', name, stat)
 
-    switch(name){
-      case 'cpus':
-        charts['cpus.times'] = __process_stat(os_charts[name].times, 'os.cpus.times', stat)
-        charts['cpus.percentage'] = __process_stat(os_charts[name].percentage, 'os.cpus.percentage', stat)
+      switch(name){
+        case 'cpus':
+          charts['cpus.times'] = __process_stat(os_charts[name].times, 'os.cpus.times', stat)
+          charts['cpus.percentage'] = __process_stat(os_charts[name].percentage, 'os.cpus.percentage', stat)
 
-        break;
+          break;
 
-      default:
-        if(os_charts[name])
-          charts[name] = __process_stat(os_charts[name], 'os.'+name, stat)
+        default:
+          if(os_charts[name])
+            charts[name] = __process_stat(os_charts[name], 'os.'+name, stat)
 
-    //   // case 'loadavg':
-    //   // case 'uptime':
-    }
-  })
+      //   // case 'loadavg':
+      //   // case 'uptime':
+      }
+    })
 
   // debug_internals('return_charts', charts)
 

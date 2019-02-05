@@ -175,6 +175,7 @@ module.exports = new Class({
   ON_HOSTS_UPDATED: 'onHostsUpdated',
   ON_HOST_UPDATED: 'onHostUpdated',
   ON_HOST_RANGE: 'onHostRange',
+  ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
 
   CHART_INSTANCE_TTL: 60000,
   HOSTS_TTL: 5000,
@@ -188,7 +189,7 @@ module.exports = new Class({
       if(type && doc[type] && this.events[type]){
         Array.each(this.events[type], function(socketId){
           // sending to individual socketid (private message)
-          this.io.binary(false).to(`${socketId}`).emit(type, doc[type])
+          this.io.binary(false).to(`${socketId}`).emit(type, doc)
         }.bind(this))
 
       }
@@ -285,7 +286,8 @@ module.exports = new Class({
 
       // if(query.format) type = query.format
 
-      result['instances'] = data
+      // result['instances'] = data
+      result = Object.merge(result, data)
 
       if(result && (result.length > 0 || Object.getLength(result) > 0)){
 
@@ -418,7 +420,7 @@ module.exports = new Class({
         paths = []
         if(Array.isArray(_parsed))
           Array.each(_parsed, function(_path){
-            let __query_path = (_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')) : _path
+            let __query_path = (query.format && _path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')) : _path
             // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
             //avoid duplicates (with push, you may get duplicates)
             __query_paths.combine([__query_path])
@@ -432,7 +434,7 @@ module.exports = new Class({
       }
 
       if(!Array.isArray(paths)){
-        __query_paths = (paths.indexOf('.') > -1) ? [paths.substring(0, paths.indexOf('.'))]: [paths]
+        __query_paths = (query.format && paths.indexOf('.') > -1) ? [paths.substring(0, paths.indexOf('.'))]: [paths]
         paths = [paths]
       }
 
@@ -491,7 +493,7 @@ module.exports = new Class({
 
       }.bind(this)
 
-      // debug_internals('send_resp %s', prop, result, query)
+      debug_internals('send_result %s', prop, result, query)
 
       if(( query.format == 'stat' || query.format == 'tabular') && result && result.paths)
         Array.each(result.paths, function(path, index){
@@ -727,7 +729,8 @@ module.exports = new Class({
 
     let transformed = {}
     let counter = 0 //counter for each path:stat in data
-    let instances = []
+    // let instances = []
+    let instances = {}
 
     if(!data || data == null && typeof cb == 'function')
       cb(transformed)
@@ -789,7 +792,8 @@ module.exports = new Class({
 
                   // chart_instance = this.cache.clean(chart_instance)
                   // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
-                  instances.push(this.__transform_name(path+'.'+path_key))
+                  // instances.push(this.__transform_name(path+'.'+path_key))
+                  instances[this.__transform_name(path+'.'+path_key)] = chart_instance
 
                   this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
@@ -864,7 +868,8 @@ module.exports = new Class({
 
                 // chart_instance = this.cache.clean(chart_instance)
 
-                instances.push(this.__transform_name(path))
+                // instances.push(this.__transform_name(path))
+                instances[this.__transform_name(path)] = chart_instance
 
                 this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
@@ -939,12 +944,13 @@ module.exports = new Class({
               // to_merge[name] = stat
               //
               // transformed = Object.merge(transformed, to_merge)
-              debug_internals('default chart_instance CACHE %o', name, chart_instance)
+              // debug_internals('default chart_instance CACHE %o', name)
 
               // debug_internals('default chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
               // chart_instance = this.cache.clean(chart_instance)
               // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
-              instances.push(this.__transform_name(path))
+              // instances.push(this.__transform_name(path))
+              instances[this.__transform_name(path)] = chart_instance
 
               this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
@@ -995,20 +1001,24 @@ module.exports = new Class({
 
     this.cache.get(cache_key+'.instances', function(err, result){
       if(result){
-        // result.push(type+'.'+path+'.'+path_key)
-        Array.each(instances, function(instance){
+        // Array.each(instances, function(instance){
+        Object.each(instances, function(data, instance){
           if(!result.contains(instance)) result.push(instance)
         })
       }
       else
-        result = instances
+        result = Object.keys(instances)
 
       this.cache.set(cache_key+'.instances', result, this.CHART_INSTANCE_TTL, function(err, result){
         debug_internals('__save_instances cache.set', err, result)
+
+        if(!err || err === null)
+          this.fireEvent(this.ON_HOST_INSTANCES_UPDATED, {type: 'instances', host: cache_key, instances: instances})
+
         if(typeof cb == 'function')
           cb()
 
-      })
+      }.bind(this))
     }.bind(this))
   },
   __merge_transformed: function(name, stat, merge){
@@ -1248,6 +1258,7 @@ module.exports = new Class({
       }.bind(this))
 
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
 
       // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
       //   this.__emit_stats(host, stats)
