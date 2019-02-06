@@ -127,7 +127,7 @@ module.exports = new Class({
 				}],
         'on': [
           {
-  					// path: ':param',
+  					// path: ':events',
   					// once: true, //socket.once
   					callbacks: ['register'],
   					// middlewares: [], //socket.use(fn)
@@ -176,22 +176,88 @@ module.exports = new Class({
   ON_HOST_UPDATED: 'onHostUpdated',
   ON_HOST_RANGE: 'onHostRange',
   ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
+  ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
 
   CHART_INSTANCE_TTL: 60000,
-  HOSTS_TTL: 5000,
+  HOSTS_TTL: 60000,
 
   events: {},
+  hosts_events: {},
 
   __emit: function(doc){
-    debug_internals('__emit', doc, this.events)
+    // debug_internals('__emit', this.events, this.hosts_events, doc)
     if(!doc.id){//if doc.id, then this event was fired by a client request...ommit!
-      let {type} = doc
-      if(type && doc[type] && this.events[type]){
-        Array.each(this.events[type], function(socketId){
-          // sending to individual socketid (private message)
-          this.io.binary(false).to(`${socketId}`).emit(type, doc)
-        }.bind(this))
+      debug_internals('__emit', this.events, this.hosts_events, doc)
 
+      let {type, host, prop} = doc
+
+      if(type && doc[type]){
+        if(this.events[type])
+          Array.each(this.events[type], function(socketId){
+            // sending to individual socketid (private message)
+            this.io.binary(false).to(`${socketId}`).emit(type, doc)
+          }.bind(this))
+
+        if(this.hosts_events[host] && this.hosts_events[host][type])
+          Array.each(this.hosts_events[host][type], function(event){
+            let result = Object.clone(doc)
+
+            if(event && event !== null){
+              let {id, format} = event
+
+              if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
+                Array.each(result['paths'], function(path, index){
+                  result['paths'][index] = path.replace(/\./g, '_')
+                })
+
+                this.io.binary(false).to(`${id}`).emit(type, result)
+              }
+              else if(type == 'data' && format == 'stat' || format == 'tabular'){
+                debug_internals('__emit data', result)
+                result.data = result.data.data
+                // if(prop) type = prop
+                //
+                // let result = {
+                //   type: type,
+                //   // range: range,
+                //   host: host
+                // }
+                //
+                // if(type == 'data' && format)
+                type = format
+                //
+                // result[type] = doc
+
+
+
+                this.__transform_data('stat', result.data, host, function(stat){
+                  // result = stat
+                  result.stat = stat
+                  delete result.data
+
+                  if( format == 'tabular' ){
+                    this.__transform_data('tabular', result.stat, host, function(tabular){
+                      // result = tabular
+                      result.tabular = tabular
+                      delete result.stat
+                      this.io.binary(false).to(`${id}`).emit(type, result)
+
+                    }.bind(this))
+
+                  }
+                  else{
+                    this.io.binary(false).to(`${id}`).emit(type, result)
+                  }
+
+                }.bind(this))
+              }
+              else{
+                this.io.binary(false).to(`${id}`).emit(type, result)
+              }
+
+            }
+
+          }.bind(this))
       }
       // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
@@ -206,9 +272,11 @@ module.exports = new Class({
     session.send_register_resp = session.send_register_resp+1 || 0
     let req_id = id +'.'+session.send_register_resp
 
+    debug_internals('register %o', events)
+
     let send_resp = {}
     send_resp[req_id] = function(err, result){
-      debug_internals('register.send_resp %o', err, result)
+      // debug_internals('register.send_resp %o', err, result)
       if(err){
         if(resp){
           resp.status(err.code).json(err)
@@ -230,30 +298,57 @@ module.exports = new Class({
     }
 
     if(events && events !== null){
-      try{
-        let _parsed = JSON.parse(events)
-        // debug_internals('data: paths _parsed %o ', _parsed)
-
-        events = []
-        if(Array.isArray(_parsed))
-          Array.each(_parsed, function(event){
-            // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
-            //avoid duplicates (with push, you may get duplicates)
-            events.combine([event])
-          }.bind(this))
-
-
-      }
-      catch(e){
-        // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
-      }
+      // try{
+      //   let _parsed = JSON.parse(events)
+      //   // debug_internals('data: paths _parsed %o ', _parsed)
+      //
+      //   events = []
+      //   if(Array.isArray(_parsed))
+      //     Array.each(_parsed, function(event){
+      //       // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+      //       //avoid duplicates (with push, you may get duplicates)
+      //       events.combine([event])
+      //     }.bind(this))
+      //
+      //
+      // }
+      // catch(e){
+      //   // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+      // }
 
       if(!Array.isArray(events))
         events = [events]
 
       Array.each(events, function(event){
-        if(!this.events[event]) this.events[event] = []
-        if(!this.events[event].contains(id)) this.events[event].push(id)
+        if(typeof event === 'string'){
+          if(!this.events[event]) this.events[event] = []
+          if(!this.events[event].contains(id)) this.events[event].push(id)
+
+        }
+        else{
+          let {host, prop, format} = event
+          debug_internals('register Object', host, prop, format)
+          if(host){
+            if(!this.hosts_events[host]) this.hosts_events[host] = {}
+            if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
+            this.hosts_events[host][prop].push({id: id, format: format})
+
+            if(prop == 'data'){
+              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+                host: host,
+                type: 'register',
+                prop: 'data',
+                query: {format: format},
+                // paths: paths,
+                id: id,
+              })//fire only the 'host' input
+            }
+          }
+        }
+
+
+
+
       }.bind(this))
 
       send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.toString()+' events'})
@@ -997,7 +1092,7 @@ module.exports = new Class({
 
   },
   __save_instances: function(cache_key, instances, cb){
-    debug_internals('__save_instances', instances)
+    // debug_internals('__save_instances', instances)
 
     this.cache.get(cache_key+'.instances', function(err, result){
       if(result){
@@ -1038,7 +1133,7 @@ module.exports = new Class({
     path = path.replace(/_/g, '.')
     original_path = original_path.replace(/_/g, '.')
 
-    debug_internals('__traverse_path_require %s', path, original_path)
+    // debug_internals('__traverse_path_require %s', path, original_path)
     try{
       let chart = require('./libs/'+type+'/'+path)(original_path)
 
@@ -1087,7 +1182,7 @@ module.exports = new Class({
           paths: paths,
           id: req_id,
           Range: range
-        })//fire only the 'hosts' input
+        })//fire only the 'host' input
 
       }.bind(this))
 
@@ -1174,7 +1269,7 @@ module.exports = new Class({
   },
   __get_hosts: function(req_id, socket, cb){
     this.cache.get('hosts', function(err, result){
-      // debug_internals('get hosts %o %o', err, result)
+      debug_internals('get hosts cache %o %o', err, result)
       if(!result){
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
             // // debug_internals('send_resp', pipe)
@@ -1246,18 +1341,25 @@ module.exports = new Class({
         //   timestamp: Date.now()
         // }
 
-        // // debug_internals('onSaveDoc %o', doc)
+        // debug_internals('onSaveDoc %o', type, doc)
 
-        if(!range)
-          this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
-        else
+        if(!range){
+          if(type == 'data')
+            this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
+
+          else
+            this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
+        }
+        else{
           this.fireEvent(this['ON_'+type.toUpperCase()+'_RANGE'], doc)
+        }
 
         // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
         // this.__emit_stats(host, stats)
       }.bind(this))
 
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
 
       // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
@@ -1396,6 +1498,36 @@ module.exports = new Class({
 		this.parent(socket)
 
 		socket.on('disconnect', function () {
+      debug_internals('socket.io disconnect', socket.id, this.hosts_events)
+
+
+
+      Object.each(this.events, function(event, name){
+        if(event.contains(socket.id)){
+          event.erase(socket.id)
+          event = event.clean()
+        }
+      }.bind(this))
+
+      Object.each(this.hosts_events, function(host, host_name){
+        Object.each(host, function(prop, prop_name){
+          Array.each(prop, function(event, event_index){
+            if(event && event.id == socket.id){
+              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+                host: host_name,
+                type: 'unregister',
+                prop: prop_name,
+                id: socket.id,
+              })//fire only the 'host' input
+
+              prop[event_index] = undefined
+            }
+          }.bind(this))
+          prop = prop.clean()
+        }.bind(this))
+      }.bind(this))
+
+
 
       if(this.pipeline.ids.contains(socket.id)){
         this.pipeline.ids.erase(socket.id)

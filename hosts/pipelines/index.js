@@ -108,7 +108,7 @@ module.exports = function(payload){
   				requests: {
       			periodical: function(dispatch){
   						// //////////console.log('host periodical running')
-      				return cron.schedule('*/5 * * * * *', dispatch);//every second
+      				return cron.schedule('* * * * *', dispatch);//every minute
       			}
       		},
   			},
@@ -156,7 +156,7 @@ module.exports = function(payload){
 
 
 
-        if(type == 'host' && docs && docs.data && Object.getLength(docs.data) > 0){
+        if((type == 'host' || type == 'data') && docs && docs.data && Object.getLength(docs.data) > 0){
 
           let counter = 0
           Object.each(docs.data, function(stat, name){

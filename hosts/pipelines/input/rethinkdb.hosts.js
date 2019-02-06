@@ -29,11 +29,28 @@ module.exports = new Class({
 					search_hosts: function(req, next, app){
 						debug_internals('search_hosts');
 
-            app.distinct({
+            // app.distinct({
+            //   _extras: {type: 'hosts', id: req.id},
+            //   uri: app.options.db+'/periodical',
+            //   args: {index: 'host'}
+            // })
+
+            /**
+            * reducing last minute of hosts should be enough, and is way faster than "distinct" from all docs
+            **/
+            app.reduce({
               _extras: {type: 'hosts', id: req.id},
               uri: app.options.db+'/periodical',
-              args: {index: 'host'}
+              args: function(left, right) {
+                  return left.merge(right)
+              },
+
+              query: app.r.db(app.options.db).table('periodical').between(Date.now() - 60000, Date.now(), {index: 'timestamp'}).map(function(doc) {
+                return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
+              }.bind(app))
             })
+
+
 
 					}
 				},
@@ -45,11 +62,26 @@ module.exports = new Class({
 					search_hosts: function(req, next, app){
 						debug_internals('search_hosts');
 
-            app.distinct({
+            /**
+            * reducing last minute of hosts should be enough, and is way faster than "distinct" from all docs
+            **/
+            app.reduce({
               _extras: {type: 'hosts', id: undefined},
               uri: app.options.db+'/periodical',
-              args: {index: 'host'}
+              args: function(left, right) {
+                  return left.merge(right)
+              },
+
+              query: app.r.db(app.options.db).table('periodical').between(Date.now() - 60000, Date.now(), {index: 'timestamp'}).map(function(doc) {
+                return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
+              }.bind(app))
             })
+
+            // app.distinct({
+            //   _extras: {type: 'hosts', id: undefined},
+            //   uri: app.options.db+'/periodical',
+            //   args: {index: 'host'}
+            // })
 
 					}
 				},
@@ -60,15 +92,19 @@ module.exports = new Class({
 
 		routes: {
 
-      distinct: [{
+      // distinct: [{
+      //   path: ':database/:table',
+      //   callbacks: ['distinct']
+      // }],
+      reduce: [{
         path: ':database/:table',
-        callbacks: ['distinct']
+        callbacks: ['hosts']
       }],
-      changes: [{
-        // path: ':database/:table',
-        path: '',
-        callbacks: ['changes']
-      }],
+      // changes: [{
+      //   // path: ':database/:table',
+      //   path: '',
+      //   callbacks: ['changes']
+      // }],
 
 		},
 
@@ -98,8 +134,8 @@ module.exports = new Class({
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Hosts:Input started');
   },
 
-  distinct: function(err, resp, params){
-    debug_internals('distinct', params.options)
+  hosts: function(err, resp, params){
+    // debug_internals('distinct', params.options)
 
     if(err){
       debug_internals('distinct err', err)
@@ -123,7 +159,10 @@ module.exports = new Class({
     else{
       // let type = params.options._extras.type
       let extras = params.options._extras
-      resp.toArray(function(err, arr){
+
+      let arr = (resp) ? Object.keys(resp) : null
+
+      // resp.toArray(function(err, arr){
         debug_internals('distinct count', arr)
 
           if(arr.length == 0){
@@ -147,7 +186,7 @@ module.exports = new Class({
   				}
         // }
 
-      }.bind(this))
+      // }.bind(this))
 
 
     }
