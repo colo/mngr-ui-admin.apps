@@ -4,10 +4,24 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:os.procs'),
     debug_internals = require('debug')('mngr-ui-admin:apps:hosts:libs:tabular:os.procs:Internals');
 
 let chart = require('mngr-ui-admin-charts/os/procs_top')
-
+let percentage_stacked_chart = Object.merge(
+  Object.clone(chart),
+  { options: {valueRange: [0, 100], stackedGraph: true,} }
+)
 
 let match = /stats/
 let allowed_names = /cpu|mem|elapsed|time|count/
+
+let percentage_stacked = [
+  'percentage_mem',
+  'percentage_cpu',
+  // 'os_procs_stats_percentage_mem',
+  // 'os_procs_stats_percentage_cpu',
+  // 'os_procs_cmd_stats_percentage_cpu',
+  // 'os_procs_cmd_stats_percentage_mem',
+  // 'os_procs_uid_stats_percentage_cpu',
+  // 'os_procs_uid_stats_percentage_mem'
+]
 
 let __process_stat = function(chart, name, stat){
   // console.log('__process_stat', chart, name, stat)
@@ -72,14 +86,18 @@ let __process_chart = function(chart, name, stat){
 }
 
 let return_charts = function(stats, path){
-  debug_internals('return_charts', stats)
+  debug_internals('return_charts path', stats, path)
   let charts = {}
 
   if(stats && stats !== null)
     Object.each(stats, function(stat, name){
-      // debug_internals('return_charts name stat', name, stat)
+      debug_internals('return_charts name ', name)
       if(allowed_names.test(name))
-        charts[name] = __process_stat(Object.clone(chart), path+'.'+name, stat)
+        if(percentage_stacked.contains(name))
+          charts[name] = __process_stat(Object.clone(percentage_stacked_chart), path+'.'+name, stat)
+        else
+          charts[name] = __process_stat(Object.clone(chart), path+'.'+name, stat)
+          
       // switch(name){
       //   case 'cpus':
       //     charts['cpus.times'] = __process_stat(os_charts[name].times, 'os.cpus.times', stat)
