@@ -27,7 +27,7 @@ module.exports = new Class({
       once: [
         {
 					search_hosts: function(req, next, app){
-						debug_internals('search_hosts');
+						debug_internals('search_hosts', req.id);
 
             // app.distinct({
             //   _extras: {type: 'hosts', id: req.id},
@@ -135,7 +135,7 @@ module.exports = new Class({
   },
 
   hosts: function(err, resp, params){
-    // debug_internals('distinct', params.options)
+    debug_internals('hosts', err, resp)
 
     if(err){
       debug_internals('distinct err', err)
@@ -163,27 +163,29 @@ module.exports = new Class({
       let arr = (resp) ? Object.keys(resp) : null
 
       // resp.toArray(function(err, arr){
-        debug_internals('distinct count', arr)
+      debug_internals('distinct count', arr)
+      this.fireEvent('onDoc', [arr, Object.merge({input_type: this, app: null}, extras)]);
 
-          if(arr.length == 0){
-  					debug_internals('No hosts yet');
-  				}
-  				else{
-            let equal = false
-
-  					if(extras.id == undefined && this.hosts.length > 0 && this.hosts.length == arr.length){
-              equal = arr.every(function(item, index){
-                return this.hosts.contains(item)
-              }.bind(this))
-            }
-
-            if(equal == false){
-              debug_internals('HOSTs %o', arr)
-              this.hosts = arr
-              this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
-            }
-
-  				}
+        // if(arr.length == 0){
+				// 	debug_internals('No hosts yet');
+				// }
+				// else{
+        //   let equal = false
+        //
+				// 	if(extras.id == undefined && this.hosts.length > 0 && this.hosts.length == arr.length){
+        //     debug_internals('check equality %s', extras.id)
+        //     equal = arr.every(function(item, index){
+        //       return this.hosts.contains(item)
+        //     }.bind(this))
+        //   }
+        //
+        //   // if(equal == false){
+        //     debug_internals('HOSTs %o', arr)
+        //     this.hosts = arr
+        //     this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
+        //   // }
+        //
+				// }
         // }
 
       // }.bind(this))

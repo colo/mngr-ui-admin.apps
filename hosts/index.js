@@ -1269,15 +1269,16 @@ module.exports = new Class({
   },
   __get_hosts: function(req_id, socket, cb){
     this.cache.get('hosts', function(err, result){
-      debug_internals('get hosts cache %o %o', err, result)
+      debug_internals('get hosts cache %o %o %s', err, result, req_id)
       if(!result){
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
             // // debug_internals('send_resp', pipe)
 
             let _get_resp = {}
             _get_resp[req_id] = function(resp){
+              debug_internals('_get_resp %s %s', resp.id, req_id)
               if(resp.id == req_id){
-                // debug_internals('_get_resp %o', resp.id)
+
 
                 this.cache.set('hosts', resp['hosts'], this.HOSTS_TTL)
                 // send_resp[req_id](resp)

@@ -666,7 +666,7 @@ module.exports = new Class({
           * https://www.rethinkdb.com/api/javascript/each/
           * Iteration can be stopped prematurely by returning false from the callback.
           */
-          if(this.close_feed === true) return false
+          if(this.close_feed === true){ this.close_feed = false; return false }
 
           // debug_internals('changes %s', new Date())
 
