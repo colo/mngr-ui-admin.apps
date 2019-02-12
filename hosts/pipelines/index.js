@@ -11,7 +11,7 @@ let cron = require('node-cron')
 
 let os = {
 	mounts: {
-		type: /ext.*/ //filter mounts
+		type: /^(ext.*|xfs)$/ //filter mounts
 	}
 }
 
