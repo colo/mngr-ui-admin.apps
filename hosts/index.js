@@ -333,7 +333,11 @@ module.exports = new Class({
             if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
             this.hosts_events[host][prop].push({id: id, format: format})
 
-            if(prop == 'data'){
+            // if(prop == 'data'){
+            /**
+            * @todo: pipelines should protect you from firing events before being connected
+            **/
+            if(prop == 'data' && this.pipeline.connected[1] == true){
               this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
                 host: host,
                 type: 'register',
@@ -1535,7 +1539,7 @@ module.exports = new Class({
         this.pipeline.ids = this.pipeline.ids.clean()
       }
 
-      if(this.pipeline.ids.length == 0){ // && this.pipeline.suspended == false
+      if(this.pipeline.ids.length == 0 && this.pipeline.hosts){ // && this.pipeline.suspended == false
         this.pipeline.suspended = true
         this.pipeline.hosts.fireEvent('onSuspend')
       }
