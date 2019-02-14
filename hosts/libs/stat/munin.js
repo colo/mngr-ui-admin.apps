@@ -24,7 +24,7 @@ let chart = {
   }
 }
 
-module.exports = function(path){
+module.exports = function(stat, path){
 
   if(!chart.match || chart.match.test(path)){
     return chart

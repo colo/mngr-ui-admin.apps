@@ -111,7 +111,7 @@ let return_charts = function(stats){
   return charts
 }
 
-module.exports = function(path){
+module.exports = function(stat, path){
   debug_internals('net', path)
 
 

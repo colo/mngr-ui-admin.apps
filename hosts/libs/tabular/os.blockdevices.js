@@ -82,8 +82,8 @@ let __process_chart = function(chart, name, stat){
 
 }
 
-let return_charts = function(stats){
-  debug_internals('return_charts', stats)
+let return_charts = function(stats, path){
+  debug_internals('return_charts', stats, path)
   let charts = {}
 
   if(stats && stats !== null)
@@ -111,7 +111,7 @@ let return_charts = function(stats){
   return charts
 }
 
-module.exports = function(path){
+module.exports = function(stat, path){
   debug_internals('blockdevices', path)
 
 

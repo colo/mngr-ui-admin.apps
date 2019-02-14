@@ -97,7 +97,7 @@ let return_charts = function(stats, path){
           charts[name] = __process_stat(Object.clone(percentage_stacked_chart), path+'.'+name, stat)
         else
           charts[name] = __process_stat(Object.clone(chart), path+'.'+name, stat)
-          
+
       // switch(name){
       //   case 'cpus':
       //     charts['cpus.times'] = __process_stat(os_charts[name].times, 'os.cpus.times', stat)
@@ -119,7 +119,7 @@ let return_charts = function(stats, path){
   return charts
 }
 
-module.exports = function(path){
+module.exports = function(stat, path){
   debug_internals('os.procs*', path)
 
 

@@ -126,7 +126,7 @@ let return_charts = function(stats){
   return charts
 }
 
-module.exports = function(path){
+module.exports = function(stat, path){
 
   if(!match || match.test(path)){
     return return_charts

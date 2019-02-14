@@ -187,7 +187,7 @@ module.exports = new Class({
   __emit: function(doc){
     // debug_internals('__emit', this.events, this.hosts_events, doc)
     if(!doc.id){//if doc.id, then this event was fired by a client request...ommit!
-      debug_internals('__emit', this.events, this.hosts_events, doc)
+      // debug_internals('__emit', this.events, this.hosts_events, doc)
 
       let {type, host, prop} = doc
 
@@ -213,7 +213,7 @@ module.exports = new Class({
                 this.io.binary(false).to(`${id}`).emit(type, result)
               }
               else if(type == 'data' && format == 'stat' || format == 'tabular'){
-                debug_internals('__emit data', result)
+                // debug_internals('__emit data', result)
                 result.data = result.data.data
                 // if(prop) type = prop
                 //
@@ -839,7 +839,7 @@ module.exports = new Class({
     **/
     let transform_result_length = 0
     Object.each(data, function(d, path){
-      let transform = this.__traverse_path_require(type, path)
+      let transform = this.__traverse_path_require(type, path, d)
 
         if(transform && typeof transform == 'function'){
           transform_result_length += Object.getLength(transform(d))
@@ -852,7 +852,7 @@ module.exports = new Class({
     let transform_result_counter = 0
 
     Object.each(data, function(d, path){
-      let transform = this.__traverse_path_require(type, path) //for each path find a trasnform or use "default"
+      let transform = this.__traverse_path_require(type, path, d) //for each path find a trasnform or use "default"
 
       if(transform){
 
@@ -950,7 +950,7 @@ module.exports = new Class({
             this.cache.get(cache_key+'.'+type+'.'+path, function(err, chart_instance){
               chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
 
-              chart_instance = Object.merge(transform, chart_instance)
+              chart_instance = Object.merge(chart_instance, transform)
               // debug_internals('chart_instance NOT FUNC %o', chart_instance)
               debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path)
 
@@ -961,15 +961,16 @@ module.exports = new Class({
                 // let to_merge = {}
                 // to_merge[name] = stat
                 //
-                // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path, to_merge)
+                debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path, transformed)
 
                 // transformed = Object.merge(transformed, to_merge)
 
                 // chart_instance = this.cache.clean(chart_instance)
 
                 // instances.push(this.__transform_name(path))
-                instances[this.__transform_name(path)] = chart_instance
 
+
+                instances[this.__transform_name(path)] = chart_instance
                 this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                 if(
@@ -979,6 +980,8 @@ module.exports = new Class({
                   this.__save_instances(cache_key, instances, cb.pass(transformed))
                   // cb(transformed)
                 }
+
+                transform_result_counter++
 
               }.bind(this))
 
@@ -1132,21 +1135,21 @@ module.exports = new Class({
     name = name.replace(/\%/g, 'percentage_')
     return name
   },
-  __traverse_path_require(type, path, original_path){
+  __traverse_path_require: function(type, path, stat, original_path){
     original_path = original_path || path
     path = path.replace(/_/g, '.')
     original_path = original_path.replace(/_/g, '.')
 
     // debug_internals('__traverse_path_require %s', path, original_path)
     try{
-      let chart = require('./libs/'+type+'/'+path)(original_path)
+      let chart = require('./libs/'+type+'/'+path)(stat, original_path)
 
       return chart
     }
     catch(e){
       if(path.indexOf('.') > -1){
         let pre_path = path.substring(0, path.lastIndexOf('.'))
-        return this.__traverse_path_require(type, pre_path, original_path)
+        return this.__traverse_path_require(type, pre_path, stat, original_path)
       }
 
       return undefined
