@@ -35,7 +35,7 @@ module.exports = new Class({
     path: 'hosts',
 
     host: {
-      properties: ['paths', 'data', 'range'],//to send to pipelines.input.*.host.js
+      properties: ['paths', 'data', 'data_range'],//to send to pipelines.input.*.host.js
     },
 
     cache_store: {
@@ -62,7 +62,7 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
-      prop: /data|paths|instances|range/,
+      prop: /data|paths|instances|data_range/,
       events: /hosts|paths/,
       // stat:
 		},
@@ -177,7 +177,7 @@ module.exports = new Class({
   ON_HOST_RANGE: 'onHostRange',
   ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
   ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
-  ON_HOST_RANGE_UPDATED: 'onHostRangeUpdated',
+  ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
 
   CHART_INSTANCE_TTL: 60000,
   HOSTS_TTL: 60000,
@@ -186,11 +186,12 @@ module.exports = new Class({
   hosts_events: {},
 
   __emit: function(doc){
-    // debug_internals('__emit', this.events, this.hosts_events, doc)
+    debug_internals('__emit', this.events, this.hosts_events, doc)
     if(!doc.id){//if doc.id, then this event was fired by a client request...ommit!
       // debug_internals('__emit', this.events, this.hosts_events, doc)
 
       let {type, host, prop} = doc
+      debug_internals('__emit', type, host, prop)
 
       if(type && doc[type]){
         if(this.events[type])
@@ -253,6 +254,9 @@ module.exports = new Class({
                 }.bind(this))
               }
               else{
+                if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
+                  result[prop] = result[prop][prop]
+
                 this.io.binary(false).to(`${id}`).emit(type, result)
               }
 
@@ -1350,10 +1354,10 @@ module.exports = new Class({
         //   timestamp: Date.now()
         // }
 
-        // debug_internals('onSaveDoc %o', type, doc)
+        debug_internals('onSaveDoc %o', type, range)
 
         if(!range){
-          if(type == 'data' || type == 'range')
+          if(type == 'data' || type == 'data_range')
             this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
             // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
           else
@@ -1367,9 +1371,14 @@ module.exports = new Class({
         // this.__emit_stats(host, stats)
       }.bind(this))
 
+      this.addEvent(this.ON_HOSTS_UPDATED, function(doc){//update "hosts" on "host" input
+        // debug_internals('ON_HOSTS_UPDATED', this.pipeline.hosts.inputs[1])
+        this.pipeline.hosts.inputs[1].conn_pollers[0].data_hosts = doc.hosts
+      }.bind(this))
+
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
-      this.addEvent(this.ON_HOST_RANGE_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_DATA_RANGE_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
 
       // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){

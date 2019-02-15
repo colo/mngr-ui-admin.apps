@@ -27,15 +27,75 @@ module.exports = new Class({
   options: {
 
 		requests : {
+      periodical: [
+        {
+					get_data_range: function(req, next, app){
+            debug_internals('get_data_range', app.data_hosts);
+						if(app.data_hosts && app.data_hosts.length > 0){
+
+              Array.each(app.data_hosts, function(host){
+                debug_internals('get_data_range', host)
+                //get first
+                app.nth({
+                  _extras: {
+                    id: undefined,
+                    prop: 'data_range',
+                    range_select : 'start',
+                    host: host,
+                    type: 'prop'
+                  },
+                  uri: app.options.db+'/periodical',
+                  args: 0,
+                  query: app.r.db(app.options.db).table('periodical').
+                  between(
+                    [host, 'periodical', 0],
+                    [host, 'periodical', ''],
+                    {index: 'sort_by_host'}
+                  )
+                })
+
+                //get last
+                app.nth({
+                  _extras: {
+                    id: undefined,
+                    prop: 'data_range',
+                    range_select : 'end',
+                    host: host,
+                    type: 'prop'
+                  },
+                  uri: app.options.db+'/periodical',
+                  args: -1,
+                  query: app.r.db(app.options.db).table('periodical').
+                  between(
+                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(1000)],
+                    [host, 'periodical', ''],
+                    {index: 'sort_by_host'}
+                  )
+                })
+
+              })
+
+            }
+
+					}
+				},
+
+      ],
       once: [
         {
-					get_range: function(req, next, app){
-						if(req.host && !req.type && (req.prop == 'range' || !req.prop)){
-              debug_internals('get_range', req.host, req.prop);
+					get_data_range: function(req, next, app){
+						if(req.host && !req.type && (req.prop == 'data_range' || !req.prop)){
+              debug_internals('get_data_range', req.host, req.prop);
 
               //get first
               app.nth({
-                _extras: {id: req.id, prop: 'range', 'range' : 'start', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'start',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop'
+                },
                 uri: app.options.db+'/periodical',
                 args: 0,
                 query: app.r.db(app.options.db).table('periodical').
@@ -48,7 +108,13 @@ module.exports = new Class({
 
               //get last
               app.nth({
-                _extras: {id: req.id, prop: 'range', 'range' : 'end', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'end',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop'
+                },
                 uri: app.options.db+'/periodical',
                 args: -1,
                 query: app.r.db(app.options.db).table('periodical').
@@ -60,28 +126,6 @@ module.exports = new Class({
               })
 
 
-
-              // app.reduce({
-              //   _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/periodical',
-              //   args: function(left, right) {
-              //       return left.merge(right)
-              //   },
-              //
-              //   query: app.r.db(app.options.db).table('periodical').
-              //   // getAll(req.host, {index: 'host'}).
-              //   between(
-              //     [req.host, 'periodical', Date.now() - 60000],
-              //     [req.host, 'periodical', Date.now()],
-              //     {index: 'sort_by_host'}
-              //   ).
-              //   map(function(doc) {
-              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-              //   }.bind(app))
-              //   // query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
-              //   //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-              //   // }.bind(app))
-              // })
             }
 
 					}
@@ -235,7 +279,62 @@ module.exports = new Class({
       ],
 
       range: [
+        {
+					get_data_range: function(req, next, app){
+						if(req.host && (req.prop == 'data_range' || !req.prop)){
+              debug_internals('get_data_range', req.host, req.prop);
 
+              let range = req.opt.range
+              let end = (range.end != null) ?  range.end : Date.now()
+              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
+              let start = range.start
+
+
+              //get first
+              app.nth({
+                _extras: {
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'start',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop',
+                  range: req.opt.range
+                },
+                uri: app.options.db+'/periodical',
+                args: 0,
+                query: app.r.db(app.options.db).table('periodical').
+                between(
+                  [req.host, 'periodical', start],
+                  [req.host, 'periodical', end],
+                  {index: 'sort_by_host'}
+                )
+              })
+
+              //get last
+              app.nth({
+                _extras: {
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'end',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop',
+                  range: req.opt.range
+                },
+                uri: app.options.db+'/periodical',
+                args: -1,
+                query: app.r.db(app.options.db).table('periodical').
+                between(
+                  [req.host, 'periodical', start],
+                  [req.host, 'periodical', end],
+                  {index: 'sort_by_host'}
+                )
+              })
+
+
+            }
+
+					}
+				},
         {
 					search_paths: function(req, next, app){
 						if(req.host && (req.prop == 'paths' || !req.prop)){
@@ -412,7 +511,7 @@ module.exports = new Class({
       }],
       nth: [{
         path: ':database/:table',
-        callbacks: ['stats_range']
+        callbacks: ['data_range']
       }],
       // distinct: [{
       //   path: ':database/:table',
@@ -428,7 +527,7 @@ module.exports = new Class({
 
   },
 
-  properties: ['paths', 'data', 'range'],
+  properties: ['paths', 'data', 'data_range'],
   // properties: [],
 
   hosts: {},
@@ -448,8 +547,8 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
   },
-  stats_range: function(err, resp, params){
-    debug_internals('stats_range', err, resp, params.options)
+  data_range: function(err, resp, params){
+    debug_internals('data_range', err, resp, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -474,7 +573,7 @@ module.exports = new Class({
       let extras = params.options._extras
       let host = extras.host
       let prop = extras.prop
-      let range = extras.range //start | end
+      let range_select = extras.range_select //start | end
       let type = extras.type
       let id = extras.id
 
@@ -490,9 +589,9 @@ module.exports = new Class({
       //
       // // let result = {}
       // // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
-      this.hosts[host][prop][range] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
+      this.hosts[host][prop][range_select] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
 
-      debug_internals('data', this.hosts)
+      debug_internals('data_range', this.hosts)
 
       if(this.hosts[host][prop]['start'] && this.hosts[host][prop]['end'])
         if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
@@ -502,13 +601,12 @@ module.exports = new Class({
               found = true
           })
 
-          debug_internals('paths firing host...', this.hosts[host])
-
+          debug_internals('paths firing host...', this.hosts[host], found)
 
           this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
             {input_type: this, app: null},
             extras,
-            {type: 'host'}
+            {type: (id === undefined) ? 'data_range' : 'host'}
             // {host: host, type: 'host', prop: prop, id: id}
           )])
           delete this.hosts[host]
