@@ -28,7 +28,64 @@ module.exports = new Class({
 
 		requests : {
       once: [
+        {
+					get_range: function(req, next, app){
+						if(req.host && !req.type && (req.prop == 'range' || !req.prop)){
+              debug_internals('get_range', req.host, req.prop);
 
+              //get first
+              app.nth({
+                _extras: {id: req.id, prop: 'range', 'range' : 'start', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                uri: app.options.db+'/periodical',
+                args: 0,
+                query: app.r.db(app.options.db).table('periodical').
+                between(
+                  [req.host, 'periodical', 0],
+                  [req.host, 'periodical', ''],
+                  {index: 'sort_by_host'}
+                )
+              })
+
+              //get last
+              app.nth({
+                _extras: {id: req.id, prop: 'range', 'range' : 'end', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                uri: app.options.db+'/periodical',
+                args: -1,
+                query: app.r.db(app.options.db).table('periodical').
+                between(
+                  [req.host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(1000)],
+                  [req.host, 'periodical', ''],
+                  {index: 'sort_by_host'}
+                )
+              })
+
+
+
+              // app.reduce({
+              //   _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+              //   uri: app.options.db+'/periodical',
+              //   args: function(left, right) {
+              //       return left.merge(right)
+              //   },
+              //
+              //   query: app.r.db(app.options.db).table('periodical').
+              //   // getAll(req.host, {index: 'host'}).
+              //   between(
+              //     [req.host, 'periodical', Date.now() - 60000],
+              //     [req.host, 'periodical', Date.now()],
+              //     {index: 'sort_by_host'}
+              //   ).
+              //   map(function(doc) {
+              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              //   }.bind(app))
+              //   // query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              //   // }.bind(app))
+              // })
+            }
+
+					}
+				},
         {
 					search_paths: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
@@ -353,6 +410,10 @@ module.exports = new Class({
         path: ':database/:table',
         callbacks: ['data']
       }],
+      nth: [{
+        path: ':database/:table',
+        callbacks: ['stats_range']
+      }],
       // distinct: [{
       //   path: ':database/:table',
       //   callbacks: ['distinct']
@@ -364,21 +425,16 @@ module.exports = new Class({
 
 		},
 
-    // properties: ['paths', 'data'],
-    properties: [],
+
   },
+
+  properties: ['paths', 'data', 'range'],
+  // properties: [],
 
   hosts: {},
   _multi_response: {},
 
   initialize: function(options){
-    // let paths = []
-    // Array.each(options.paths, function(path){
-    //   if(this.paths.test(path) == true)
-    //     paths.push(path)
-    // }.bind(this))
-    //
-    // options.paths = paths
 
   	this.parent(options);//override default options
 
@@ -391,6 +447,76 @@ module.exports = new Class({
 		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Host:Input_init');//end profiling
 
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
+  },
+  stats_range: function(err, resp, params){
+    debug_internals('stats_range', err, resp, params.options)
+
+    if(err){
+      // debug_internals('reduce err', err)
+
+			if(params.uri != ''){
+				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
+			}
+			else{
+				this.fireEvent('onGetError', err);
+			}
+
+			this.fireEvent(this.ON_DOC_ERROR, err);
+
+			this.fireEvent(
+				this[
+					'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
+				],
+				err
+			);
+    }
+    else{
+      let extras = params.options._extras
+      let host = extras.host
+      let prop = extras.prop
+      let range = extras.range //start | end
+      let type = extras.type
+      let id = extras.id
+
+      if(!this.hosts[host]) this.hosts[host] = {}
+      if(!this.hosts[host][prop]) this.hosts[host][prop] = {start: undefined, end: undefined}
+
+
+
+      // if(extras.range == 'end')
+      //   process.exit(1)
+
+      // // if(resp) debug_internals('paths', Object.keys(resp))
+      //
+      // // let result = {}
+      // // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
+      this.hosts[host][prop][range] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
+
+      debug_internals('data', this.hosts)
+
+      if(this.hosts[host][prop]['start'] && this.hosts[host][prop]['end'])
+        if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+          let found = false
+          Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+            if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
+              found = true
+          })
+
+          debug_internals('paths firing host...', this.hosts[host])
+
+
+          this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+            {input_type: this, app: null},
+            extras,
+            {type: 'host'}
+            // {host: host, type: 'host', prop: prop, id: id}
+          )])
+          delete this.hosts[host]
+        }
+
+
+
+    }
   },
   unknown_property: function(params){
     debug_internals('unknown_property', params.options)
@@ -408,7 +534,7 @@ module.exports = new Class({
     )])
   },
   data: function(err, resp, params){
-    // debug_internals('data', err, params.options)
+    debug_internals('data', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -488,7 +614,7 @@ module.exports = new Class({
 
           this.hosts[host][prop] = result
 
-          if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
+          if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
             let found = false
             Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
               if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
@@ -514,26 +640,12 @@ module.exports = new Class({
 
 
     }.bind(this))
-    // // let result = {}
-    // this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
-    //
-    // if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
-    //   let found = false
-    //   Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-    //     if(data)
-    //       found = true
-    //   })
-    //
-    //   this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge({input_type: this, app: null}, {host: host, type: 'host'})])
-    //   delete this.hosts[host]
-    // }
 
 
 
-    // }
   },
   paths: function(err, resp, params){
-    // debug_internals('paths', err, resp, params.options)
+    debug_internals('paths', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -569,7 +681,7 @@ module.exports = new Class({
     // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
     this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
 
-    if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.options.properties.length)){
+    if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
       let found = false
       Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
         if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))

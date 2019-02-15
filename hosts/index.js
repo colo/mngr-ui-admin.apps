@@ -35,7 +35,7 @@ module.exports = new Class({
     path: 'hosts',
 
     host: {
-      properties: ['paths', 'data'],//to send to pipelines.input.*.host.js
+      properties: ['paths', 'data', 'range'],//to send to pipelines.input.*.host.js
     },
 
     cache_store: {
@@ -62,7 +62,7 @@ module.exports = new Class({
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
-      prop: /data|paths|instances/,
+      prop: /data|paths|instances|range/,
       events: /hosts|paths/,
       // stat:
 		},
@@ -177,6 +177,7 @@ module.exports = new Class({
   ON_HOST_RANGE: 'onHostRange',
   ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
   ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
+  ON_HOST_RANGE_UPDATED: 'onHostRangeUpdated',
 
   CHART_INSTANCE_TTL: 60000,
   HOSTS_TTL: 60000,
@@ -1352,9 +1353,9 @@ module.exports = new Class({
         // debug_internals('onSaveDoc %o', type, doc)
 
         if(!range){
-          if(type == 'data')
-            this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
-
+          if(type == 'data' || type == 'range')
+            this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
+            // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
           else
             this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
         }
@@ -1368,6 +1369,7 @@ module.exports = new Class({
 
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_RANGE_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
 
       // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
