@@ -180,6 +180,7 @@ module.exports = new Class({
   ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
 
   CHART_INSTANCE_TTL: 60000,
+  // SESSIONS_TTL: 60000,
   HOSTS_TTL: 60000,
 
   events: {},
@@ -1322,6 +1323,7 @@ module.exports = new Class({
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
 
+    // this.__update_sessions(session.id)
     // if(!session.hosts)
     //   session.hosts = {
     //     value: undefined,
@@ -1330,6 +1332,34 @@ module.exports = new Class({
 
     return session
   },
+  // __update_sessions: function(id, remove){
+  //   remove = remove || false
+  //   this.cache.get('sessions', function(err, sessions){
+  //     if(!sessions || sessions == null) sessions = []
+  //
+  //     if(remove === false){
+  //       if(Array.isArray(id)){
+  //         Array.each(function(_id){
+  //           sessions = sessions.erase(_id)
+  //         })
+  //
+  //       }
+  //       else{
+  //         sessions = sessions.erase(id)
+  //       }
+  //     }
+  //     else{
+  //       if(Array.isArray(id)){
+  //         sessions = sessions.combine(id)
+  //       }
+  //       else{
+  //         sessions = sessions.include(id)
+  //       }
+  //     }
+  //
+  //     this.cache.set('sessions', sessions, this.SESSIONS_TTL)
+  //   }.bind(this))
+  // },
   __get_pipeline: function(id, cb){
 
     if(!this.pipeline.hosts){
@@ -1515,6 +1545,8 @@ module.exports = new Class({
   },
   socket: function(socket){
 		this.parent(socket)
+
+    socket.compress(true)
 
 		socket.on('disconnect', function () {
       debug_internals('socket.io disconnect', socket.id, this.hosts_events)
