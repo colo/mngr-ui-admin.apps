@@ -230,30 +230,30 @@ module.exports = new Class({
 
 					}
 				},
-        {
-					unregister: function(req, next, app){
-						if(req.host && req.type == 'unregister' && req.prop == 'data' && req.id){
-              // debug_internals('unregister', req.host, req.prop);
-              let {host, prop, id} = req
-              app.unregister(host, prop, id)
-              // if(app.events[host] && app.events[host][prop])
-
-              // app.map({
-              //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/periodical',
-              //   args: function(x){ return [x('group'), x('reduction')] },
-              //
-              //   query: app.r.db(app.options.db).
-              //   table('periodical').
-              //   getAll(req.host, {index: 'host'}).
-              //   group(app.r.row('metadata')('path')).
-              //   max(app.r.row('metadata')('timestamp')).
-              //   ungroup()
-              // })
-            }
-
-					}
-				},
+        // {
+				// 	unregister: function(req, next, app){
+				// 		if(req.host && req.type == 'unregister' && req.prop == 'data' && req.id){
+        //       // debug_internals('unregister', req.host, req.prop);
+        //       let {host, prop, id} = req
+        //       app.unregister(host, prop, id)
+        //       // if(app.events[host] && app.events[host][prop])
+        //
+        //       // app.map({
+        //       //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+        //       //   uri: app.options.db+'/periodical',
+        //       //   args: function(x){ return [x('group'), x('reduction')] },
+        //       //
+        //       //   query: app.r.db(app.options.db).
+        //       //   table('periodical').
+        //       //   getAll(req.host, {index: 'host'}).
+        //       //   group(app.r.row('metadata')('path')).
+        //       //   max(app.r.row('metadata')('timestamp')).
+        //       //   ungroup()
+        //       // })
+        //     }
+        //
+				// 	}
+				// },
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
@@ -805,41 +805,41 @@ module.exports = new Class({
 
     // }
   },
-  unregister: function(host, prop, id){
-    debug_internals('unregister', host, prop, id)
-
-    if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
-      this.events[host][prop].erase(id)
-      this.events[host][prop] = this.events[host][prop].clean()
-
-      if(this.events[host][prop].length == 0){
-        delete this.events[host][prop]
-      }
-    }
-
-    if(this.events[host] && Object.getLength(this.events[host]) == 0)
-      delete this.events[host]
-
-    if(Object.getLength(this.events) == 0 && this.feed){
-      debug_internals('unregister closing')
-      this.feed.close(function (err) {
-        this.close_feed = true
-        if (err){
-          debug_internals('err closing cursor', err)
-        }
-      }.bind(this))
-      this.feed = undefined
-    }
-
-    debug_internals('unregister', this.events)
-
-  },
+  // unregister: function(host, prop, id){
+  //   debug_internals('unregister', host, prop, id)
+  //
+  //   if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
+  //     this.events[host][prop].erase(id)
+  //     this.events[host][prop] = this.events[host][prop].clean()
+  //
+  //     if(this.events[host][prop].length == 0){
+  //       delete this.events[host][prop]
+  //     }
+  //   }
+  //
+  //   if(this.events[host] && Object.getLength(this.events[host]) == 0)
+  //     delete this.events[host]
+  //
+  //   if(Object.getLength(this.events) == 0 && this.feed){
+  //     debug_internals('unregister closing')
+  //     this.feed.close(function (err) {
+  //       this.close_feed = true
+  //       if (err){
+  //         debug_internals('err closing cursor', err)
+  //       }
+  //     }.bind(this))
+  //     this.feed = undefined
+  //   }
+  //
+  //   debug_internals('unregister', this.events)
+  //
+  // },
   register: function(host, prop, id){
     // debug_internals('register', host, prop, id)
 
-    if(!this.events[host]) this.events[host] = {}
-    if(!this.events[host][prop]) this.events[host][prop] = []
-    this.events[host][prop].push(id)
+    // if(!this.events[host]) this.events[host] = {}
+    // if(!this.events[host][prop]) this.events[host][prop] = []
+    // this.events[host][prop].push(id)
 
     if(!this.feed){
 

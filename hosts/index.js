@@ -28,7 +28,23 @@ let data_to_tabular = require('node-tabular-data').data_to_tabular
 module.exports = new Class({
   Extends: App,
 
+  ID: 'ea77ccca-4aa1-448d-a766-b23efef9c12b',
+
+  ON_HOSTS_UPDATED: 'onHostsUpdated',
+  ON_HOST_UPDATED: 'onHostUpdated',
+  ON_HOST_RANGE: 'onHostRange',
+  ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
+  ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
+  ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
+
+
+  CHART_INSTANCE_TTL: 60000,
+  SESSIONS_TTL: 60000,
+  HOSTS_TTL: 60000,
+
   cache: undefined,
+
+  session_store: undefined,
 
 	options: {
     id: 'hosts',
@@ -172,103 +188,130 @@ module.exports = new Class({
 
   // hosts_props: {},
 
-  ON_HOSTS_UPDATED: 'onHostsUpdated',
-  ON_HOST_UPDATED: 'onHostUpdated',
-  ON_HOST_RANGE: 'onHostRange',
-  ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
-  ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
-  ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
-
-  CHART_INSTANCE_TTL: 60000,
-  // SESSIONS_TTL: 60000,
-  HOSTS_TTL: 60000,
-
   events: {},
   hosts_events: {},
 
   __emit: function(doc){
-    debug_internals('__emit', this.events, this.hosts_events, doc)
-    if(!doc.id){//if doc.id, then this event was fired by a client request...ommit!
-      // debug_internals('__emit', this.events, this.hosts_events, doc)
-
+    debug_internals('__emit', this.events, this.hosts_events)
+    if(!doc.id && this.session_store){//if doc.id, then this event was fired by a client request...ommit!
       let {type, host, prop} = doc
-      debug_internals('__emit', type, host, prop)
-
       if(type && doc[type]){
-        if(this.events[type])
-          Array.each(this.events[type], function(socketId){
-            // sending to individual socketid (private message)
-            this.io.binary(false).to(`${socketId}`).emit(type, doc)
-          }.bind(this))
 
-        if(this.hosts_events[host] && this.hosts_events[host][type])
-          Array.each(this.hosts_events[host][type], function(event){
-            let result = Object.clone(doc)
+        this.cache.get(this.ID+'.sessions', function(err, sessions){
 
-            if(event && event !== null){
-              let {id, format} = event
+          if(sessions && sessions['socket'] && sessions['socket'].length > 0){
 
-              if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
-                Array.each(result['paths'], function(path, index){
-                  result['paths'][index] = path.replace(/\./g, '_')
-                })
+            Array.each(sessions['socket'], function(socketId){
+              if(typeof this.session_store.get == 'function'){
+                try{
 
-                this.io.binary(false).to(`${id}`).emit(type, result)
+                  this.session_store.get(socketId, function(err, session){
+                    if(!err){
+                      debug_internals('this.session.store session', socketId, err, session)
+                      this.__emit_registered_events(socketId, session, doc)
+                    }
+                  //
+                  }.bind(this))
+                }
+                catch(e){
+                  debug_internals('this.session_store.get', e)
+                }
               }
-              else if(type == 'data' && format == 'stat' || format == 'tabular'){
-                // debug_internals('__emit data', result)
-                result.data = result.data.data
-                // if(prop) type = prop
-                //
-                // let result = {
-                //   type: type,
-                //   // range: range,
-                //   host: host
-                // }
-                //
-                // if(type == 'data' && format)
-                type = format
-                //
-                // result[type] = doc
+              else{//MemoryStore
+                debug_internals('this.session.store session', this.session_store.sessions[socketId])
 
-
-
-                this.__transform_data('stat', result.data, host, function(stat){
-                  // result = stat
-                  result.stat = stat
-                  delete result.data
-
-                  if( format == 'tabular' ){
-                    this.__transform_data('tabular', result.stat, host, function(tabular){
-                      // result = tabular
-                      result.tabular = tabular
-                      delete result.stat
-                      this.io.binary(false).to(`${id}`).emit(type, result)
-
-                    }.bind(this))
-
-                  }
-                  else{
-                    this.io.binary(false).to(`${id}`).emit(type, result)
-                  }
-
-                }.bind(this))
-              }
-              else{
-                if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
-                  result[prop] = result[prop][prop]
-
-                this.io.binary(false).to(`${id}`).emit(type, result)
+                this.__emit_registered_events(socketId, this.session_store.sessions[socketId], doc)
               }
 
-            }
+            }.bind(this))
 
-          }.bind(this))
+
+          }
+
+        }.bind(this))//cache.get
+
+
+        // debug_internals('__emit', type, host, prop)
       }
+
+
       // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
 
     }
+  },
+  __emit_registered_events: function(socketId, session, doc){
+    let {type, host, prop} = doc
+
+    if(this.events[type])
+      Array.each(this.events[type], function(socketId){
+        // sending to individual socketid (private message)
+        this.io.binary(false).to(`${socketId}`).emit(type, doc)
+      }.bind(this))
+
+    if(this.hosts_events[host] && this.hosts_events[host][type])
+      Array.each(this.hosts_events[host][type], function(event){
+        let result = Object.clone(doc)
+
+        if(event && event !== null){
+          let {id, format} = event
+
+          if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
+            Array.each(result['paths'], function(path, index){
+              result['paths'][index] = path.replace(/\./g, '_')
+            })
+
+            this.io.binary(false).to(`${id}`).emit(type, result)
+          }
+          else if(type == 'data' && format == 'stat' || format == 'tabular'){
+            // debug_internals('__emit data', result)
+            result.data = result.data.data
+            // if(prop) type = prop
+            //
+            // let result = {
+            //   type: type,
+            //   // range: range,
+            //   host: host
+            // }
+            //
+            // if(type == 'data' && format)
+            type = format
+            //
+            // result[type] = doc
+
+
+
+            this.__transform_data('stat', result.data, host, function(stat){
+              // result = stat
+              result.stat = stat
+              delete result.data
+
+              if( format == 'tabular' ){
+                this.__transform_data('tabular', result.stat, host, function(tabular){
+                  // result = tabular
+                  result.tabular = tabular
+                  delete result.stat
+                  this.io.binary(false).to(`${id}`).emit(type, result)
+
+                }.bind(this))
+
+              }
+              else{
+                this.io.binary(false).to(`${id}`).emit(type, result)
+              }
+
+            }.bind(this))
+          }
+          else{
+            if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
+              result[prop] = result[prop][prop]
+
+            this.io.binary(false).to(`${id}`).emit(type, result)
+          }
+
+        }
+
+      }.bind(this))
   },
   register: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
@@ -361,7 +404,7 @@ module.exports = new Class({
 
       }.bind(this))
 
-      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.toString()+' events'})
+      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(', ')+' events'})
     }
     else{
       send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
@@ -1322,8 +1365,12 @@ module.exports = new Class({
   },
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
+    debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
 
-    // this.__update_sessions(session.id)
+    if(!this.session_store)
+      this.session_store = (socket) ? socket.handshake.sessionStore : req.sessionStore
+
+    this.__update_sessions({id: session.id, type: (socket) ? 'socket' : 'http'})
     // if(!session.hosts)
     //   session.hosts = {
     //     value: undefined,
@@ -1332,34 +1379,29 @@ module.exports = new Class({
 
     return session
   },
-  // __update_sessions: function(id, remove){
-  //   remove = remove || false
-  //   this.cache.get('sessions', function(err, sessions){
-  //     if(!sessions || sessions == null) sessions = []
-  //
-  //     if(remove === false){
-  //       if(Array.isArray(id)){
-  //         Array.each(function(_id){
-  //           sessions = sessions.erase(_id)
-  //         })
-  //
-  //       }
-  //       else{
-  //         sessions = sessions.erase(id)
-  //       }
-  //     }
-  //     else{
-  //       if(Array.isArray(id)){
-  //         sessions = sessions.combine(id)
-  //       }
-  //       else{
-  //         sessions = sessions.include(id)
-  //       }
-  //     }
-  //
-  //     this.cache.set('sessions', sessions, this.SESSIONS_TTL)
-  //   }.bind(this))
-  // },
+  __update_sessions: function(session, remove){
+    remove = remove || false
+    this.cache.get(this.ID+'.sessions', function(err, sessions){
+      if(!sessions || sessions == null) sessions = {}
+
+      session = [session]
+      if(remove === false){
+        Array.each(session, function(_session){
+          if(!sessions[_session.type]) sessions[_session.type] = []
+          sessions[_session.type] = sessions[_session.type].include(_session.id)
+        })
+
+      }
+      else{
+        Array.each(session, function(_session){
+          if(sessions[_session.type])
+            sessions[_session.type] = sessions[_session.type].erase(_session.id)
+        })
+      }
+
+      this.cache.set(this.ID+'.sessions', sessions, this.SESSIONS_TTL)
+    }.bind(this))
+  },
   __get_pipeline: function(id, cb){
 
     if(!this.pipeline.hosts){
@@ -1537,8 +1579,6 @@ module.exports = new Class({
     //   this.pipeline.hosts.fireEvent('onOnce')
     // }.bind(this))
 
-
-
     this.profile('hosts_init');//end profiling
 
 		this.log('hosts', 'info', 'hosts started');
@@ -1551,7 +1591,7 @@ module.exports = new Class({
 		socket.on('disconnect', function () {
       debug_internals('socket.io disconnect', socket.id, this.hosts_events)
 
-
+      this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
 
       Object.each(this.events, function(event, name){
         if(event.contains(socket.id)){
