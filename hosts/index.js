@@ -188,8 +188,8 @@ module.exports = new Class({
 
   // hosts_props: {},
 
-  events: {},
-  hosts_events: {},
+  // events: {},
+  // hosts_events: {},
 
   __emit: function(doc){
     // debug_internals('__emit', this.events, this.hosts_events)
@@ -202,33 +202,43 @@ module.exports = new Class({
           if(sessions && sessions['socket'] && sessions['socket'].length > 0){
 
             Array.each(sessions['socket'], function(id){
-              if(typeof this.session_store.get == 'function'){
-                try{
-
-                  this.session_store.get(id, function(err, session){
-                    if(!err){
-                      // debug_internals('this.session.store session', id, err, session)
-                      // this.__emit_registered_events(socketId, session, doc)
-                      if(session && session.sockets && session.sockets.length > 0)
-                        Array.each(session.sockets, function(socketId){
-                          this.__emit_registered_events(socketId, session, doc)
-                        }.bind(this))
+              this.__get_session_by_id(id, function(err, session){
+                if(session && session.sockets && session.sockets.length > 0)
+                  Array.each(session.sockets, function(socketId){
+                    if(this.io.connected[socketId] && this.io.connected[socketId].connected){
+                      this.__update_sessions({id: id, type: 'socket'})
+                      this.__emit_registered_events(socketId, session, doc)
                     }
-                  //
-                  }.bind(this))
-                }
-                catch(e){
-                  debug_internals('this.session_store.get error', e)
-                }
-              }
-              else{//MemoryStore
-                // debug_internals('this.session.store session', this.session_store.sessions[id], this.session_store.sessions[id].sockets)
-                if(this.session_store.sessions[id].sockets && this.session_store.sessions[id].sockets.length > 0)
-                  Array.each(this.session_store.sessions[id].sockets, function(socketId){
-                    this.__emit_registered_events(socketId, this.session_store.sessions[id], doc)
-                  }.bind(this))
 
-              }
+                  }.bind(this))
+              }.bind(this))
+              // if(typeof this.session_store.get == 'function'){
+              //   try{
+              //
+              //     this.session_store.get(id, function(err, session){
+              //       if(!err){
+              //         // debug_internals('this.session.store session', id, err, session)
+              //         // this.__emit_registered_events(socketId, session, doc)
+              //         if(session && session.sockets && session.sockets.length > 0)
+              //           Array.each(session.sockets, function(socketId){
+              //             this.__emit_registered_events(socketId, session, doc)
+              //           }.bind(this))
+              //       }
+              //     //
+              //     }.bind(this))
+              //   }
+              //   catch(e){
+              //     debug_internals('this.session_store.get error', e)
+              //   }
+              // }
+              // else{//MemoryStore
+              //   // debug_internals('this.session.store session', this.session_store.sessions[id], this.session_store.sessions[id].sockets)
+              //   if(this.session_store.sessions[id].sockets && this.session_store.sessions[id].sockets.length > 0)
+              //     Array.each(this.session_store.sessions[id].sockets, function(socketId){
+              //       this.__emit_registered_events(socketId, this.session_store.sessions[id], doc)
+              //     }.bind(this))
+              //
+              // }
 
             }.bind(this))
 
@@ -242,94 +252,228 @@ module.exports = new Class({
       }
 
 
-      // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+      // this.io.emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
 
 
     }
   },
-  __emit_registered_events: function(socketId, session, doc){
-    if(doc.type == 'instances')
-      debug_internals('__emit_registered_events', (session) ? session.hosts_events : undefined, doc.type)
+  __get_session_by_id: function(id, cb){
 
-    let {type, host, prop} = doc
-
-    if(session && session.events.contains(type))
-      this.io.binary(false).to(`${socketId}`).emit(type, doc)
-
-
-    if(session && session.hosts_events[host])
-      Array.each(session.hosts_events[host], function(event){
-
-
-        let result = Object.clone(doc)
-
-        if(event && event !== null && event.prop == type){
-          let {format} = event
-
-          if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
-            Array.each(result['paths'], function(path, index){
-              result['paths'][index] = path.replace(/\./g, '_')
-            })
-
-            this.io.binary(false).to(`${socketId}`).emit(type, result)
-          }
-          else if(type == 'data' && format == 'stat' || format == 'tabular'){
-            // debug_internals('__emit data', result)
-            result.data = result.data.data
-            // if(prop) type = prop
-            //
-            // let result = {
-            //   type: type,
-            //   // range: range,
-            //   host: host
-            // }
-            //
-            // if(type == 'data' && format)
-            type = format
-            //
-            // result[type] = doc
+    if(typeof this.session_store.get == 'function'){
+      try{
+        this.session_store.get(id, cb)
+      }
+      catch(e){
+        debug_internals('this.session_store.get error', e)
+      }
+    }
+    else if(this.session_store.sessions[id]){//MemoryStore
+      cb(undefined, this.session_store.sessions[id])
+    }
+    else{
+      cb({status: 404, message: 'session not found'}, undefined)
+    }
 
 
+  },
+  // __get_session_by_socket: function(socketId, cb){
+  //   debug_internals('__get_session_by_socket', socketId)
+  //
+  //   if(typeof this.session_store.all == 'function'){
+  //     try{
+  //       this.session_store.all(function(err, sessions){
+  //         if(err) cb(err, sessions)
+  //
+  //         debug_internals('__get_session_by_socket this.session_store.all', sessions)
+  //
+  //         let found = false
+  //         Object.each(sessions, function(session, sid){
+  //           if(session && session.sockets && session.sockets.contains(socketId)){
+  //             cb(undefined, session)
+  //             found = true
+  //           }
+  //         }.bind(this))
+  //
+  //         if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+  //
+  //       })
+  //     }
+  //     catch(e){
+  //       debug_internals('this.session_store.get error', e)
+  //     }
+  //   }
+  //   else if(this.session_store.sessions){//MemoryStore
+  //     debug_internals('__get_session_by_socket this.session_store.sessions', this.session_store.sessions)
+  //     let found = false
+  //     Object.each(this.session_store.sessions, function(session, sid){
+  //       if(session && session.sockets && session.sockets.contains(socketId)){
+  //         cb(undefined, session)
+  //         found = true
+  //       }
+  //     }.bind(this))
+  //
+  //     if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+  //   }
+  //   else{//last resort, search by IDs using cache
+  //     // cb({status: 404, message: 'session not found'}, undefined)
+  //     this.cache.get(this.ID+'.sessions', function(err, sessions){
+  //
+  //       if(sessions && sessions['socket'] && sessions['socket'].length > 0){
+  //         let found = false
+  //         Array.each(sessions['socket'], function(id){
+  //           this.__get_session_by_id(id, function(err, session){
+  //             if(session){
+  //               found = true
+  //               cb(undefined, session)
+  //             }
+  //           })
+  //         }.bind(this))
+  //
+  //         if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+  //       }
+  //       else{
+  //         cb({status: 404, message: 'session not found'}, undefined)
+  //       }
+  //     }.bind(this))
+  //   }
+  //
+  // },
+  __get_session_id_by_socket: function(socketId, cb){
+    debug_internals('__get_session_id_by_socket', socketId)
 
-            this.__transform_data('stat', result.data, host, function(stat){
-              // result = stat
-              result.stat = stat
-              delete result.data
+    if(typeof this.session_store.all == 'function'){
+      try{
+        this.session_store.all(function(err, sessions){
+          if(err) cb(err, sessions)
 
-              if( format == 'tabular' ){
-                this.__transform_data('tabular', result.stat, host, function(tabular){
-                  // result = tabular
-                  result.tabular = tabular
-                  delete result.stat
-                  this.io.binary(false).to(`${socketId}`).emit(type, result)
+          debug_internals('__get_session_id_by_socket this.session_store.all', sessions)
 
-                }.bind(this))
+          let found = false
+          Object.each(sessions, function(session, sid){
+            if(session && session.sockets && session.sockets.contains(socketId)){
+              cb(undefined, sid)
+              found = true
+            }
+          }.bind(this))
 
-              }
-              else{
-                this.io.binary(false).to(`${socketId}`).emit(type, result)
-              }
+          if(found === false) cb({status: 404, message: 'session not found'}, undefined)
 
-            }.bind(this))
-          }
-          else{
-            // if(type == 'instances'){
-            //   debug_internals('__emit_registered_events EVENT', result)
-            //   process.exit(1)
-            //
-            // }
-
-            // debug_internals(type, socketId)
-            // process.exit(1)
-            if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
-              result[prop] = result[prop][prop]
-
-            this.io.binary(false).to(`${socketId}`).emit(type, result)
-          }
-
+        })
+      }
+      catch(e){
+        debug_internals('this.session_store.get error', e)
+      }
+    }
+    else if(this.session_store.sessions){//MemoryStore
+      debug_internals('__get_session_id_by_socket this.session_store.sessions', this.session_store.sessions)
+      let found = false
+      Object.each(this.session_store.sessions, function(session, sid){
+        if(session && session.sockets && session.sockets.contains(socketId)){
+          cb(undefined, sid)
+          found = true
         }
-
       }.bind(this))
+
+      if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+    }
+    else{//last resort, search by IDs using cache
+      // cb({status: 404, message: 'session not found'}, undefined)
+      this.cache.get(this.ID+'.sessions', function(err, sessions){
+
+        if(sessions && sessions['socket'] && sessions['socket'].length > 0){
+          let found = false
+          Array.each(sessions['socket'], function(sid){
+            this.__get_session_by_id(sid, function(err, session){
+              if(session){
+                found = true
+                cb(undefined, sid)
+              }
+            })
+          }.bind(this))
+
+          if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+        }
+        else{
+          cb({status: 404, message: 'session not found'}, undefined)
+        }
+      }.bind(this))
+    }
+
+  },
+  __emit_registered_events: function(socketId, session, doc){
+    // debug_internals('__emit_registered_events', this.io.connected[socketId].connected)
+    if(this.io.connected[socketId] && this.io.connected[socketId].connected){
+      let {type, host, prop} = doc
+
+      if(session && session.events.contains(type))
+        this.io.to(`${socketId}`).emit(type, doc)
+
+
+      if(session && session.hosts_events[host]){
+        Array.each(session.hosts_events[host], function(event){
+
+          if(type == 'data')
+            debug_internals('__emit_registered_events', event)
+
+          let result = Object.clone(doc)
+
+          if(event && event !== null && event.prop == type){
+            let {format} = event
+
+            if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
+              Array.each(result['paths'], function(path, index){
+                result['paths'][index] = path.replace(/\./g, '_')
+              })
+
+              this.io.to(`${socketId}`).emit(type, result)
+            }
+            else if(type == 'data' && format == 'stat' || format == 'tabular'){
+              debug_internals('__emit data', result)
+
+              result.data = result.data.data // @bug: doc.data.data ??
+
+              this.__transform_data('stat', result.data, host, function(stat){
+                // result = stat
+                result.stat = stat
+                delete result.data
+
+                if( format == 'tabular' ){
+                  this.__transform_data('tabular', result.stat, host, function(tabular){
+                    // result = tabular
+                    result.tabular = tabular
+                    delete result.stat
+                    this.io.to(`${socketId}`).emit(format, result)
+
+                  }.bind(this))
+
+                }
+                else{
+                  this.io.to(`${socketId}`).emit(format, result)
+                }
+
+              }.bind(this))
+            }
+            else{
+              // if(type == 'instances'){
+              //   debug_internals('__emit_registered_events EVENT', result)
+              //   process.exit(1)
+              //
+              // }
+
+              // debug_internals(type, socketId)
+              // process.exit(1)
+              if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
+                result[prop] = result[prop][prop]
+
+              this.io.to(`${socketId}`).emit(type, result)
+            }
+
+          }
+
+        }.bind(this))
+      }
+    }
+
   },
   register: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
@@ -349,7 +493,7 @@ module.exports = new Class({
           resp.status(err.code).json(err)
         }
         else{
-          socket.binary(false).emit('on', err)
+          socket.emit('on', err)
         }
       }
       else{
@@ -357,7 +501,7 @@ module.exports = new Class({
           resp.json(result)
         }
         else{
-          socket.binary(false).emit('on', result)
+          socket.emit('on', result)
         }
       }
 
@@ -385,7 +529,7 @@ module.exports = new Class({
 
             if(!session.hosts_events[host]) session.hosts_events[host] = []
 
-            // if(!this.hosts_events[host].some(function(item){ return (item.prop == event.prop && item.format == event.format) }))
+            if(session.hosts_events[host].some(function(item){ return item.prop == event.prop && item.format == event.format }) !== true)
               session.hosts_events[host].push(event)
 
 
@@ -450,7 +594,7 @@ module.exports = new Class({
           resp.json(result)
         }
         else{
-          socket.binary(false).emit('instances', result)
+          socket.emit('instances', result)
         }
       }
       else{
@@ -458,7 +602,7 @@ module.exports = new Class({
           resp.status(404).json({status: 'no instances'})
         }
         else{
-          socket.binary(false).emit('instances', {status: 'no instances'})
+          socket.emit('instances', {status: 'no instances'})
         }
 
       }
@@ -631,7 +775,7 @@ module.exports = new Class({
             resp.json(result)
           }
           else{
-            socket.binary(false).emit(type, result)
+            socket.emit(type, result)
           }
         }
         else{
@@ -639,7 +783,7 @@ module.exports = new Class({
             resp.status(404).json({status: 'no '+type})
           }
           else{
-            socket.binary(false).emit(type, {status: 'no '+type})
+            socket.emit(type, {status: 'no '+type})
           }
 
         }
@@ -1604,36 +1748,39 @@ module.exports = new Class({
     socket.compress(true)
 
 		socket.on('disconnect', function () {
-      debug_internals('socket.io disconnect', socket.id, this.hosts_events)
+      debug_internals('socket.io disconnect', socket.id)
 
-      this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
+      // Object.each(this.events, function(event, name){
+      //   if(event.contains(socket.id)){
+      //     event.erase(socket.id)
+      //     event = event.clean()
+      //   }
+      // }.bind(this))
+      //
+      // Object.each(this.hosts_events, function(host, host_name){
+      //   Object.each(host, function(prop, prop_name){
+      //     Array.each(prop, function(event, event_index){
+      //       if(event && event.id == socket.id){
+      //         this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+      //           host: host_name,
+      //           type: 'unregister',
+      //           prop: prop_name,
+      //           id: socket.id,
+      //         })//fire only the 'host' input
+      //
+      //         prop[event_index] = undefined
+      //       }
+      //     }.bind(this))
+      //     prop = prop.clean()
+      //   }.bind(this))
+      // }.bind(this))
 
-      Object.each(this.events, function(event, name){
-        if(event.contains(socket.id)){
-          event.erase(socket.id)
-          event = event.clean()
-        }
+      // this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
+      this.__get_session_id_by_socket(socket.id, function(err, sid){
+        debug_internals('disconnect __get_session_by_socket', err, sid)
+        if(sid)
+          this.__update_sessions({id: sid, type: 'socket'}, true)//true == remove
       }.bind(this))
-
-      Object.each(this.hosts_events, function(host, host_name){
-        Object.each(host, function(prop, prop_name){
-          Array.each(prop, function(event, event_index){
-            if(event && event.id == socket.id){
-              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-                host: host_name,
-                type: 'unregister',
-                prop: prop_name,
-                id: socket.id,
-              })//fire only the 'host' input
-
-              prop[event_index] = undefined
-            }
-          }.bind(this))
-          prop = prop.clean()
-        }.bind(this))
-      }.bind(this))
-
-
 
       if(this.pipeline.ids.contains(socket.id)){
         this.pipeline.ids.erase(socket.id)
