@@ -192,7 +192,7 @@ module.exports = new Class({
   hosts_events: {},
 
   __emit: function(doc){
-    debug_internals('__emit', this.events, this.hosts_events)
+    // debug_internals('__emit', this.events, this.hosts_events)
     if(!doc.id && this.session_store){//if doc.id, then this event was fired by a client request...ommit!
       let {type, host, prop} = doc
       if(type && doc[type]){
@@ -201,26 +201,33 @@ module.exports = new Class({
 
           if(sessions && sessions['socket'] && sessions['socket'].length > 0){
 
-            Array.each(sessions['socket'], function(socketId){
+            Array.each(sessions['socket'], function(id){
               if(typeof this.session_store.get == 'function'){
                 try{
 
-                  this.session_store.get(socketId, function(err, session){
+                  this.session_store.get(id, function(err, session){
                     if(!err){
-                      debug_internals('this.session.store session', socketId, err, session)
-                      this.__emit_registered_events(socketId, session, doc)
+                      // debug_internals('this.session.store session', id, err, session)
+                      // this.__emit_registered_events(socketId, session, doc)
+                      if(session && session.sockets && session.sockets.length > 0)
+                        Array.each(session.sockets, function(socketId){
+                          this.__emit_registered_events(socketId, session, doc)
+                        }.bind(this))
                     }
                   //
                   }.bind(this))
                 }
                 catch(e){
-                  debug_internals('this.session_store.get', e)
+                  debug_internals('this.session_store.get error', e)
                 }
               }
               else{//MemoryStore
-                debug_internals('this.session.store session', this.session_store.sessions[socketId])
+                // debug_internals('this.session.store session', this.session_store.sessions[id], this.session_store.sessions[id].sockets)
+                if(this.session_store.sessions[id].sockets && this.session_store.sessions[id].sockets.length > 0)
+                  Array.each(this.session_store.sessions[id].sockets, function(socketId){
+                    this.__emit_registered_events(socketId, this.session_store.sessions[id], doc)
+                  }.bind(this))
 
-                this.__emit_registered_events(socketId, this.session_store.sessions[socketId], doc)
               }
 
             }.bind(this))
@@ -241,27 +248,30 @@ module.exports = new Class({
     }
   },
   __emit_registered_events: function(socketId, session, doc){
+    if(doc.type == 'instances')
+      debug_internals('__emit_registered_events', (session) ? session.hosts_events : undefined, doc.type)
+
     let {type, host, prop} = doc
 
-    if(this.events[type])
-      Array.each(this.events[type], function(socketId){
-        // sending to individual socketid (private message)
-        this.io.binary(false).to(`${socketId}`).emit(type, doc)
-      }.bind(this))
+    if(session && session.events.contains(type))
+      this.io.binary(false).to(`${socketId}`).emit(type, doc)
 
-    if(this.hosts_events[host] && this.hosts_events[host][type])
-      Array.each(this.hosts_events[host][type], function(event){
+
+    if(session && session.hosts_events[host])
+      Array.each(session.hosts_events[host], function(event){
+
+
         let result = Object.clone(doc)
 
-        if(event && event !== null){
-          let {id, format} = event
+        if(event && event !== null && event.prop == type){
+          let {format} = event
 
           if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
             Array.each(result['paths'], function(path, index){
               result['paths'][index] = path.replace(/\./g, '_')
             })
 
-            this.io.binary(false).to(`${id}`).emit(type, result)
+            this.io.binary(false).to(`${socketId}`).emit(type, result)
           }
           else if(type == 'data' && format == 'stat' || format == 'tabular'){
             // debug_internals('__emit data', result)
@@ -291,22 +301,30 @@ module.exports = new Class({
                   // result = tabular
                   result.tabular = tabular
                   delete result.stat
-                  this.io.binary(false).to(`${id}`).emit(type, result)
+                  this.io.binary(false).to(`${socketId}`).emit(type, result)
 
                 }.bind(this))
 
               }
               else{
-                this.io.binary(false).to(`${id}`).emit(type, result)
+                this.io.binary(false).to(`${socketId}`).emit(type, result)
               }
 
             }.bind(this))
           }
           else{
+            // if(type == 'instances'){
+            //   debug_internals('__emit_registered_events EVENT', result)
+            //   process.exit(1)
+            //
+            // }
+
+            // debug_internals(type, socketId)
+            // process.exit(1)
             if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
               result[prop] = result[prop][prop]
 
-            this.io.binary(false).to(`${id}`).emit(type, result)
+            this.io.binary(false).to(`${socketId}`).emit(type, result)
           }
 
         }
@@ -347,40 +365,29 @@ module.exports = new Class({
     }
 
     if(events && events !== null){
-      // try{
-      //   let _parsed = JSON.parse(events)
-      //   // debug_internals('data: paths _parsed %o ', _parsed)
-      //
-      //   events = []
-      //   if(Array.isArray(_parsed))
-      //     Array.each(_parsed, function(event){
-      //       // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
-      //       //avoid duplicates (with push, you may get duplicates)
-      //       events.combine([event])
-      //     }.bind(this))
-      //
-      //
-      // }
-      // catch(e){
-      //   // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
-      // }
 
       if(!Array.isArray(events))
         events = [events]
 
       Array.each(events, function(event){
         if(typeof event === 'string'){
-          if(!this.events[event]) this.events[event] = []
-          if(!this.events[event].contains(id)) this.events[event].push(id)
-
+          // if(!this.events[event]) this.events[event] = []
+          // if(!this.events[event].contains(id)) this.events[event].push(id)
+          session.events.include(event)
         }
         else{
           let {host, prop, format} = event
           debug_internals('register Object', host, prop, format)
           if(host){
-            if(!this.hosts_events[host]) this.hosts_events[host] = {}
-            if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
-            this.hosts_events[host][prop].push({id: id, format: format})
+            // if(!this.hosts_events[host]) this.hosts_events[host] = {}
+            // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
+            // this.hosts_events[host][prop].push({id: id, format: format})
+
+            if(!session.hosts_events[host]) session.hosts_events[host] = []
+
+            // if(!this.hosts_events[host].some(function(item){ return (item.prop == event.prop && item.format == event.format) }))
+              session.hosts_events[host].push(event)
+
 
             // if(prop == 'data'){
             /**
@@ -404,7 +411,7 @@ module.exports = new Class({
 
       }.bind(this))
 
-      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(', ')+' events'})
+      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(',')+' events'})
     }
     else{
       send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
@@ -1365,17 +1372,25 @@ module.exports = new Class({
   },
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
+    // let id = (socket) ? socket.id : req.session.id
     debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
 
     if(!this.session_store)
       this.session_store = (socket) ? socket.handshake.sessionStore : req.sessionStore
 
     this.__update_sessions({id: session.id, type: (socket) ? 'socket' : 'http'})
-    // if(!session.hosts)
-    //   session.hosts = {
-    //     value: undefined,
-    //     timestamp: 0
-    //   }
+
+    if(!session.events)
+      session.events = []
+
+    if(!session.hosts_events)
+      session.hosts_events= {}
+
+    if(socket){
+      if(!session.sockets) session.sockets = []
+
+      session.sockets.include(socket.id)
+    }
 
     return session
   },
