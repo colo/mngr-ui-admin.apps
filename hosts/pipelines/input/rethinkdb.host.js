@@ -298,7 +298,9 @@ module.exports = new Class({
                   range_select : 'start',
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop',
-                  range: req.opt.range
+                  range: req.opt.range,
+                  full_range: req.full_range,
+                  range_counter: req.range_counter
                 },
                 uri: app.options.db+'/periodical',
                 args: 0,
@@ -318,7 +320,9 @@ module.exports = new Class({
                   range_select : 'end',
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop',
-                  range: req.opt.range
+                  range: req.opt.range,
+                  full_range: req.full_range,
+                  range_counter: req.range_counter
                 },
                 uri: app.options.db+'/periodical',
                 args: -1,
@@ -351,7 +355,9 @@ module.exports = new Class({
                   prop: 'paths',
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop',
-                  range: req.opt.range
+                  range: req.opt.range,
+                  full_range: req.full_range,
+                  range_counter: req.range_counter
                 },
                 uri: app.options.db+'/periodical',
                 args: function(left, right) {
@@ -428,6 +434,8 @@ module.exports = new Class({
                       host: req.host,
                       type: (!req.prop) ? 'host' : 'prop',
                       range: req.opt.range,
+                      full_range: req.full_range,
+                      range_counter: req.range_counter,
                       multipath: {index: index, length: paths.length}
                     })
                   })
@@ -438,7 +446,9 @@ module.exports = new Class({
                     prop: 'data',
                     host: req.host,
                     type: (!req.prop) ? 'host' : 'prop',
-                    range: req.opt.range
+                    range: req.opt.range,
+                    full_range: req.full_range,
+                    range_counter: req.range_counter
                   })
                 }
 
@@ -450,7 +460,9 @@ module.exports = new Class({
                     prop: 'data',
                     host: req.host,
                     type: (!req.prop) ? 'host' : 'prop',
-                    range: req.opt.range
+                    range: req.opt.range,
+                    full_range: req.full_range,
+                    range_counter: req.range_counter
                   },
                   uri: app.options.db+'/periodical',
                   args: function(x){ return [x('group'),x('reduction')] },

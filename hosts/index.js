@@ -24,6 +24,10 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts'),
 
 let data_to_stat = require('node-tabular-data').data_to_stat
 let data_to_tabular = require('node-tabular-data').data_to_tabular
+let parse_range = require('./libs/parse_range')
+let build_range = require('./libs/build_range')
+
+const qrate = require('qrate');
 
 module.exports = new Class({
   Extends: App,
@@ -41,6 +45,10 @@ module.exports = new Class({
   CHART_INSTANCE_TTL: 60000,
   SESSIONS_TTL: 60000,
   HOSTS_TTL: 60000,
+
+  RANGE_SECONDS_LIMIT: 60,
+  RANGE_WORKERS_CONCURRENCY: 1,
+  RANGE_WORKERS_RATE: 1,
 
   cache: undefined,
 
@@ -792,7 +800,7 @@ module.exports = new Class({
 
       }.bind(this)
 
-      debug_internals('send_result %s', prop, result, query)
+      // debug_internals('send_result %s', prop, result, query)
 
       if(( query.format == 'stat' || query.format == 'tabular') && result && result.paths)
         Array.each(result.paths, function(path, index){
@@ -815,7 +823,7 @@ module.exports = new Class({
               }.bind(this))
 
               if( query.format == 'tabular'){
-                debug_internals('to tabular', tmp_result)
+                // debug_internals('to tabular', tmp_result)
                 this.__transform_data('tabular', tmp_result, host, function(tabular){
                   // result.tabular = tabular
                   // delete result.stat
@@ -1366,32 +1374,95 @@ module.exports = new Class({
     let {host, prop, paths, range, req_id, socket, cb} = payload
 
     this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
-        // // debug_internals('send_resp', pipe)
+      debug_internals('RANGE', parse_range(range), range)
 
-        let _get_resp = {}
-        _get_resp[req_id] = function(resp){
-          if(resp.id == req_id){
-            debug_internals('_get_resp range %o %o', resp)
+      let parsed_range = parse_range(range)
+      let new_range = Object.clone(parsed_range)
+      let range_seconds_length = (parsed_range.end - parsed_range.start) / 1000
+      let range_counter = 0
+      let range_total = 0
 
-            cb(resp)
+      let _get_resp = {}
+      _get_resp[req_id] = function(resp){
+        if(resp.id == req_id){
+          debug_internals('_get_resp RANGE %d %d', resp.range_counter, range_total)
 
+          cb(resp)
+
+          if(socket && range_total == resp.range_counter){
             this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
             delete _get_resp[req_id]
           }
-        }.bind(this)
+          else if(!socket) {//http request
+            throw new Error('TODO: add a Limit header')
+            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            delete _get_resp[req_id]
+          }
+        }
+      }.bind(this)
 
-        this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+      this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+
+      let __event_worker = function(payload, done){
+        pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
+
+        if(typeof done == 'function')
+          done()
+      }.bind(this)
+
+      if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
+        // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
+
+        range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
+
+        let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
 
 
-        pipe.hosts.inputs[1].fireEvent('onRange', {
+        do {
+          new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
+
+          debug_internals('firing RANGE', new_range)
+
+          // pipe.hosts.inputs[1].fireEvent('onRange', {
+          //   host: host,
+          //   prop: prop,
+          //   paths: paths,
+          //   id: req_id,
+          //   Range: build_range(new_range)
+          // })//fire only the 'host' input
+          q.push({
+            host: host,
+            prop: prop,
+            paths: paths,
+            id: req_id,
+            full_range: range,
+            range_counter: range_counter++,
+            Range: build_range(new_range)
+          })
+
+          new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
+        } while(new_range.end < parsed_range.end);
+      }
+      else{
+        __event_worker({
           host: host,
           prop: prop,
           paths: paths,
           id: req_id,
           Range: range
-        })//fire only the 'host' input
+        })
+        // pipe.hosts.inputs[1].fireEvent('onRange', {
+        //   host: host,
+        //   prop: prop,
+        //   paths: paths,
+        //   id: req_id,
+        //   Range: range
+        // })//fire only the 'host' input
+      }
 
-      }.bind(this))
+
+
+    }.bind(this))
 
   },
   // __get_host: function(host, prop, req_id, socket, cb){
