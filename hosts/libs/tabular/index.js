@@ -14,7 +14,7 @@ let __process_stat = function(chart, name, stat){
   if(!Array.isArray(stat))
     stat = [stat]
 
-  if(isNaN(stat[0].value)){
+  if(stat[0] && isNaN(stat[0].value)){
     //sdX.stats.
 
     let filtered = false
@@ -48,7 +48,7 @@ let __process_stat = function(chart, name, stat){
     }
 
   }
-  else{
+  else if(stat[0]){
 
     // chart.label = this.__process_chart_label(chart, name, stat) || name
     // let chart_name = this.__process_chart_name(chart, stat) || name

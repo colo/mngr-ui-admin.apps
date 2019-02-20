@@ -35,6 +35,28 @@ let blockdevices_filter = function(doc, opts, next, pipeline){
 	return doc
 }
 
+// let paths_whitelist = /^((?!os\.procs|os\.procs\.cmd|os\.procs\.uid).)*$/
+let paths_whitelist = undefined
+let paths_blacklist = /^os\.procs(\.|\.uid|\.cmd)*$/
+
+let __white_black_lists_filter = function(whitelist, blacklist, str){
+  let filtered = false
+  if(!blacklist && !whitelist){
+    filtered = true
+  }
+  else if(blacklist && !blacklist.test(str)){
+    filtered = true
+  }
+  else if(blacklist && blacklist.test(str) && (whitelist && whitelist.test(str))){
+    filtered = true
+  }
+  else if(!blacklist && (whitelist && whitelist.test(str))){
+    filtered = true
+  }
+
+  return filtered
+}
+
 // let __process_stat_doc = function(doc, cb){
 //   //console.log('__process_os_doc', doc)
 //
@@ -154,12 +176,22 @@ module.exports = function(payload){
 
         out[type] = docs
 
+        debug_internals('docs', type, docs)
 
+        if(out[type] && out[type].paths && out[type].paths.length > 0){
+          debug_internals('out[type].paths', type, out[type])
 
-        if((type == 'host' || type == 'data') && docs && docs.data && Object.getLength(docs.data) > 0){
+          Array.each(out[type].paths, function(row, index){
+            if(__white_black_lists_filter(paths_whitelist, paths_blacklist, row) !== true)
+              out[type].paths= out[type].paths.erase(row)
+          })
+        }
+
+        // if((type == 'host' || type == 'data') && docs && docs.data && Object.getLength(docs.data) > 0){
+        if(out[type] && out[type].data && Object.getLength(out[type].data) > 0){
 
           let counter = 0
-          Object.each(docs.data, function(stat, name){
+          Object.each(out[type].data, function(stat, name){
             if(!Array.isArray(stat))
               stat = [stat]
 
@@ -169,7 +201,7 @@ module.exports = function(payload){
             })
 
             Array.each(stat, function(row, index){
-              if(row && row.metadata && row.metadata.path)
+              if(row && row.metadata && row.metadata.path){
                 switch (row.metadata.path) {
                   // case 'os.procs':
                   // 	// row = mount_filter(row)
@@ -186,38 +218,50 @@ module.exports = function(payload){
 
                 }
 
+                if(__white_black_lists_filter(paths_whitelist, paths_blacklist, row.metadata.path) !== true)
+                  stat[index] = undefined
+
+
                 // data[row.metadata.path] = {value: row.data, timestamp: row.metadata.timestamp}
+              }
 
-                if(index == stat.length -1){
-                  stat.clean()
+              if(index == stat.length -1){
+                stat = stat.clean()
 
-                  // __process_stat_doc(stat, function(processed){
-                  //   out[type].data[name] = processed
-                  //   // pipeline.output(out)
-                  // })
-                }
+                // __process_stat_doc(stat, function(processed){
+                //   out[type].data[name] = processed
+                //   // pipeline.output(out)
+                // })
+              }
             })
 
-            out[type].data[name] = stat
-
-            if(counter == Object.getLength(docs.data) -1 ){
-              // docs.data = docs.data.clean()
-              // out[type].data = data
-              pipeline.output(out)
-              // __process_stat_doc(docs.data, function(data){
-              //   out[type].data = data
-              //   pipeline.output(out)
-              // })
+            if(stat.length > 0){
+              out[type].data[name] = stat
             }
+            else{
+              delete out[type].data[name]
+            }
+
+            // if(counter == Object.getLength(docs.data) -1 && Object.getLength(out[type].data)){
+            //   // docs.data = docs.data.clean()
+            //   // out[type].data = data
+            //
+            //     pipeline.output(out)
+            //
+            //   // __process_stat_doc(docs.data, function(data){
+            //   //   out[type].data = data
+            //   //   pipeline.output(out)
+            //   // })
+            // }
 
             counter++
           })
 
 
         }
-        else{
+        // else{
           pipeline.output(out)
-        }
+        // }
       }
   	],
   	// output: [

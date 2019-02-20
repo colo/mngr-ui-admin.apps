@@ -891,43 +891,45 @@ module.exports = new Class({
           if(this.close_feed === true){ this.close_feed = false; return false }
 
           // debug_internals('changes %s', new Date())
+          if(row && row !== null ){
+            if(row.type == 'add'){
+              // debug_internals('changes add %s %o', new Date(), row.new_val)
+              // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+              this.changes_buffer.push(row.new_val)
+            }
 
-          if(row.type == 'add'){
-            // debug_internals('changes add %s %o', new Date(), row.new_val)
-            // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
-            this.changes_buffer.push(row.new_val)
-          }
+            if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
+              // console.log('onPeriodicalDoc', this.changes_buffer.length)
+              // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+              let data = {}
+              Array.each(this.changes_buffer, function(doc){
+                let path = doc.metadata.path
+                let host = doc.metadata.host
 
-          if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
-            // console.log('onPeriodicalDoc', this.changes_buffer.length)
-            // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
-            let data = {}
-            Array.each(this.changes_buffer, function(doc){
-              let path = doc.metadata.path
-              let host = doc.metadata.host
+                if(!data[host]) data[host] = {}
+                if(!data[host][path]) data[host][path] = []
+                data[host][path].push(doc)
 
-              if(!data[host]) data[host] = {}
-              if(!data[host][path]) data[host][path] = []
-              data[host][path].push(doc)
+              }.bind(this))
 
-            }.bind(this))
-
-            Object.each(data, function(host_data, host){
-              // debug_internals('changes emiting %o', host, host_data)
-              this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
-                {input_type: this, app: null},
-                // {host: host, type: 'host', prop: prop, id: id}
-                {type: prop, host: host}
-              )])
-
-
-            }.bind(this))
+              Object.each(data, function(host_data, host){
+                // debug_internals('changes emiting %o', host, host_data)
+                this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+                  {input_type: this, app: null},
+                  // {host: host, type: 'host', prop: prop, id: id}
+                  {type: prop, host: host}
+                )])
 
 
-            // debug_internals('changes %s', new Date(), data)
+              }.bind(this))
 
-            this.changes_buffer_expire = Date.now()
-            this.changes_buffer = []
+
+              // debug_internals('changes %s', new Date(), data)
+
+              this.changes_buffer_expire = Date.now()
+              this.changes_buffer = []
+            }
+
           }
 
 
