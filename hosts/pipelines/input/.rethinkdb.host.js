@@ -44,9 +44,9 @@ module.exports = new Class({
                     host: host,
                     type: 'prop'
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: 0,
-                  query: app.r.db(app.options.db).table('ui').
+                  query: app.r.db(app.options.db).table('periodical').
                   between(
                     [host, 'periodical', 0],
                     [host, 'periodical', ''],
@@ -63,9 +63,9 @@ module.exports = new Class({
                     host: host,
                     type: 'prop'
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: -1,
-                  query: app.r.db(app.options.db).table('ui').
+                  query: app.r.db(app.options.db).table('periodical').
                   between(
                     [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)], //last 5 secs
                     [host, 'periodical', ''],
@@ -96,9 +96,9 @@ module.exports = new Class({
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: 0,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', 0],
                   [req.host, 'periodical', ''],
@@ -115,9 +115,9 @@ module.exports = new Class({
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
                   [req.host, 'periodical', ''],
@@ -136,12 +136,12 @@ module.exports = new Class({
               debug_internals('search_paths', req.host, req.prop);
               app.reduce({
                 _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 // getAll(req.host, {index: 'host'}).
                 between(
                   [req.host, 'periodical', Date.now() - 60000],
@@ -151,7 +151,7 @@ module.exports = new Class({
                 map(function(doc) {
                   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
                 }.bind(app))
-                // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+                // query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
                 //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
                 // }.bind(app))
               })
@@ -165,11 +165,11 @@ module.exports = new Class({
               debug_internals('search_data', req.host, req.prop);
               app.map({
                 _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: function(x){ return [x('group'), x('reduction')] },
 
                 query: app.r.db(app.options.db).
-                table('ui').
+                table('periodical').
                 // getAll(req.host, {index: 'host'}).
                 between(
                   [req.host, 'periodical', Date.now() - 60000],
@@ -195,10 +195,10 @@ module.exports = new Class({
         //         // app.events[host]['data'] = true
         //         app.changes({
         //            _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
-        //            uri: app.options.db+'/ui',
+        //            uri: app.options.db+'/periodical',
         //            // args: {includeTypes: true, squash: 1.1},
         //            args: {includeTypes: true, squash: 1},
-        //            query: app.r.db(app.options.db).table('ui').getAll(host, {index:'host'})
+        //            query: app.r.db(app.options.db).table('periodical').getAll(host, {index:'host'})
         //         })
         //       }
         //
@@ -218,10 +218,10 @@ module.exports = new Class({
               //   // app.events[host]['data'] = true
               //   app.changes({
               //      _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
-              //      uri: app.options.db+'/ui',
+              //      uri: app.options.db+'/periodical',
               //      // args: {includeTypes: true, squash: 1.1},
               //      args: {includeTypes: true, squash: 1},
-              //      query: app.r.db(app.options.db).table('ui')
+              //      query: app.r.db(app.options.db).table('periodical')
               //   })
               // }
 
@@ -240,11 +240,11 @@ module.exports = new Class({
         //
         //       // app.map({
         //       //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-        //       //   uri: app.options.db+'/ui',
+        //       //   uri: app.options.db+'/periodical',
         //       //   args: function(x){ return [x('group'), x('reduction')] },
         //       //
         //       //   query: app.r.db(app.options.db).
-        //       //   table('ui').
+        //       //   table('periodical').
         //       //   getAll(req.host, {index: 'host'}).
         //       //   group(app.r.row('metadata')('path')).
         //       //   max(app.r.row('metadata')('timestamp')).
@@ -264,12 +264,12 @@ module.exports = new Class({
 
               // app.reduce({
               //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
+              //   uri: app.options.db+'/periodical',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -302,9 +302,9 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: 0,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', start],
                   [req.host, 'periodical', end],
@@ -324,9 +324,9 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', start],
                   [req.host, 'periodical', end],
@@ -359,13 +359,13 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
                 query: app.r.db(app.options.db).
-                table('ui').
+                table('periodical').
                 between(
                   [req.host, 'periodical', roundMilliseconds(start)],
                   [req.host, 'periodical', roundMilliseconds(end)],
@@ -395,11 +395,11 @@ module.exports = new Class({
 
                   app.map({
                     _extras: extras,
-                    uri: app.options.db+'/ui',
+                    uri: app.options.db+'/periodical',
                     args: function(x){ return [x('group'),x('reduction')] },
 
                     query: app.r.db(app.options.db).
-                    table('ui').
+                    table('periodical').
                     between(
                       [path, req.host, 'periodical', roundMilliseconds(start)],
                       [path, req.host, 'periodical', roundMilliseconds(end)],
@@ -411,7 +411,7 @@ module.exports = new Class({
                   })
                   // app.between({
                   //   _extras: extras,
-                  //   uri: app.options.db+'/ui',
+                  //   uri: app.options.db+'/periodical',
                   //   args: [
                   //     [path, req.host, "periodical", roundMilliseconds(start)],
                   //     [path, req.host, "periodical",roundMilliseconds(end)],
@@ -464,11 +464,11 @@ module.exports = new Class({
                     full_range: req.full_range,
                     range_counter: req.range_counter
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: function(x){ return [x('group'),x('reduction')] },
 
                   query: app.r.db(app.options.db).
-                  table('ui').
+                  table('periodical').
                   between(
                     [req.host, 'periodical', roundMilliseconds(start)],
                     [req.host, 'periodical', roundMilliseconds(end)],
@@ -492,12 +492,12 @@ module.exports = new Class({
 
               // app.reduce({
               //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
+              //   uri: app.options.db+'/periodical',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -878,7 +878,7 @@ module.exports = new Class({
       if(!this.changes_buffer_expire)
         this.changes_buffer_expire = Date.now()
 
-      this.r.db(this.options.db).table('ui').changes({includeTypes: true, squash: 1}).run(this.conn, function(err, cursor) {
+      this.r.db(this.options.db).table('periodical').changes({includeTypes: true, squash: 1}).run(this.conn, function(err, cursor) {
 
         this.feed = cursor
 
@@ -1012,10 +1012,10 @@ module.exports = new Class({
   //   **/
   //   this.changes({
   //      _extras: {type: 'periodical'},
-  //      uri: this.options.db+'/ui',
+  //      uri: this.options.db+'/periodical',
   //      args: {includeTypes: true, squash: 1.1},
-  //      // query: this.r.db(this.options.db).table('ui').getAll(this.options.stat_host, {index:'host'})
-  //      query: this.r.db(this.options.db).table('ui').distinct({index: 'host'})
+  //      // query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
+  //      query: this.r.db(this.options.db).table('periodical').distinct({index: 'host'})
   //
   //
   //   })

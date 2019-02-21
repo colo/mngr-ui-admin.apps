@@ -440,22 +440,24 @@ module.exports = new Class({
 
               result.data = result.data.data // @bug: doc.data.data ??
 
-              this.__transform_data('stat', result.data, host, function(stat){
+              this.__transform_data('stat', result.data, host, function(value){
                 // result = stat
-                result.stat = stat
-                delete result.data
+                result.stat = value.stat
+                // delete result.data
 
                 if( format == 'tabular' ){
-                  this.__transform_data('tabular', result.stat, host, function(tabular){
+                  this.__transform_data('tabular', Object.merge(result.stat, result.data), host, function(value){
                     // result = tabular
-                    result.tabular = tabular
+                    result.tabular = value.tabular
                     delete result.stat
+                    delete result.data
                     this.io.to(`${socketId}`).emit(format, result)
 
                   }.bind(this))
 
                 }
                 else{
+                  delete result.data
                   this.io.to(`${socketId}`).emit(format, result)
                 }
 
@@ -815,19 +817,23 @@ module.exports = new Class({
         if(prop == 'data' && paths){
 
           if( query.format == 'stat' || query.format == 'tabular'){
-            this.__transform_data('stat', result, host, function(stat){
+            this.__transform_data('stat', result, host, function(value){
               let tmp_result = {}
               Array.each(paths, function(path){
-                tmp_result = Object.merge(tmp_result, this.__find_stat(path, stat))
+                tmp_result = Object.merge(tmp_result, this.__find_stat(path, value.stat))
 
               }.bind(this))
 
               if( query.format == 'tabular'){
                 // debug_internals('to tabular', tmp_result)
-                this.__transform_data('tabular', tmp_result, host, function(tabular){
+                Array.each(paths, function(path){
+                  tmp_result = Object.merge(tmp_result, this.__find_stat(path, result))
+                }.bind(this))
+
+                this.__transform_data('tabular', tmp_result, host, function(value){
                   // result.tabular = tabular
                   // delete result.stat
-                  send_result(tabular)
+                  send_result(value.tabular)
                 })
 
               }
@@ -851,22 +857,22 @@ module.exports = new Class({
 
         }
         else if(prop == 'data' && ( query.format == 'stat' || query.format == 'tabular') ){
-          this.__transform_data('stat', result, host, function(stat){
-            result = stat
+          this.__transform_data('stat', result, host, function(value){
+            // result.stat = value.stat
             // result.stat = stat
-            // delete result.data
+
 
             if( query.format == 'tabular'){
-              this.__transform_data('tabular', result, host, function(tabular){
-                result = tabular
+              this.__transform_data('tabular', Object.merge(result, value.stat), host, function(value){
+                // result = value.tabular
                 // result.tabular = tabular
                 // delete result.stat
-                send_result(result)
+                send_result(value.tabular)
               }.bind(this))
 
             }
             else{
-              send_result(result)
+              send_result(value.stat)
             }
 
           }.bind(this))
@@ -876,18 +882,19 @@ module.exports = new Class({
         }
       }
       else if(result && result.data && ( query.format == 'stat' || query.format == 'tabular') ){
-        this.__transform_data('stat', result.data, host, function(stat){
-          result.stat = stat
-          result.paths = Object.keys(stat)
-          delete result.data
+        this.__transform_data('stat', result.data, host, function(value){
+          result.stat = value.stat
+          result.paths = Object.keys(value.stat)
+          // delete result.data
 
           if( query.format == 'tabular'){
             // debug_internals('query.format == tabular', result.stat)
 
-            this.__transform_data('tabular', result.stat, host, function(tabular){
+            this.__transform_data('tabular', Object.merge(result.data, result.stat), host, function(value){
               // debug_internals('query.format == tabular', tabular)
-              result.tabular = tabular
+              result.tabular = value.tabular
               delete result.stat
+              delete result.data
               // send_result(result)
               this.cache.get(host+'.instances', function(err, instances){
                 if(instances){
@@ -905,6 +912,8 @@ module.exports = new Class({
 
           }
           else{
+            delete result.data
+
             // send_result(result)
             this.cache.get(host+'.instances', function(err, instances){
               // if(instances)
@@ -1035,6 +1044,8 @@ module.exports = new Class({
     let convert = (type == 'stat') ? data_to_stat : data_to_tabular
 
     let transformed = {}
+    transformed[type] = {}
+
     let counter = 0 //counter for each path:stat in data
     // let instances = []
     let instances = {}
@@ -1060,60 +1071,158 @@ module.exports = new Class({
     let transform_result_counter = 0
 
     Object.each(data, function(d, path){
+
+      debug_internals('DATA', d, type)
+
       if(d && d !== null){
-        let transform = this.__traverse_path_require(type, path, d) //for each path find a trasnform or use "default"
+        if (d[0] && d[0].metadata && d[0].metadata.format && d[0].metadata.format == type){
 
-        if(transform){
+          // if(!d[0].metadata.format[type]){
+          let formated_data = []
+          Array.each(d, function(_d){ formated_data.push(_d.data) })
+          transformed[type] = this.__merge_transformed(this.__transform_name(path), formated_data, transformed[type])
+          // }
 
-          if(typeof transform == 'function'){
-            let transform_result = transform(d, path)
+          if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+            cb(transformed)
+
+        }
+        else if (
+          (d[0] && d[0].metadata && !d[0].metadata.format && type == 'stat')
+          || (d[0] && !d[0].metadata && type == 'tabular')
+        ){
+          let transform = this.__traverse_path_require(type, path, d) //for each path find a trasnform or use "default"
+
+          if(transform){
+
+            if(typeof transform == 'function'){
+              let transform_result = transform(d, path)
 
 
-            Object.each(transform_result, function(chart, path_key){
+              Object.each(transform_result, function(chart, path_key){
 
-              /**
-              * key may use "." to create more than one chart (per key), ex: cpus.times | cpus.percentage
-              **/
-              let sub_key = (path_key.indexOf('.') > -1) ? path_key.substring(0, path_key.indexOf('.')) : path_key
+                /**
+                * key may use "." to create more than one chart (per key), ex: cpus.times | cpus.percentage
+                **/
+                let sub_key = (path_key.indexOf('.') > -1) ? path_key.substring(0, path_key.indexOf('.')) : path_key
 
 
-              if(type == 'tabular'){
-                // debug_internals('transform_result', transform_result)
+                if(type == 'tabular'){
+                  // debug_internals('transform_result', transform_result)
 
-                this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), function(err, chart_instance){
-                  chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+                  this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), function(err, chart_instance){
+                    chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
-                  chart_instance = Object.merge(chart, chart_instance)
+                    chart_instance = Object.merge(chart, chart_instance)
 
-                  // chart_instance = _transform(chart_instance)
+                    // chart_instance = _transform(chart_instance)
 
-                  convert(d[sub_key], chart_instance, path+'.'+path_key, function(name, stat){
-                    transformed = this.__merge_transformed(name, stat, transformed)
+                    convert(d[sub_key], chart_instance, path+'.'+path_key, function(name, stat){
+                      transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                      // name = name.replace(/\./g, '_')
+                      // let to_merge = {}
+                      // to_merge[name] = stat
+                      //
+                      // transformed = Object.merge(transformed, to_merge)
+                      //
+                      // debug_internals('chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
+
+
+                      // chart_instance = this.cache.clean(chart_instance)
+                      // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
+                      // instances.push(this.__transform_name(path+'.'+path_key))
+                      instances[this.__transform_name(path+'.'+path_key)] = chart_instance
+
+                      this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+
+                      if(
+                        transform_result_counter == transform_result_length - 1
+                        && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+                      ){
+                        this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
+                        // cb(transformed)
+                      }
+
+                      transform_result_counter++
+                    }.bind(this))
+
+
+
+                  }.bind(this))
+                }
+                else{
+                  convert(d[sub_key], chart, path+'.'+path_key, function(name, stat){
+                    transformed[type] = this.__merge_transformed(name, stat, transformed[type])
                     // name = name.replace(/\./g, '_')
                     // let to_merge = {}
                     // to_merge[name] = stat
                     //
-                    // transformed = Object.merge(transformed, to_merge)
+                    // debug_internals('transformed func', name, stat)
                     //
-                    // debug_internals('chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
-
-
-                    // chart_instance = this.cache.clean(chart_instance)
-                    // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
-                    // instances.push(this.__transform_name(path+'.'+path_key))
-                    instances[this.__transform_name(path+'.'+path_key)] = chart_instance
-
-                    this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                    // transformed = Object.merge(transformed, to_merge)
 
                     if(
                       transform_result_counter == transform_result_length - 1
                       && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                     ){
-                      this.__save_instances(cache_key, instances, cb.pass(transformed))
+                      cb(transformed)
+                    }
+
+
+                    transform_result_counter++
+                  })
+
+                }
+
+
+
+
+
+              }.bind(this))
+            }
+            else{//not a function
+
+              /**
+              * @todo: 'tabular' not tested, also counter should consider this case (right now only considers functions type)
+              **/
+              if(type == 'tabular'){
+                this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
+                  chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
+
+                  chart_instance = Object.merge(chart_instance, transform)
+                  // debug_internals('chart_instance NOT FUNC %o', chart_instance)
+
+                  // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path)
+
+                  // throw new Error()
+                  convert(d, chart_instance, path, function(name, stat){
+                    transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                    // name = name.replace(/\./g, '_')
+                    // let to_merge = {}
+                    // to_merge[name] = stat
+                    //
+                    // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path, transformed)
+
+                    // transformed = Object.merge(transformed, to_merge)
+
+                    // chart_instance = this.cache.clean(chart_instance)
+
+                    // instances.push(this.__transform_name(path))
+
+
+                    instances[this.__transform_name(path)] = chart_instance
+                    this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+
+                    if(
+                      transform_result_counter == transform_result_length - 1
+                      && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+                    ){
+                      this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
                       // cb(transformed)
                     }
 
                     transform_result_counter++
+
                   }.bind(this))
 
 
@@ -1121,94 +1230,96 @@ module.exports = new Class({
                 }.bind(this))
               }
               else{
-                convert(d[sub_key], chart, path+'.'+path_key, function(name, stat){
-                  transformed = this.__merge_transformed(name, stat, transformed)
+                convert(d, transform, path, function(name, stat){
+                  transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+
                   // name = name.replace(/\./g, '_')
                   // let to_merge = {}
                   // to_merge[name] = stat
                   //
-                  // debug_internals('transformed func', name, stat)
+                  // debug_internals('transformed custom', type, to_merge)
                   //
                   // transformed = Object.merge(transformed, to_merge)
 
-                  if(
-                    transform_result_counter == transform_result_length - 1
-                    && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
-                  ){
+                  if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
                     cb(transformed)
-                  }
 
-
-                  transform_result_counter++
-                })
-
+                }.bind(this))
               }
 
+            }
 
 
-
-
-            }.bind(this))
           }
-          else{//not a function
+          else{//default
+            if(type == 'tabular'){ //default trasnform for "tabular"
 
-            /**
-            * @todo: 'tabular' not tested, also counter should consider this case (right now only considers functions type)
-            **/
-            if(type == 'tabular'){
+              // debug_internals('transform default', path)
+
+              let chart = Object.clone(require('./libs/'+type)(d, path))
+
               this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
-                chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
+                chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
-                chart_instance = Object.merge(chart_instance, transform)
-                // debug_internals('chart_instance NOT FUNC %o', chart_instance)
+                chart_instance = Object.merge(chart, chart_instance)
 
-                // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path)
+                debug_internals('transform default', d, path)
 
-                // throw new Error()
                 convert(d, chart_instance, path, function(name, stat){
-                  transformed = this.__merge_transformed(name, stat, transformed)
+                  /**
+                  * clean stats that couldn't be converted with "data_to_tabular"
+                  **/
+                  Array.each(stat, function(val, index){
+                    Array.each(val, function(row, i_row){
+                      if(isNaN(row))
+                        val[i_row] = undefined
+                    })
+                    stat[index] = val.clean()
+                    if(stat[index].length <= 1)
+                      stat[index] = undefined
+                  })
+                  stat = stat.clean()
+
+                  if(stat.length > 0)
+                    transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+
                   // name = name.replace(/\./g, '_')
                   // let to_merge = {}
                   // to_merge[name] = stat
                   //
-                  // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path, transformed)
-
                   // transformed = Object.merge(transformed, to_merge)
+                  // debug_internals('default chart_instance CACHE %o', name)
 
+                  // debug_internals('default chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
                   // chart_instance = this.cache.clean(chart_instance)
-
+                  // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
                   // instances.push(this.__transform_name(path))
-
-
                   instances[this.__transform_name(path)] = chart_instance
+
                   this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                   if(
                     transform_result_counter == transform_result_length - 1
                     && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                   ){
-                    this.__save_instances(cache_key, instances, cb.pass(transformed))
+                    this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
                     // cb(transformed)
                   }
 
                   transform_result_counter++
-
                 }.bind(this))
 
 
 
               }.bind(this))
             }
-            else{
-              convert(d, transform, path, function(name, stat){
-                transformed = this.__merge_transformed(name, stat, transformed)
-
+            else{//default trasnform for "stat"
+              require('./libs/'+type)(d, path, function(name, stat){
+                transformed[type] = this.__merge_transformed(name, stat, transformed[type])
                 // name = name.replace(/\./g, '_')
                 // let to_merge = {}
                 // to_merge[name] = stat
-                //
-                // debug_internals('transformed custom', type, to_merge)
-                //
+                // debug_internals('transformed default', type, to_merge)
                 // transformed = Object.merge(transformed, to_merge)
 
                 if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
@@ -1217,95 +1328,22 @@ module.exports = new Class({
               }.bind(this))
             }
 
+
           }
 
+          // if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+          //   cb(transformed)
 
         }
-        else{//default
-          if(type == 'tabular'){ //default trasnform for "tabular"
-
-            // debug_internals('transform default', path)
-
-            let chart = Object.clone(require('./libs/'+type)(d, path))
-
-            this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
-              chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
-
-              chart_instance = Object.merge(chart, chart_instance)
-
-              debug_internals('transform default', d, path)
-
-              convert(d, chart_instance, path, function(name, stat){
-                /**
-                * clean stats that couldn't be converted with "data_to_tabular"
-                **/
-                Array.each(stat, function(val, index){
-                  Array.each(val, function(row, i_row){
-                    if(isNaN(row))
-                      val[i_row] = undefined
-                  })
-                  stat[index] = val.clean()
-                  if(stat[index].length <= 1)
-                    stat[index] = undefined
-                })
-                stat = stat.clean()
-
-                if(stat.length > 0)
-                  transformed = this.__merge_transformed(name, stat, transformed)
-
-                // name = name.replace(/\./g, '_')
-                // let to_merge = {}
-                // to_merge[name] = stat
-                //
-                // transformed = Object.merge(transformed, to_merge)
-                // debug_internals('default chart_instance CACHE %o', name)
-
-                // debug_internals('default chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
-                // chart_instance = this.cache.clean(chart_instance)
-                // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
-                // instances.push(this.__transform_name(path))
-                instances[this.__transform_name(path)] = chart_instance
-
-                this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
-
-                if(
-                  transform_result_counter == transform_result_length - 1
-                  && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
-                ){
-                  this.__save_instances(cache_key, instances, cb.pass(transformed))
-                  // cb(transformed)
-                }
-
-                transform_result_counter++
-              }.bind(this))
-
-
-
-            }.bind(this))
-          }
-          else{//default trasnform for "stat"
-            require('./libs/'+type)(d, path, function(name, stat){
-              transformed = this.__merge_transformed(name, stat, transformed)
-              // name = name.replace(/\./g, '_')
-              // let to_merge = {}
-              // to_merge[name] = stat
-              // debug_internals('transformed default', type, to_merge)
-              // transformed = Object.merge(transformed, to_merge)
-
-              if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
-                cb(transformed)
-
-            }.bind(this))
-          }
-
-
+        else if(counter == Object.getLength(data) - 1 && typeof cb == 'function'){
+            cb(transformed)
         }
-
-        // if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
-        //   cb(transformed)
 
       }//end if(d && d !== null)
-
+      else if(counter == Object.getLength(data) - 1 && typeof cb == 'function'){
+          cb(transformed)
+      }
+      
       counter++
     }.bind(this))
 
@@ -1394,70 +1432,70 @@ module.exports = new Class({
 
           cb(resp)
 
-          if(socket && range_total == resp.range_counter){
+          // if(socket && range_total == resp.range_counter){
+          //   this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+          //   delete _get_resp[req_id]
+          // }
+          // else if(!socket) {//http request
+          //   throw new Error('TODO: add a Limit header')
             this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
             delete _get_resp[req_id]
-          }
-          else if(!socket) {//http request
-            throw new Error('TODO: add a Limit header')
-            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
-            delete _get_resp[req_id]
-          }
+          // }
         }
       }.bind(this)
 
       this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
 
-      let __event_worker = function(payload, done){
-        pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
+      // let __event_worker = function(payload, done){
+      //   pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
+      //
+      //   if(typeof done == 'function')
+      //     done()
+      // }.bind(this)
+      //
+      // if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
+      //   // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
+      //
+      //   range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
+      //
+      //   let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
+      //
+      //
+      //   do {
+      //     new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
+      //
+      //     debug_internals('firing RANGE', new_range)
+      //
+      //     q.push({
+      //       host: host,
+      //       prop: prop,
+      //       paths: paths,
+      //       id: req_id,
+      //       full_range: range,
+      //       range_counter: range_counter++,
+      //       Range: build_range(new_range)
+      //     })
+      //
+      //     new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
+      //   } while(new_range.end < parsed_range.end);
+      // }
+      // else{
+      //   __event_worker({
+      //     host: host,
+      //     prop: prop,
+      //     paths: paths,
+      //     id: req_id,
+      //     Range: range
+      //   })
+      // }
 
-        if(typeof done == 'function')
-          done()
-      }.bind(this)
-
-      if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
-        // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
-
-        range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
-
-        let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
-
-
-        do {
-          new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
-
-          debug_internals('firing RANGE', new_range)
-
-          q.push({
-            host: host,
-            prop: prop,
-            paths: paths,
-            id: req_id,
-            full_range: range,
-            range_counter: range_counter++,
-            Range: build_range(new_range)
-          })
-
-          new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
-        } while(new_range.end < parsed_range.end);
-      }
-      else{
-        __event_worker({
-          host: host,
-          prop: prop,
-          paths: paths,
-          id: req_id,
-          Range: range
-        })
-      }
-
-      // pipe.hosts.inputs[1].fireEvent('onRange', {
-      //   host: host,
-      //   prop: prop,
-      //   paths: paths,
-      //   id: req_id,
-      //   Range: range
-      // })//fire only the 'host' input
+      pipe.hosts.inputs[1].fireEvent('onRange', {
+        host: host,
+        prop: prop,
+        paths: paths,
+        id: req_id,
+        Range: range
+      })//fire only the 'host' input
 
 
     }.bind(this))

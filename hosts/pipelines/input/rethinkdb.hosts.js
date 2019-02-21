@@ -40,7 +40,7 @@ module.exports = new Class({
             **/
             app.reduce({
               _extras: {type: 'hosts', id: req.id},
-              uri: app.options.db+'/periodical',
+              uri: app.options.db+'/ui',
               args: function(left, right) {
                   return left.merge(right)
               },
@@ -67,7 +67,7 @@ module.exports = new Class({
             **/
             app.reduce({
               _extras: {type: 'hosts', id: undefined},
-              uri: app.options.db+'/periodical',
+              uri: app.options.db+'/ui',
               args: function(left, right) {
                   return left.merge(right)
               },

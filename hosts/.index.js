@@ -11,88 +11,83 @@ const ETC =  process.env.NODE_ENV === 'production'
       : path.join(process.cwd(), '/devel/etc/')
 
 let Pipeline = require('js-pipeline')
+let jscaching = require('js-caching')
 
-let extract_data_os = require( 'node-mngr-docs' ).extract_data_os
-let data_to_tabular  = require( 'node-tabular-data' ).data_to_tabular
+let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
+let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
 
-let uptime_chart = require('mngr-ui-admin-charts/os/uptime')
-let loadavg_chart = require('mngr-ui-admin-charts/os/loadavg')
-let cpus_times_chart = require('mngr-ui-admin-charts/os/cpus_times')
-let cpus_percentage_chart = require('mngr-ui-admin-charts/os/cpus_percentage')
-let freemem_chart = require('mngr-ui-admin-charts/os/freemem')
-let mounts_percentage_chart = require('mngr-ui-admin-charts/os/mounts_percentage')
-let blockdevices_stats_chart = require('mngr-ui-admin-charts/os/blockdevices_stats')
-let networkInterfaces_chart = require('mngr-ui-admin-charts/os/networkInterfaces')
-let networkInterfaces_stats_chart = require('mngr-ui-admin-charts/os/networkInterfaces_stats')
-// let procs_count_chart = require('mngr-ui-admin-charts/os/procs_count')
-let procs_top_chart = require('mngr-ui-admin-charts/os/procs_top')
-let munin = require('mngr-ui-admin-charts/munin/default')
+// let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
-let debug = require('debug')('apps:os'),
-    debug_internals = require('debug')('apps:os:Internals');
+
+let debug = require('debug')('mngr-ui-admin:apps:hosts'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Internals');
+
+let data_to_stat = require('node-tabular-data').data_to_stat
+let data_to_tabular = require('node-tabular-data').data_to_tabular
+let parse_range = require('./libs/parse_range')
+let build_range = require('./libs/build_range')
+
+const qrate = require('qrate');
 
 module.exports = new Class({
   Extends: App,
 
-  HostOSPipeline: undefined,
-  pipelines: {},
-  __stats: {},
-  __stats_tabular: {},
+  ID: 'ea77ccca-4aa1-448d-a766-b23efef9c12b',
 
-  charts:{},
-
-  // __charts_instances:{},
-
-
-
-  __charts: {
-    'os.uptime': {chart: uptime_chart},
-    'os.loadavg': {chart: loadavg_chart},
-    'os.cpus': {
-      times: { chart: cpus_times_chart },
-      percentage : { chart: cpus_percentage_chart }
-    },
-    'os_procs_uid_stats':{
-      top: {'matched_name': true, match: '%s', chart: procs_top_chart },
-    },
-    'os_procs_cmd_stats':{
-      top: {'matched_name': true, match: '%s', chart: procs_top_chart },
-    },
-    'os_procs_stats':{
-      top: {'matched_name': true, match: '%s', chart: procs_top_chart },
-    },
-    // 'os_procs': {
-    //   count: {'matched_name': true, match: '%s', chart: procs_count_chart },
-    // },
-    /**
-    * matched_name: true; will use that name as the key, else if will use the chart key
-    * ex matched_name = true: os_networkInterfaces_stats{ lo_bytes: {}}
-    * ex matched_name != true: os.cpus{ cpus_percentage: {}}
-    **/
-    'os_networkInterfaces_stats': {
-      properties: {'matched_name': true, match: '%s', chart: networkInterfaces_stats_chart},
-    },
-    'os_mounts':{
-      percentage : { 'matched_name': true, match: '%s', chart: mounts_percentage_chart},
-    },
-    'os_blockdevices': {
-      stats : { 'matched_name': true, match: '%s', chart: blockdevices_stats_chart},
-    },
-    'new RegExp("^munin")': { 'matched_name': true, chart: munin }
+  ON_HOSTS_UPDATED: 'onHostsUpdated',
+  ON_HOST_UPDATED: 'onHostUpdated',
+  ON_HOST_RANGE: 'onHostRange',
+  ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
+  ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
+  ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
 
 
-  },
+  CHART_INSTANCE_TTL: 60000,
+  SESSIONS_TTL: 60000,
+  HOSTS_TTL: 60000,
 
+  RANGE_SECONDS_LIMIT: 300,
+  RANGE_WORKERS_CONCURRENCY: 1,
+  RANGE_WORKERS_RATE: 5,
 
+  cache: undefined,
+
+  session_store: undefined,
 
 	options: {
-    id: 'os',
-    path: 'os',
+    id: 'hosts',
+    path: 'hosts',
+
+    host: {
+      properties: ['paths', 'data', 'data_range'],//to send to pipelines.input.*.host.js
+    },
+
+    cache_store: {
+      suspended: false,
+      ttl: 1999,
+      stores: [
+        {
+          id: 'rethinkdb',
+          conn: [
+            {
+              host: 'elk',
+              port: 28015,
+              db: 'servers',
+              table: 'cache',
+              module: RethinkDBStoreIn,
+            },
+          ],
+          module: RethinkDBStoreOut,
+        }
+      ],
+    },
 
     authorization: undefined,
 
     params: {
 			host: /(.|\s)*\S(.|\s)*/,
+      prop: /data|paths|instances|data_range/,
+      events: /hosts|paths/,
       // stat:
 		},
 
@@ -101,21 +96,31 @@ module.exports = new Class({
       // path: '/',
 			routes: {
 				get: [
-					{
-						path: 'charts/:host?/:chart?',
-						callbacks: ['charts'],
-						version: '',
-					},
+					// {
+					// 	path: 'charts/:host?/:chart?',
+					// 	callbacks: ['charts'],
+					// 	version: '',
+					// },
+          // {
+					// 	path: 'instances/:host?/:path?',
+					// 	callbacks: ['instances'],
+					// 	version: '',
+					// },
+          // {
+					// 	path: 'stats/:host?/:stat?',
+					// 	callbacks: ['stats'],
+					// 	version: '',
+					// }
           {
-						path: 'instances/:host?/:path?',
-						callbacks: ['instances'],
-						version: '',
-					},
+            path: ':host/instances/:instances?',
+            callbacks: ['host_instances'],
+            version: '',
+          },
           {
-						path: 'stats/:host?/:stat?',
-						callbacks: ['stats'],
-						version: '',
-					}
+            path: ':host?/:prop?/:paths?',
+            callbacks: ['hosts'],
+            version: '',
+          }
 				],
 
         all: [{
@@ -131,501 +136,1779 @@ module.exports = new Class({
 			// middlewares: [], //namespace.use(fn)
 			// rooms: ['root'], //atomatically join connected sockets to this rooms
 			routes: {
-        // charts: [{
+
+        'instances': [{
+					// path: ':host/instances/:instances?',
+					// once: true, //socket.once
+					callbacks: ['host_instances'],
+					// middlewares: [], //socket.use(fn)
+				}],
+        '/': [{
+					// path: ':param',
+					// once: true, //socket.once
+					callbacks: ['hosts'],
+					// middlewares: [], //socket.use(fn)
+				}],
+        'on': [
+          {
+  					// path: ':events',
+  					// once: true, //socket.once
+  					callbacks: ['register'],
+  					// middlewares: [], //socket.use(fn)
+  				}
+        ],
+				// charts: [{
 				// 	// path: ':param',
 				// 	// once: true, //socket.once
 				// 	callbacks: ['charts'],
 				// 	// middlewares: [], //socket.use(fn)
 				// }],
-				charts: [{
-					// path: ':param',
-					// once: true, //socket.once
-					callbacks: ['charts'],
-					// middlewares: [], //socket.use(fn)
-				}],
-        instances: [{
-					// path: ':param',
-					// once: true, //socket.once
-					callbacks: ['instances'],
-					// middlewares: [], //socket.use(fn)
-				}],
-        stats: [{
-					// path: ':param',
-					// once: true, //socket.once
-					callbacks: ['stats'],
-					// middlewares: [], //socket.use(fn)
-				}],
+        // instances: [{
+				// 	// path: ':param',
+				// 	// once: true, //socket.once
+				// 	callbacks: ['instances'],
+				// 	// middlewares: [], //socket.use(fn)
+				// }],
+        // stats: [{
+				// 	// path: ':param',
+				// 	// once: true, //socket.once
+				// 	callbacks: ['stats'],
+				// 	// middlewares: [], //socket.use(fn)
+				// }],
 
 			}
-		}
+		},
+
+    expire: 1000,//ms
 	},
 
-  stats: function(){
-    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'stat'])
-    let {host, stat} = params
+  pipeline: {
+    hosts: undefined,
+    ids: [],
+    connected: false,
+    suspended: undefined
+  },
+
+  // hosts: {
+  //   value: undefined,
+  //   timestamp: 0
+  // },
+
+  // hosts_props: {},
+
+  // events: {},
+  // hosts_events: {},
+
+  __emit: function(doc){
+    // debug_internals('__emit', this.events, this.hosts_events)
+    if(!doc.id && this.session_store){//if doc.id, then this event was fired by a client request...ommit!
+      let {type, host, prop} = doc
+      if(type && doc[type]){
+
+        this.cache.get(this.ID+'.sessions', function(err, sessions){
+
+          if(sessions && sessions['socket'] && sessions['socket'].length > 0){
+
+            Array.each(sessions['socket'], function(id){
+              this.__get_session_by_id(id, function(err, session){
+                if(session && session.sockets && session.sockets.length > 0)
+                  Array.each(session.sockets, function(socketId){
+                    if(this.io.connected[socketId] && this.io.connected[socketId].connected){
+                      this.__update_sessions({id: id, type: 'socket'})
+                      this.__emit_registered_events(socketId, session, doc)
+                    }
+
+                  }.bind(this))
+              }.bind(this))
+              // if(typeof this.session_store.get == 'function'){
+              //   try{
+              //
+              //     this.session_store.get(id, function(err, session){
+              //       if(!err){
+              //         // debug_internals('this.session.store session', id, err, session)
+              //         // this.__emit_registered_events(socketId, session, doc)
+              //         if(session && session.sockets && session.sockets.length > 0)
+              //           Array.each(session.sockets, function(socketId){
+              //             this.__emit_registered_events(socketId, session, doc)
+              //           }.bind(this))
+              //       }
+              //     //
+              //     }.bind(this))
+              //   }
+              //   catch(e){
+              //     debug_internals('this.session_store.get error', e)
+              //   }
+              // }
+              // else{//MemoryStore
+              //   // debug_internals('this.session.store session', this.session_store.sessions[id], this.session_store.sessions[id].sockets)
+              //   if(this.session_store.sessions[id].sockets && this.session_store.sessions[id].sockets.length > 0)
+              //     Array.each(this.session_store.sessions[id].sockets, function(socketId){
+              //       this.__emit_registered_events(socketId, this.session_store.sessions[id], doc)
+              //     }.bind(this))
+              //
+              // }
+
+            }.bind(this))
+
+
+          }
+
+        }.bind(this))//cache.get
+
+
+        // debug_internals('__emit', type, host, prop)
+      }
+
+
+      // this.io.emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
+
+
+    }
+  },
+  __get_session_by_id: function(id, cb){
+
+    if(typeof this.session_store.get == 'function'){
+      try{
+        this.session_store.get(id, cb)
+      }
+      catch(e){
+        debug_internals('this.session_store.get error', e)
+      }
+    }
+    else if(this.session_store.sessions[id]){//MemoryStore
+      cb(undefined, this.session_store.sessions[id])
+    }
+    else{
+      cb({status: 404, message: 'session not found'}, undefined)
+    }
+
+
+  },
+  // __get_session_by_socket: function(socketId, cb){
+  //   debug_internals('__get_session_by_socket', socketId)
+  //
+  //   if(typeof this.session_store.all == 'function'){
+  //     try{
+  //       this.session_store.all(function(err, sessions){
+  //         if(err) cb(err, sessions)
+  //
+  //         debug_internals('__get_session_by_socket this.session_store.all', sessions)
+  //
+  //         let found = false
+  //         Object.each(sessions, function(session, sid){
+  //           if(session && session.sockets && session.sockets.contains(socketId)){
+  //             cb(undefined, session)
+  //             found = true
+  //           }
+  //         }.bind(this))
+  //
+  //         if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+  //
+  //       })
+  //     }
+  //     catch(e){
+  //       debug_internals('this.session_store.get error', e)
+  //     }
+  //   }
+  //   else if(this.session_store.sessions){//MemoryStore
+  //     debug_internals('__get_session_by_socket this.session_store.sessions', this.session_store.sessions)
+  //     let found = false
+  //     Object.each(this.session_store.sessions, function(session, sid){
+  //       if(session && session.sockets && session.sockets.contains(socketId)){
+  //         cb(undefined, session)
+  //         found = true
+  //       }
+  //     }.bind(this))
+  //
+  //     if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+  //   }
+  //   else{//last resort, search by IDs using cache
+  //     // cb({status: 404, message: 'session not found'}, undefined)
+  //     this.cache.get(this.ID+'.sessions', function(err, sessions){
+  //
+  //       if(sessions && sessions['socket'] && sessions['socket'].length > 0){
+  //         let found = false
+  //         Array.each(sessions['socket'], function(id){
+  //           this.__get_session_by_id(id, function(err, session){
+  //             if(session){
+  //               found = true
+  //               cb(undefined, session)
+  //             }
+  //           })
+  //         }.bind(this))
+  //
+  //         if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+  //       }
+  //       else{
+  //         cb({status: 404, message: 'session not found'}, undefined)
+  //       }
+  //     }.bind(this))
+  //   }
+  //
+  // },
+  __get_session_id_by_socket: function(socketId, cb){
+    debug_internals('__get_session_id_by_socket', socketId)
+
+    if(typeof this.session_store.all == 'function'){
+      try{
+        this.session_store.all(function(err, sessions){
+          if(err) cb(err, sessions)
+
+          debug_internals('__get_session_id_by_socket this.session_store.all', sessions)
+
+          let found = false
+          Object.each(sessions, function(session, sid){
+            if(session && session.sockets && session.sockets.contains(socketId)){
+              cb(undefined, sid)
+              found = true
+            }
+          }.bind(this))
+
+          if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+
+        })
+      }
+      catch(e){
+        debug_internals('this.session_store.get error', e)
+      }
+    }
+    else if(this.session_store.sessions){//MemoryStore
+      debug_internals('__get_session_id_by_socket this.session_store.sessions', this.session_store.sessions)
+      let found = false
+      Object.each(this.session_store.sessions, function(session, sid){
+        if(session && session.sockets && session.sockets.contains(socketId)){
+          cb(undefined, sid)
+          found = true
+        }
+      }.bind(this))
+
+      if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+    }
+    else{//last resort, search by IDs using cache
+      // cb({status: 404, message: 'session not found'}, undefined)
+      this.cache.get(this.ID+'.sessions', function(err, sessions){
+
+        if(sessions && sessions['socket'] && sessions['socket'].length > 0){
+          let found = false
+          Array.each(sessions['socket'], function(sid){
+            this.__get_session_by_id(sid, function(err, session){
+              if(session){
+                found = true
+                cb(undefined, sid)
+              }
+            })
+          }.bind(this))
+
+          if(found === false) cb({status: 404, message: 'session not found'}, undefined)
+        }
+        else{
+          cb({status: 404, message: 'session not found'}, undefined)
+        }
+      }.bind(this))
+    }
+
+  },
+  __emit_registered_events: function(socketId, session, doc){
+    // debug_internals('__emit_registered_events', this.io.connected[socketId].connected)
+    if(this.io.connected[socketId] && this.io.connected[socketId].connected){
+      let {type, host, prop} = doc
+
+      if(session && session.events.contains(type))
+        this.io.to(`${socketId}`).emit(type, doc)
+
+
+      if(session && session.hosts_events[host]){
+        Array.each(session.hosts_events[host], function(event){
+
+          if(type == 'data')
+            debug_internals('__emit_registered_events', event)
+
+          let result = Object.clone(doc)
+
+          if(event && event !== null && event.prop == type){
+            let {format} = event
+
+            if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
+              Array.each(result['paths'], function(path, index){
+                result['paths'][index] = path.replace(/\./g, '_')
+              })
+
+              this.io.to(`${socketId}`).emit(type, result)
+            }
+            else if(type == 'data' && format == 'stat' || format == 'tabular'){
+              debug_internals('__emit data', result)
+
+              result.data = result.data.data // @bug: doc.data.data ??
+
+              this.__transform_data('stat', result.data, host, function(stat){
+                // result = stat
+                result.stat = stat
+                delete result.data
+
+                if( format == 'tabular' ){
+                  this.__transform_data('tabular', result.stat, host, function(tabular){
+                    // result = tabular
+                    result.tabular = tabular
+                    delete result.stat
+                    this.io.to(`${socketId}`).emit(format, result)
+
+                  }.bind(this))
+
+                }
+                else{
+                  this.io.to(`${socketId}`).emit(format, result)
+                }
+
+              }.bind(this))
+            }
+            else{
+              // if(type == 'instances'){
+              //   debug_internals('__emit_registered_events EVENT', result)
+              //   process.exit(1)
+              //
+              // }
+
+              // debug_internals(type, socketId)
+              // process.exit(1)
+              if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
+                result[prop] = result[prop][prop]
+
+              this.io.to(`${socketId}`).emit(type, result)
+            }
+
+          }
+
+        }.bind(this))
+      }
+    }
+
+  },
+  register: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
+    let {events} = params
+    let id = (socket) ? socket.id : req.session.id
+    let session = this.__process_session(req, socket)
+    session.send_register_resp = session.send_register_resp+1 || 0
+    let req_id = id +'.'+session.send_register_resp
+
+    debug_internals('register %o', events)
+
+    let send_resp = {}
+    send_resp[req_id] = function(err, result){
+      // debug_internals('register.send_resp %o', err, result)
+      if(err){
+        if(resp){
+          resp.status(err.code).json(err)
+        }
+        else{
+          socket.emit('on', err)
+        }
+      }
+      else{
+        if(resp){
+          resp.json(result)
+        }
+        else{
+          socket.emit('on', result)
+        }
+      }
+
+      delete send_resp[req_id]
+    }
+
+    if(events && events !== null){
+
+      if(!Array.isArray(events))
+        events = [events]
+
+      Array.each(events, function(event){
+        if(typeof event === 'string'){
+          // if(!this.events[event]) this.events[event] = []
+          // if(!this.events[event].contains(id)) this.events[event].push(id)
+          session.events.include(event)
+        }
+        else{
+          let {host, prop, format} = event
+          debug_internals('register Object', host, prop, format)
+          if(host){
+            // if(!this.hosts_events[host]) this.hosts_events[host] = {}
+            // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
+            // this.hosts_events[host][prop].push({id: id, format: format})
+
+            if(!session.hosts_events[host]) session.hosts_events[host] = []
+
+            if(session.hosts_events[host].some(function(item){ return item.prop == event.prop && item.format == event.format }) !== true)
+              session.hosts_events[host].push(event)
+
+
+            // if(prop == 'data'){
+            /**
+            * @todo: pipelines should protect you from firing events before being connected
+            **/
+            if(prop == 'data' && this.pipeline.connected[1] == true){
+              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+                host: host,
+                type: 'register',
+                prop: 'data',
+                query: {format: format},
+                // paths: paths,
+                id: id,
+              })//fire only the 'host' input
+            }
+          }
+        }
+
+
+
+
+      }.bind(this))
+
+      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(',')+' events'})
+    }
+    else{
+      send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
+    }
+  },
+  host_instances: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'instances'])
+    let {host, prop, instances} = params
+    // let query = (req) ? req.query : { format: params.format }
+    // let range = (req) ? req.header('range') : params.range
+    // let type = (range) ? 'range' : 'once'
+    let id = (socket) ? socket.id : req.session.id
+    let session = this.__process_session(req, socket)
+
+    session.send_instances_resp = session.send_instances_resp+1 || 0
+    let req_id = id +'.'+session.send_instances_resp
+
+    let send_resp = {}
+    send_resp[req_id] = function(data){
+      // if(prop) type = prop
+
+      let result = {
+        type: 'instances',
+        // range: range,
+        host: host
+      }
+
+      // if(query.format) type = query.format
+
+      // result['instances'] = data
+      result = Object.merge(result, data)
+
+      if(result && (result.length > 0 || Object.getLength(result) > 0)){
+
+        if(resp){
+          resp.json(result)
+        }
+        else{
+          socket.emit('instances', result)
+        }
+      }
+      else{
+        if(resp){
+          resp.status(404).json({status: 'no instances'})
+        }
+        else{
+          socket.emit('instances', {status: 'no instances'})
+        }
+
+      }
+
+      delete send_resp[req_id]
+    }
+
+    if(instances){
+
+      try{
+        let _parsed = JSON.parse(instances)
+        // debug_internals('data: paths _parsed %o ', _parsed)
+
+        instances = []
+        if(Array.isArray(_parsed))
+          Array.each(_parsed, function(_path){
+            // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+            //avoid duplicates (with push, you may get duplicates)
+            instances.combine([_path])
+          }.bind(this))
+
+
+      }
+      catch(e){
+        // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+      }
+
+      if(!Array.isArray(instances))
+        instances = [instances]
+
+
+      this.__get_instances(instances, host, send_resp[req_id])
+    }
+    else{
+
+      this.cache.get(host+'.instances', function(err, instances){
+        if(instances){
+          // result.instances = instances
+          this.__get_instances(instances, host, send_resp[req_id])
+        }
+        else{
+          send_resp[req_id](null)
+        }
+        // if(instances)
+        //   result.instances = instances
+        //
+        // send_result(result)
+      }.bind(this))
+
+    }
+
+    debug_internals('host_instances %o', instances)
+
+
+    // let result = {}
+    // Array.each(instances, function(instance, index){
+    //
+    //   this.cache.get(host+'.tabular.'+instance, function(err, data){
+    //     if(data) result[instance] = JSON.parse(data)
+    //
+    //     if(index == instances.length - 1) send_resp[req_id](result)
+    //     // let result = {type: 'property'}
+    //     // result.property = { instances: instances }
+    //     // debug_internals('host %s prop %s %o', host, prop, result)
+    //
+    //
+    //   })
+    //
+    // }.bind(this))
+    // this.__get_instances(instances, host, send_resp[req_id])
+
+
+
+  },
+  __get_instances: function(instances, host, cb){
+    let result = {}
+    Array.each(instances, function(instance, index){
+
+      this.cache.get(host+'.tabular.'+instance, function(err, data){
+        if(data) result[instance] = JSON.parse(data)
+
+        if(index == instances.length - 1){
+          cb(result)
+          return result
+        }
+        // let result = {type: 'property'}
+        // result.property = { instances: instances }
+        // debug_internals('host %s prop %s %o', host, prop, result)
+
+
+      })
+
+    }.bind(this))
+
+  },
+  hosts: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'paths'])
+    let {host, prop, paths} = params
     let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
     let type = (range) ? 'range' : 'once'
     let id = (socket) ? socket.id : req.session.id
-    let session = this.__process_session(req, socket, host)
+    let session = this.__process_session(req, socket)
 
-    session.send_stats = session.send_stats+1 || 0
-    let req_id = id +'.'+session.send_stats
-    // session.save()
+    let __query_paths = undefined
 
-    debug_internals('stats->session %o', session)
+    if(paths){
+      __query_paths = []
 
-    if(host === null || host === undefined){
-      this.__no_host(req, resp, socket, next, params)
+      try{
+        let _parsed = JSON.parse(paths)
+        // debug_internals('data: paths _parsed %o ', _parsed)
+
+        paths = []
+        if(Array.isArray(_parsed))
+          Array.each(_parsed, function(_path){
+            let __query_path = (query.format && _path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')) : _path
+            // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+            //avoid duplicates (with push, you may get duplicates)
+            __query_paths.combine([__query_path])
+            paths.combine([_path])
+          }.bind(this))
+
+
+      }
+      catch(e){
+        // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+      }
+
+      if(!Array.isArray(paths)){
+        __query_paths = (query.format && paths.indexOf('.') > -1) ? [paths.substring(0, paths.indexOf('.'))]: [paths]
+        paths = [paths]
+      }
+
     }
-    else{
-      // let send_stats = function(stats){
-      //   //console.log('PARAMS', params)
-      //   //console.log('QUERY', query)
-      //   //console.log('REQ', range)
-      //   //console.log('found_stats', stats)
-      //
-      // }
-
-      let send_stats = function(stats){
-        // let stats = this.__stats[host].data
-
-        // //console.log('PARAMS', params)
-        // //console.log('QUERY', query)
-        // //console.log('REQ', range)
-        // //console.log('found_stats', stats)
-
-        let found_stats = {}
-        if(stat){//one or many stats
-          try{
-            let _parsed = JSON.parse(stat)
-            //debug_internals('stats->send_stats: stat %o', _parsed)
-            path = []
-            if(Array.isArray(_parsed))
-              Array.each(_parsed, function(_path){
-                found_stats = Object.merge(found_stats, this.__find_stat(_path, Object.clone(stats)))
-              }.bind(this))
-          }
-          catch(e){
-            //debug_internals('stats->send_stats: error %o', e)
-            found_stats = this.__find_stat(stat, Object.clone(stats))
-          }
 
 
-          // //console.log('STAT', stats, stat)
-          // Object.each(stats, function(data, name){
-          //   if(name != stat)
-          //     delete stats[name]
-          // })
-        }
-        else{
-          found_stats = Object.clone(stats)
+    // debug_internals('data: paths %o ', paths)
+
+    // debug_internals('hosts params %s %s', host, prop)
+
+    session.send_resp = session.send_resp+1 || 0
+    let req_id = id +'.'+session.send_resp
+
+    let send_resp = {}
+    send_resp[req_id] = function(data){
+      let {type} = data
+      let result = data[type]
+
+      let send_result = function(data){
+        if(prop) type = prop
+
+        let result = {
+          type: type,
+          range: range,
+          host: host
         }
 
+        if(prop == 'data' && query.format) type = query.format
+
+        result[type] = data
+
+        // if(prop) type = 'property'
 
 
-        if(found_stats && Object.getLength(found_stats) == 0){
+
+        if(result && (result.length > 0 || Object.getLength(result) > 0)){
+
           if(resp){
-            resp.status(404).json({host: host, type: type, err: 'not found'})
+            resp.json(result)
           }
           else{
-            socket.binary(false).emit('stats', {host: host, type: type, err: 'not found'})
+            socket.emit(type, result)
           }
         }
         else{
-          if(query && query.format == 'tabular'){
+          if(resp){
+            resp.status(404).json({status: 'no '+type})
+          }
+          else{
+            socket.emit(type, {status: 'no '+type})
+          }
 
-            let send_tabular = function(tabular){
+        }
 
-              if(resp){
-                resp.json({host: host, status: 'ok', type: type, stats: tabular, tabular: true})
+        // this.removeEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], send_resp[req_id])
+
+      }.bind(this)
+
+      // debug_internals('send_result %s', prop, result, query)
+
+      if(( query.format == 'stat' || query.format == 'tabular') && result && result.paths)
+        Array.each(result.paths, function(path, index){
+          result.paths[index] = path.replace(/\./g, '_')
+        })
+
+
+
+      if(prop && result){
+        result = result[prop]
+
+        if(prop == 'data' && paths){
+
+          if( query.format == 'stat' || query.format == 'tabular'){
+            this.__transform_data('stat', result, host, function(stat){
+              let tmp_result = {}
+              Array.each(paths, function(path){
+                tmp_result = Object.merge(tmp_result, this.__find_stat(path, stat))
+
+              }.bind(this))
+
+              if( query.format == 'tabular'){
+                // debug_internals('to tabular', tmp_result)
+                this.__transform_data('tabular', tmp_result, host, function(tabular){
+                  // result.tabular = tabular
+                  // delete result.stat
+                  send_result(tabular)
+                })
+
               }
               else{
-                // if(stats.length == 0){
-                // //console.log('PARAMS', params)
-                // //console.log('QUERY', query)
-                // //console.log('REQ', range)
-                // }
-                //
-                socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: tabular, tabular: true})
+                send_result(tmp_result)
+              }
+
+            }.bind(this))
+          }
+          else{
+            let tmp_result = Object.clone(result)
+            result = {}
+            Array.each(paths, function(path){
+              result[path] = tmp_result[path]
+            })
+
+            send_result(result)
+          }
+
+
+
+        }
+        else if(prop == 'data' && ( query.format == 'stat' || query.format == 'tabular') ){
+          this.__transform_data('stat', result, host, function(stat){
+            result = stat
+            // result.stat = stat
+            // delete result.data
+
+            if( query.format == 'tabular'){
+              this.__transform_data('tabular', result, host, function(tabular){
+                result = tabular
+                // result.tabular = tabular
+                // delete result.stat
+                send_result(result)
+              }.bind(this))
+
+            }
+            else{
+              send_result(result)
+            }
+
+          }.bind(this))
+        }
+        else{
+            send_result(result)
+        }
+      }
+      else if(result && result.data && ( query.format == 'stat' || query.format == 'tabular') ){
+        this.__transform_data('stat', result.data, host, function(stat){
+          result.stat = stat
+          result.paths = Object.keys(stat)
+          delete result.data
+
+          if( query.format == 'tabular'){
+            // debug_internals('query.format == tabular', result.stat)
+
+            this.__transform_data('tabular', result.stat, host, function(tabular){
+              // debug_internals('query.format == tabular', tabular)
+              result.tabular = tabular
+              delete result.stat
+              // send_result(result)
+              this.cache.get(host+'.instances', function(err, instances){
+                if(instances){
+                  // result.instances = instances
+                  this.__get_instances(instances, host, function(instances){
+                    result.instances = instances
+                    send_result(result)
+                  })
+                }
+                else{
+                  send_result(result)
+                }
+              }.bind(this))
+            }.bind(this))
+
+          }
+          else{
+            // send_result(result)
+            this.cache.get(host+'.instances', function(err, instances){
+              // if(instances)
+              //   result.instances = instances
+              //
+              // send_result(result)
+              if(instances){
+                // result.instances = instances
+                this.__get_instances(instances, host, function(instances){
+                  result.instances = instances
+                  send_result(result)
+                })
+              }
+              else{
+                send_result(result)
+              }
+            }.bind(this))
+          }
+
+        }.bind(this))
+
+
+      }
+      else{
+        if(!result || result == null)
+          result = { instances: null }
+
+        this.cache.get(host+'.instances', function(err, instances){
+          if(instances){
+            // result.instances = instances
+            this.__get_instances(instances, host, function(instances){
+              result.instances = instances
+              send_result(result)
+            })
+          }
+          else{
+            send_result(result)
+          }
+          // if(instances)
+          //   result.instances = instances
+          //
+          // send_result(result)
+        }.bind(this))
+
+      }
+
+      // if(result.stat && query.format == 'tabular'){
+      //   // result.tabular = this.__transform_data(result.stat)
+      //   delete result.stat
+      // }
+
+      delete send_resp[req_id]
+
+    }.bind(this)
+
+    if(host === null || prop === null){//null means didn't pass the params filter ( undefined is allright )
+      send_resp[req_id]({
+        type: (prop === null) ? 'property' : 'host'
+      })
+    }
+    else if(!host)
+      this.__get_hosts(req_id, socket, send_resp[req_id])
+
+    // else if(prop === 'instances'){
+    //   this.cache.get(host+'.instances', function(err, instances){
+    //     let result = {type: 'property'}
+    //     result.property = { instances: null }
+    //     if(instances){
+    //       // result.instances = instances
+    //       this.__get_instances(instances, host, function(instances){
+    //         result.instances = instances
+    //         // send_result(result)
+    //         send_resp[req_id](result)
+    //       })
+    //     }
+    //     else{
+    //       send_resp[req_id](result)
+    //     }
+    //
+    //     // let result = {type: 'property'}
+    //     // result.property = { instances: instances }
+    //     // debug_internals('host %s prop %s %o', host, prop, result)
+    //
+    //     // send_resp[req_id](result)
+    //   }.bind(this))
+    //
+    // }
+    else if(!range){
+      // this.__get_host(host, prop, req_id, socket, send_resp[req_id])
+      this.__get_host({
+        host: host,
+        prop: prop,
+        query: query,
+        req_id: req_id,
+        socket: socket,
+        cb: send_resp[req_id]
+      })
+    }
+    else
+      this.__get_host_range({
+        host: host,
+        prop: prop,
+        query: query,
+        paths: __query_paths,
+        range: range,
+        req_id: req_id,
+        socket: socket,
+        cb: send_resp[req_id]
+      })
+
+  },
+  __find_stat(stat, stats){
+    let result = {}
+    if(stat.indexOf('.') > -1){
+      let key = stat.split('.')[0]
+      let rest = stat.substring(stat.indexOf('.') + 1)
+      // //console.log('REST', key, rest)
+      result[key] = this.__find_stat(rest, stats[key])
+    }
+    else if(stats){
+      result[stat] = stats[stat]
+    }
+
+    return result
+  },
+  __transform_data: function(type, data, cache_key, cb){
+    // debug_internals('__transform_data', type)
+    let convert = (type == 'stat') ? data_to_stat : data_to_tabular
+
+    let transformed = {}
+    let counter = 0 //counter for each path:stat in data
+    // let instances = []
+    let instances = {}
+
+    if(!data || data == null && typeof cb == 'function')
+      cb(transformed)
+
+    /**
+    * first count how many "transform" there are for this data set, so we can fire callback on last one
+    **/
+    let transform_result_length = 0
+    Object.each(data, function(d, path){
+      let transform = this.__traverse_path_require(type, path, d)
+
+        if(transform && typeof transform == 'function'){
+          transform_result_length += Object.getLength(transform(d))
+        }
+        else if(transform){
+          transform_result_length++
+        }
+    }.bind(this))
+
+    let transform_result_counter = 0
+
+    Object.each(data, function(d, path){
+
+      debug_internals('DATA', d, type)
+
+      if(d && d !== null){
+        if (d[0] && d[0].metadata && d[0].metadata.format){
+
+          // if(!d[0].metadata.format[type]){
+            let formated_data = []
+            Array.each(d, function(_d){ formated_data.push(_d.data) })
+            transformed = this.__merge_transformed(this.__transform_name(path), formated_data, transformed)
+          // }
+
+          if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+            cb(transformed)
+
+        }
+        else if (d[0] && d[0].metadata && (!d[0].metadata.format || (d[0].metadata.format['stat'] && type == 'tabular'))){
+          let transform = this.__traverse_path_require(type, path, d) //for each path find a trasnform or use "default"
+
+          if(transform){
+
+            if(typeof transform == 'function'){
+              let transform_result = transform(d, path)
+
+
+              Object.each(transform_result, function(chart, path_key){
+
+                /**
+                * key may use "." to create more than one chart (per key), ex: cpus.times | cpus.percentage
+                **/
+                let sub_key = (path_key.indexOf('.') > -1) ? path_key.substring(0, path_key.indexOf('.')) : path_key
+
+
+                if(type == 'tabular'){
+                  // debug_internals('transform_result', transform_result)
+
+                  this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), function(err, chart_instance){
+                    chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+
+                    chart_instance = Object.merge(chart, chart_instance)
+
+                    // chart_instance = _transform(chart_instance)
+
+                    convert(d[sub_key], chart_instance, path+'.'+path_key, function(name, stat){
+                      transformed = this.__merge_transformed(name, stat, transformed)
+                      // name = name.replace(/\./g, '_')
+                      // let to_merge = {}
+                      // to_merge[name] = stat
+                      //
+                      // transformed = Object.merge(transformed, to_merge)
+                      //
+                      // debug_internals('chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
+
+
+                      // chart_instance = this.cache.clean(chart_instance)
+                      // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
+                      // instances.push(this.__transform_name(path+'.'+path_key))
+                      instances[this.__transform_name(path+'.'+path_key)] = chart_instance
+
+                      this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+
+                      if(
+                        transform_result_counter == transform_result_length - 1
+                        && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+                      ){
+                        this.__save_instances(cache_key, instances, cb.pass(transformed))
+                        // cb(transformed)
+                      }
+
+                      transform_result_counter++
+                    }.bind(this))
+
+
+
+                  }.bind(this))
+                }
+                else{
+                  convert(d[sub_key], chart, path+'.'+path_key, function(name, stat){
+                    transformed = this.__merge_transformed(name, stat, transformed)
+                    // name = name.replace(/\./g, '_')
+                    // let to_merge = {}
+                    // to_merge[name] = stat
+                    //
+                    // debug_internals('transformed func', name, stat)
+                    //
+                    // transformed = Object.merge(transformed, to_merge)
+
+                    if(
+                      transform_result_counter == transform_result_length - 1
+                      && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+                    ){
+                      cb(transformed)
+                    }
+
+
+                    transform_result_counter++
+                  })
+
+                }
+
+
+
+
+
+              }.bind(this))
+            }
+            else{//not a function
+
+              /**
+              * @todo: 'tabular' not tested, also counter should consider this case (right now only considers functions type)
+              **/
+              if(type == 'tabular'){
+                this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
+                  chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
+
+                  chart_instance = Object.merge(chart_instance, transform)
+                  // debug_internals('chart_instance NOT FUNC %o', chart_instance)
+
+                  // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path)
+
+                  // throw new Error()
+                  convert(d, chart_instance, path, function(name, stat){
+                    transformed = this.__merge_transformed(name, stat, transformed)
+                    // name = name.replace(/\./g, '_')
+                    // let to_merge = {}
+                    // to_merge[name] = stat
+                    //
+                    // debug_internals('transformed custom CACHE', cache_key+'.'+type+'.'+path, transformed)
+
+                    // transformed = Object.merge(transformed, to_merge)
+
+                    // chart_instance = this.cache.clean(chart_instance)
+
+                    // instances.push(this.__transform_name(path))
+
+
+                    instances[this.__transform_name(path)] = chart_instance
+                    this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+
+                    if(
+                      transform_result_counter == transform_result_length - 1
+                      && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+                    ){
+                      this.__save_instances(cache_key, instances, cb.pass(transformed))
+                      // cb(transformed)
+                    }
+
+                    transform_result_counter++
+
+                  }.bind(this))
+
+
+
+                }.bind(this))
+              }
+              else{
+                convert(d, transform, path, function(name, stat){
+                  transformed = this.__merge_transformed(name, stat, transformed)
+
+                  // name = name.replace(/\./g, '_')
+                  // let to_merge = {}
+                  // to_merge[name] = stat
+                  //
+                  // debug_internals('transformed custom', type, to_merge)
+                  //
+                  // transformed = Object.merge(transformed, to_merge)
+
+                  if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+                    cb(transformed)
+
+                }.bind(this))
+              }
+
+            }
+
+
+          }
+          else{//default
+            if(type == 'tabular'){ //default trasnform for "tabular"
+
+              // debug_internals('transform default', path)
+
+              let chart = Object.clone(require('./libs/'+type)(d, path))
+
+              this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
+                chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+
+                chart_instance = Object.merge(chart, chart_instance)
+
+                debug_internals('transform default', d, path)
+
+                convert(d, chart_instance, path, function(name, stat){
+                  /**
+                  * clean stats that couldn't be converted with "data_to_tabular"
+                  **/
+                  Array.each(stat, function(val, index){
+                    Array.each(val, function(row, i_row){
+                      if(isNaN(row))
+                        val[i_row] = undefined
+                    })
+                    stat[index] = val.clean()
+                    if(stat[index].length <= 1)
+                      stat[index] = undefined
+                  })
+                  stat = stat.clean()
+
+                  if(stat.length > 0)
+                    transformed = this.__merge_transformed(name, stat, transformed)
+
+                  // name = name.replace(/\./g, '_')
+                  // let to_merge = {}
+                  // to_merge[name] = stat
+                  //
+                  // transformed = Object.merge(transformed, to_merge)
+                  // debug_internals('default chart_instance CACHE %o', name)
+
+                  // debug_internals('default chart_instance CACHE %o', name, transform_result_counter, transform_result_length)
+                  // chart_instance = this.cache.clean(chart_instance)
+                  // // debug_internals('transformed func', name, JSON.stringify(chart_instance))
+                  // instances.push(this.__transform_name(path))
+                  instances[this.__transform_name(path)] = chart_instance
+
+                  this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+
+                  if(
+                    transform_result_counter == transform_result_length - 1
+                    && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
+                  ){
+                    this.__save_instances(cache_key, instances, cb.pass(transformed))
+                    // cb(transformed)
+                  }
+
+                  transform_result_counter++
+                }.bind(this))
+
+
+
+              }.bind(this))
+            }
+            else{//default trasnform for "stat"
+              require('./libs/'+type)(d, path, function(name, stat){
+                transformed = this.__merge_transformed(name, stat, transformed)
+                // name = name.replace(/\./g, '_')
+                // let to_merge = {}
+                // to_merge[name] = stat
+                // debug_internals('transformed default', type, to_merge)
+                // transformed = Object.merge(transformed, to_merge)
+
+                if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+                  cb(transformed)
+
+              }.bind(this))
+            }
+
+
+          }
+
+          // if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+          //   cb(transformed)
+
+        }
+        // else{
+        //   if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+        //     cb(transformed)
+        // }
+
+      }//end if(d && d !== null)
+
+      counter++
+    }.bind(this))
+
+
+  },
+  __save_instances: function(cache_key, instances, cb){
+    // debug_internals('__save_instances', instances)
+
+    this.cache.get(cache_key+'.instances', function(err, result){
+      if(result){
+        // Array.each(instances, function(instance){
+        Object.each(instances, function(data, instance){
+          if(!result.contains(instance)) result.push(instance)
+        })
+      }
+      else
+        result = Object.keys(instances)
+
+      this.cache.set(cache_key+'.instances', result, this.CHART_INSTANCE_TTL, function(err, result){
+        debug_internals('__save_instances cache.set', err, result)
+
+        if(!err || err === null)
+          this.fireEvent(this.ON_HOST_INSTANCES_UPDATED, {type: 'instances', host: cache_key, instances: instances})
+
+        if(typeof cb == 'function')
+          cb()
+
+      }.bind(this))
+    }.bind(this))
+  },
+  __merge_transformed: function(name, stat, merge){
+    name = this.__transform_name(name)
+
+    let to_merge = {}
+    to_merge[name] = stat
+    return Object.merge(merge, to_merge)
+  },
+  __transform_name: function(name){
+    name = name.replace(/\./g, '_')
+    name = name.replace(/\%/g, 'percentage_')
+    return name
+  },
+  __traverse_path_require: function(type, path, stat, original_path){
+    original_path = original_path || path
+    path = path.replace(/_/g, '.')
+    original_path = original_path.replace(/_/g, '.')
+
+    // debug_internals('__traverse_path_require %s', path, original_path)
+    try{
+      let chart = require('./libs/'+type+'/'+path)(stat, original_path)
+
+      return chart
+    }
+    catch(e){
+      if(path.indexOf('.') > -1){
+        let pre_path = path.substring(0, path.lastIndexOf('.'))
+        return this.__traverse_path_require(type, pre_path, stat, original_path)
+      }
+
+      return undefined
+    }
+
+
+    // let path = path.split('.')
+    // if(!Array.isArray(path))
+    //   path = [path]
+    //
+    // Array.each()
+  },
+  __get_host_range: function(payload){
+    let {host, prop, paths, range, req_id, socket, cb} = payload
+
+    this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+      debug_internals('RANGE', parse_range(range), range)
+
+      let parsed_range = parse_range(range)
+      let new_range = Object.clone(parsed_range)
+      let range_seconds_length = (parsed_range.end - parsed_range.start) / 1000
+      let range_counter = 0
+      let range_total = 0
+
+      let _get_resp = {}
+      _get_resp[req_id] = function(resp){
+        if(resp.id == req_id){
+          debug_internals('_get_resp RANGE %d %d', resp.range_counter, range_total)
+
+          cb(resp)
+
+          if(socket && range_total == resp.range_counter){
+            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            delete _get_resp[req_id]
+          }
+          else if(!socket) {//http request
+            throw new Error('TODO: add a Limit header')
+            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            delete _get_resp[req_id]
+          }
+        }
+      }.bind(this)
+
+      this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+
+      let __event_worker = function(payload, done){
+        pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
+
+        if(typeof done == 'function')
+          done()
+      }.bind(this)
+
+      if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
+        // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
+
+        range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
+
+        let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
+
+
+        do {
+          new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
+
+          debug_internals('firing RANGE', new_range)
+
+          q.push({
+            host: host,
+            prop: prop,
+            paths: paths,
+            id: req_id,
+            full_range: range,
+            range_counter: range_counter++,
+            Range: build_range(new_range)
+          })
+
+          new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
+        } while(new_range.end < parsed_range.end);
+      }
+      else{
+        __event_worker({
+          host: host,
+          prop: prop,
+          paths: paths,
+          id: req_id,
+          Range: range
+        })
+      }
+
+      // pipe.hosts.inputs[1].fireEvent('onRange', {
+      //   host: host,
+      //   prop: prop,
+      //   paths: paths,
+      //   id: req_id,
+      //   Range: range
+      // })//fire only the 'host' input
+
+
+    }.bind(this))
+
+  },
+  // __get_host: function(host, prop, req_id, socket, cb){
+  __get_host: function(payload){
+    let {host, prop, query, req_id, socket, cb} = payload
+
+    this.cache.get('host.'+host, function(err, result){
+      // debug_internals('get host %o %o', err, result)
+
+      let _get_resp = {}
+      _get_resp[req_id] = function(resp){
+        if(resp.id == req_id){
+          // debug_internals('_get_resp %o %o', resp, result)
+
+          if(result)//cache result
+            resp['host'] = Object.merge(result, resp['host'])
+
+          this.cache.set('host.'+host, resp['host'])
+          // send_resp[req_id](resp)
+
+          cb(resp)
+
+          this.removeEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+          delete _get_resp[req_id]
+        }
+      }.bind(this)
+
+      if(
+        !result //nothing on cache
+        || (prop && !result[prop]) //or request a prop and doens't exist on cache
+      ){
+        this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+            // // debug_internals('send_resp', pipe)
+
+            this.addEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+
+            // this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
+
+            // pipe.hosts.fireEvent('onOnce')
+            // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
+            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
+
+          }.bind(this))
+      }
+       //there is a cache, should return full host, but it doens't have all properties
+      else if(result && (!prop && Object.getLength(result) != this.options.host.properties.length)){
+        let props_result = {}
+        let _merge_resp = {}
+        Array.each(this.options.host.properties, function(prop, index){
+          if(!result[prop]){//if prop not in cache
+
+            this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+
+              //merge props responses
+              _merge_resp[prop] = function(resp){
+                // debug_internals('_merge_resp', resp, prop)
+                props_result = Object.merge(props_result, resp)
+                this.removeEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
+
+                //end of array props? send response
+                if(index == this.options.host.properties.length -1)
+                  _get_resp[req_id](props_result)
+
+              }.bind(this)
+
+              this.addEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
+
+              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
+
+            }.bind(this))
+          }
+
+
+        }.bind(this))
+      }
+      else{
+        // send_resp[req_id]({type: 'hosts', hosts: result})
+        cb({type: 'host', host: result})
+      }
+
+    }.bind(this))
+  },
+  __get_hosts: function(req_id, socket, cb){
+    this.cache.get('hosts', function(err, result){
+      debug_internals('get hosts cache %o %o %s', err, result, req_id)
+      if(!result){
+        this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
+            // // debug_internals('send_resp', pipe)
+
+            let _get_resp = {}
+            _get_resp[req_id] = function(resp){
+              debug_internals('_get_resp %s %s', resp.id, req_id)
+              if(resp.id == req_id){
+
+
+                this.cache.set('hosts', resp['hosts'], this.HOSTS_TTL)
+                // send_resp[req_id](resp)
+
+                cb(resp)
+
+                this.removeEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
+                delete _get_resp[req_id]
               }
             }.bind(this)
 
+            this.addEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
 
-            let expire_time = Date.now() - 1000 //last second expire
+            // this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
 
-            if(!range && ( this.__stats_tabular[host] && this.__stats_tabular[host].lastupdate > expire_time )){
-              //console.log('TABULAR NOT EXPIRED')
-              // this.__process_tabular(host, this.__stats[host].data, send_tabular, true)//cache = true
-              send_tabular(this.__stats_tabular[host].data)
-            }
-            else{
-              // //console.log('send_stats', found_stats.os_networkInterfaces_stats)
+            // pipe.hosts.fireEvent('onOnce')
+            // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
+            pipe.hosts.inputs[0].fireEvent('onOnce', {id: req_id})//fire only the 'hosts' input
 
-              this.__process_tabular(host, found_stats, session, function(output){
-                // //console.log('send_stats', output)
-                this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
-                // //console.log('TABULAR RANGE', output)
-                send_tabular(this.__stats_tabular[host].data)
-              }.bind(this))
-            }
-
-          }
-          else{
-            if(resp){
-              resp.json({host: host, status: 'ok', type: type, stats: found_stats})
-            }
-            else{
-              socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: found_stats})
-            }
-          }
-
-          // if(this.options.redis){
-            // delete this.__stats[host]
-            // delete this.charts[host]
-          // }
-        }
-
-        this.removeEvent('statsProcessed.'+req_id, send_stats)
-      }.bind(this)
-
-      let expire_time = Date.now() - 1000 //last second expire
-
-
-      // if(this.__stats[host] && this.__stats[host].lastupdate)
-      //   //console.log('expire', (this.__stats[host].lastupdate > expire_time), this.__stats[host].lastupdate, expire_time)
-
-      // if no range, lest find out if there are stats that are newer than expire time
-      if(!range && ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )){
-        //console.log('NOT EXPIRED', new Date(expire_time))
-        send_stats(this.__stats[host].data)
+          }.bind(this))
       }
       else{
-        let update_stats = function(stats){
-          this.__stats[host] = { data: stats, lastupdate: Date.now() }
-          this.removeEvent('statsProcessed.'+req_id, update_stats)
-        }.bind(this)
-
-        this.addEvent('statsProcessed.'+req_id, update_stats)
-        this.addEvent('statsProcessed.'+req_id, send_stats)
-
-
-        // //debug_internals('stats: stat %o', stat)
-        // throw new Error()
-
-
-        let path = undefined
-        if(stat){
-
-          try{
-            let _parsed = JSON.parse(stat)
-
-            path = []
-            if(Array.isArray(_parsed))
-              Array.each(_parsed, function(_path){
-                let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
-                //avoid duplicates (with push, you may get duplicates)
-                path.combine(arr_path)
-              }.bind(this))
-
-            debug_internals('stats: stat %o %o', path, range)
-          }
-          catch(e){
-            path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
-          }
-
-        }
-
-        this.__get_pipeline(host, socket, function(pipe){
-          // if(pipe.connected == true)
-            this.__get_stats({
-              host: host,
-              pipeline: pipe.pipeline,
-              path: path,
-              range: range,
-              session: session,
-              req_id: req_id//use and "id" for the event
-            })
-        }.bind(this))
-
+        // send_resp[req_id]({type: 'hosts', hosts: result})
+        cb({type: 'hosts', hosts: result})
       }
 
-    }
+    }.bind(this))
   },
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
+    // let id = (socket) ? socket.id : req.session.id
+    debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
 
-    if(!session.charts) session.charts = {}
-    if(!session.charts[host]){
-       session.charts[host] = Object.clone(this.__charts)
-     }
-     else{
-        session.charts[host] = Object.merge(Object.clone(this.__charts), session.charts[host])
-     }
+    if(!this.session_store)
+      this.session_store = (socket) ? socket.handshake.sessionStore : req.sessionStore
 
+    this.__update_sessions({id: session.id, type: (socket) ? 'socket' : 'http'})
 
-    // debug_internals('SESSION deserialized charts', session.charts[host]['os.uptime'])
+    if(!session.events)
+      session.events = []
 
+    if(!session.hosts_events)
+      session.hosts_events= {}
 
+    if(socket){
+      if(!session.sockets) session.sockets = []
 
-    if(!session.instances) session.instances = {}
-    if(!session.instances[host]) session.instances[host] = {}
+      session.sockets.include(socket.id)
+    }
 
     return session
   },
-  charts: function(){
-    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'chart'])
-    let {host, chart} = params
-    let id = (socket) ? socket.id : req.session.id
-    let session = this.__process_session(req, socket, host)
+  __update_sessions: function(session, remove){
+    remove = remove || false
+    this.cache.get(this.ID+'.sessions', function(err, sessions){
+      if(!sessions || sessions == null) sessions = {}
 
-    session.send_charts = session.send_charts+1 || 0
-    let req_id = id +'.'+session.send_charts
+      session = [session]
+      if(remove === false){
+        Array.each(session, function(_session){
+          if(!sessions[_session.type]) sessions[_session.type] = []
+          sessions[_session.type] = sessions[_session.type].include(_session.id)
+        })
 
-    // ////console.log('host...', params, host, this.__stats[host])
-    // let host = arguments[2]
-    if(host === null || host === undefined){
-      this.__no_host(req, resp, socket, next, params)
-    }
-    else{
-
-      let send_charts = function(to_send_charts){
-        let charts = {}
-
-        if(chart && to_send_charts[host][chart]){
-          charts[chart] = to_send_charts[host][chart]
-        }
-        else if(to_send_charts[host]){
-          charts = to_send_charts[host]
-        }
-
-        if(charts && Object.getLength(charts) == 0){
-          if(resp){
-            resp.status(404).json({host: host, err: 'not found'})
-          }
-          else{
-            socket.binary(false).emit('charts', {host: host, err: 'not found'})
-          }
-        }
-        else{
-
-          if(resp){
-            resp.json({host: host, status: 'ok', charts: charts})
-          }
-          else{
-            socket.binary(false).emit('charts', {host: host, status: 'ok', charts: charts})
-          }
-
-          // if(this.options.redis){
-            // delete this.__stats[host]
-            // delete this.charts[host]
-          // }
-        }
-
-        // this.removeEvent('chartsProcessed.'+req_id, send_charts)
-      }.bind(this)
-
-
-
-      send_charts(session.charts)
-      // if(session.charts && session.charts[host] && Object.getLength(session.charts[host]) > 0){
-      //   // ////console.log('this.__stats[host]', this.__stats[host])
-      //
-      //   send_charts(session.charts)
-      // }
-      // else{
-      //
-      //
-      //   send_charts(session.charts)
-      //   // this.addEvent('chartsProcessed.'+req_id, send_charts)
-      //   // this.__get_pipeline(host, (socket) ? socket.id : undefined, function(pipe){
-      //   //   // if(pipe.connected)
-      //   //     this.__get_stats({
-      //   //       host:host,
-      //   //       pipeline: pipe.pipeline,
-      //   //       req_id: req_id
-      //   //     })
-      //   // }.bind(this))
-      //
-      // }
-
-
-    }
-
-
-	},
-  instances: function(){
-    //debug_internals('instances')
-    let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'path'])
-    let {host, path} = params
-    let id = (socket) ? socket.id : req.session.id
-    // let session = (socket) ? socket.handshake.session : req.session
-    let session = this.__process_session(req, socket, host)
-    session.send_instances = session.send_instances+1 || 0
-    let req_id = id +'.'+session.send_instances
-
-    // ////console.log('host...', params, host, this.__stats[host])
-    // let host = arguments[2]
-    if(host === null || host === undefined){
-      this.__no_host(req, resp, socket, next, params)
-    }
-    else{
-
-      let send_instances = function(){
-        //debug_internals('send_instances')
-
-        let instances = {}
-
-        //debug_internals('send_instances %o', session.instances[host])
-
-        if(path && session.instances[host][path]){
-          instances[path] = session.instances[host][path]
-        }
-        else if(session.instances[host]){
-          instances = session.instances[host]
-        }
-
-        instances = JSON.parse(JSON.stringify(instances))
-
-        if(instances && Object.getLength(instances) == 0){
-          if(resp){
-            resp.status(404).json({host: host, err: 'not found'})
-          }
-          else{
-            socket.binary(false).emit('instances', {host: host, err: 'not found'})
-          }
-        }
-        else{
-
-          if(resp){
-            resp.json({host: host, status: 'ok', instances: instances})
-          }
-          else{
-            socket.binary(false).emit('instances', {host: host, status: 'ok', instances: instances})
-          }
-
-          // if(this.options.redis){
-            // delete this.__stats[host]
-            // delete this.charts[host]
-          // }
-        }
-
-        // this.removeEvent('instancesProcessed.'+req_id, send_instances)
-      }.bind(this)
-
-      let expire_time = Date.now() - 1000 //last second expire
-
-      if(
-        ( this.__stats[host] && this.__stats[host].lastupdate > expire_time )
-        && (session.instances[host] && Object.getLength(session.instances[host]) > 0)
-      ){//stats processed already
-        // ////console.log('this.__stats[host]', this.__stats[host])
-        send_instances()
       }
       else{
-        // this.addEvent('instancesProcessed.'+req_id, send_instances)
-
-        this.__get_pipeline(host, socket, function(pipe){
-          // if(pipe.connected)
-            this.__get_stats({
-              host:host,
-              pipeline: pipe.pipeline,
-              session: session,
-              req_id: req_id
-            }, function(payload){
-              //debug_internals('cb', payload)
-              if(payload.doc)
-                this.__process_os_doc(payload.doc, function(stats){
-                  // this.__process_stats_charts(host, stats, req_id)
-
-                  this.__process_tabular(host, stats, session, function(output){
-                    // // //console.log('send_stats', output)
-                    // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
-                    // // //console.log('TABULAR RANGE', output)
-                    send_instances()
-                  }.bind(this))
-
-                }.bind(this))
-
-            }.bind(this))
-        }.bind(this))
-
+        Array.each(session, function(_session){
+          if(sessions[_session.type])
+            sessions[_session.type] = sessions[_session.type].erase(_session.id)
+        })
       }
+
+      this.cache.set(this.ID+'.sessions', sessions, this.SESSIONS_TTL)
+    }.bind(this))
+  },
+  __get_pipeline: function(id, cb){
+
+    if(!this.pipeline.hosts){
+
+      const HostsPipeline = require('./pipelines/index')({
+        conn: require(ETC+'default.conn.js')(),
+        host: this.options.host
+      })
+
+      let hosts = new Pipeline(HostsPipeline)
+      this.pipeline = {
+        hosts: hosts,
+        ids: [],
+        connected: [],
+        suspended: hosts.inputs[0].options.suspended
+      }
+
+      this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
+        let {type, range} = doc
+        // this[type] = {
+        //   value: doc[type],
+        //   timestamp: Date.now()
+        // }
+
+        debug_internals('onSaveDoc %o', type, range)
+
+        if(!range){
+          if(type == 'data' || type == 'data_range')
+            this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
+            // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
+          else
+            this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
+        }
+        else{
+          this.fireEvent(this['ON_'+type.toUpperCase()+'_RANGE'], doc)
+        }
+
+        // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
+        // this.__emit_stats(host, stats)
+      }.bind(this))
+
+      this.addEvent(this.ON_HOSTS_UPDATED, function(doc){//update "hosts" on "host" input
+        // debug_internals('ON_HOSTS_UPDATED', this.pipeline.hosts.inputs[1])
+        this.pipeline.hosts.inputs[1].conn_pollers[0].data_hosts = doc.hosts
+      }.bind(this))
+
+      this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_DATA_RANGE_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
+
+      // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
+      //   this.__emit_stats(host, stats)
+      // }.bind(this))
+
+      this.__after_connect_inputs(
+        this.__resume_pipeline.pass([this.pipeline, id, cb])
+        // this.__after_connect_pipeline(
+        //   this.pipeline,
+        //   id,
+        //   cb
+        // )
+      )
+
+      // let _client_connect = function(index){
+      //   // debug_internals('__get_pipeline %o', index)
+      //
+      //   // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+      //   //   this.pipeline,
+      //   //   id,
+      //   //   cb
+      //   // ))
+      //   this.pipeline.connected.push(true)
+      //   if(this.pipeline.hosts.inputs.length == this.pipeline.connected.length){
+      //     this.__after_connect_pipeline(
+      //       this.pipeline,
+      //       id,
+      //       cb
+      //     )
+      //   }
+      //
+      //
+      //   this.pipeline.hosts.inputs[index].removeEvent('onClientConnect',_client_connect)
+      // }.bind(this)
+
+      // Array.each(this.pipeline.hosts.inputs, function(input, index){
+      //   input.addEvent('onClientConnect', _client_connect.pass(index));
+      // }.bind(this))
+      // this.pipeline.hosts.inputs[0].addEvent('onClientConnect', _client_connect);
+
 
 
     }
+    else{
+        if(this.pipeline.hosts.inputs.length != this.pipeline.connected.length){
+          this.__after_connect_inputs(
+            this.__resume_pipeline.pass([this.pipeline, id, cb])
+            // this.__after_connect_pipeline(
+            //   this.pipeline,
+            //   id,
+            //   cb
+            // )
+          )
+        // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+        //   this.pipeline,
+        //   id,
+        //   cb
+        // ))
+      }
+      else{
+        this.__resume_pipeline(this.pipeline, id, cb)
+      }
+    }
+
+  },
+  __after_connect_inputs: function(cb){
+
+    let _client_connect = function(index){
+      // debug_internals('__get_pipeline %o', index, cb)
+
+      // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
+      //   this.pipeline,
+      //   id,
+      //   cb
+      // ))
+      this.pipeline.connected.push(true)
+      if(this.pipeline.hosts.inputs.length == this.pipeline.connected.length){
+        cb()
+      }
 
 
-	},
-	initialize: function(options){
+      this.pipeline.hosts.inputs[index].removeEvent('onClientConnect',_client_connect)
+    }.bind(this)
+
+    Array.each(this.pipeline.hosts.inputs, function(input, index){
+      input.addEvent('onClientConnect', _client_connect.pass(index));
+    }.bind(this))
+  },
+  // __after_connect_pipeline: function(pipeline, id, cb){
+  //   // debug_internals('__after_connect_pipeline')
+  //   pipeline.hosts.inputs[0].options.conn[0].module.removeEvents('onConnect')
+  //   // pipeline.connected = true
+  //
+  //   this.__resume_pipeline(pipeline, id, cb)
+  // },
+  __resume_pipeline: function(pipeline, id, cb){
+    if(id){
+      if(!pipeline.ids.contains(id))
+        pipeline.ids.push(id)
+
+      if(pipeline.suspended == true){
+        debug_internals('__resume_pipeline this.pipeline.connected', pipeline.connected)
+        // let __resume = function(){
+        //
+        // }.bind(this)
+
+        if(pipeline.connected.every(function(item){ return item === true}.bind(this))){
+          pipeline.suspended = false
+          pipeline.hosts.fireEvent('onResume')
+        }
+        else{
+          let __resume = []
+          Array.each(pipeline.hosts.inputs, function(input, index){
+            if(this.pipeline.connected[index] !== true){
+              __resume[index] = function(){
+                __resume_pipeline(pipeline, id)
+                input.conn_pollers[0].removeEvent('onConnect', __resume[index])
+              }.bind(this)
+              input.conn_pollers[0].addEvent('onConnect', () => __resume[index])
+            }
+
+          }.bind(this))
+
+        }
+
+      }
+    }
+
+    if(cb && typeof cb == 'function')
+      cb(pipeline)
+  },
+  initialize: function(options){
     this.parent(options)
 
-		this.profile('os_init');//start profiling
+		this.profile('hosts_init');//start profiling
 
-    this.profile('os_init');//end profiling
+    this.cache = new jscaching(this.options.cache_store)
 
-		this.log('os', 'info', 'os started');
+
+    // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', function(){
+    //   // debug_internals('connected')
+    //   // this.pipeline.hosts.suspended = false
+    //   // this.pipeline.hosts.fireEvent('onResume')
+    //   this.pipeline.hosts.fireEvent('onOnce')
+    // }.bind(this))
+
+    this.profile('hosts_init');//end profiling
+
+		this.log('hosts', 'info', 'hosts started');
   },
   socket: function(socket){
 		this.parent(socket)
 
+    socket.compress(true)
+
 		socket.on('disconnect', function () {
+      debug_internals('socket.io disconnect', socket.id)
 
-      ////console.log('disconnect this.io.namespace.connected', this.io.connected)
+      // Object.each(this.events, function(event, name){
+      //   if(event.contains(socket.id)){
+      //     event.erase(socket.id)
+      //     event = event.clean()
+      //   }
+      // }.bind(this))
+      //
+      // Object.each(this.hosts_events, function(host, host_name){
+      //   Object.each(host, function(prop, prop_name){
+      //     Array.each(prop, function(event, event_index){
+      //       if(event && event.id == socket.id){
+      //         this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+      //           host: host_name,
+      //           type: 'unregister',
+      //           prop: prop_name,
+      //           id: socket.id,
+      //         })//fire only the 'host' input
+      //
+      //         prop[event_index] = undefined
+      //       }
+      //     }.bind(this))
+      //     prop = prop.clean()
+      //   }.bind(this))
+      // }.bind(this))
 
-
-      Object.each(this.pipelines, function(pipe){
-        if(pipe.ids.contains(socket.id)){
-          pipe.ids.erase(socket.id)
-          pipe.ids = pipe.ids.clean()
-        }
-
-        ////console.log('suspending...', pipe.ids, pipe.ids.length)
-
-        if(pipe.ids.length == 0 && pipe.suspended == false){
-          ////console.log('suspending...', pipe.ids)
-          pipe.suspended = true
-          pipe.pipeline.fireEvent('onSuspend')
-        }
-
+      // this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
+      this.__get_session_id_by_socket(socket.id, function(err, sid){
+        debug_internals('disconnect __get_session_by_socket', err, sid)
+        if(sid)
+          this.__update_sessions({id: sid, type: 'socket'}, true)//true == remove
       }.bind(this))
-			// if(Object.keys(this.io.connected).length == 0)
-				// this.pipeline.fireEvent('onSuspend')
+
+      if(this.pipeline.ids.contains(socket.id)){
+        this.pipeline.ids.erase(socket.id)
+        this.pipeline.ids = this.pipeline.ids.clean()
+      }
+
+      if(this.pipeline.ids.length == 0 && this.pipeline.hosts){ // && this.pipeline.suspended == false
+        this.pipeline.suspended = true
+        this.pipeline.hosts.fireEvent('onSuspend')
+      }
 
 
 		}.bind(this));
 	},
-  __emit_stats: function(host, payload, socket){
-		// console.log('broadcast stats...', host, payload.type, socket)
-    if(socket)
-      debug_internals('__emit_stats %s %s', payload.type, socket.id)
 
-    let {type, doc} = payload
-
-    if(type == 'periodical' && doc.length > 0){
-
-      this.__process_os_doc(doc, function(stats){
-
-        // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
-        socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: stats, tabular: false})
-
-        this.__process_tabular(host, stats, socket.handshake.session, function(output){
-          // this.__stats_tabular[host] = {data: output, lastupdate: Date.now()}
-
-          // this.io.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
-          socket.binary(false).emit('stats', {host: host, status: 'ok', type: type, stats: output, tabular: true})
-
-
-        }.bind(this), false)
-      }.bind(this))
-
-    }
-
-
-	},
   _arguments: function(args, defined_params){
 		let req, resp, next, socket = undefined
-    // ////console.log(typeof args[0])
+
 		if(args[0]._readableState){//express
 			req = args[0]
 			resp = args[1]
@@ -668,999 +1951,11 @@ module.exports = new Class({
       socket.emit('host', {error: 'no host param', status: 500})
     }
   },
-  __find_stat(stat, stats){
-    let result = {}
-    if(stat.indexOf('.') > -1){
-      let key = stat.split('.')[0]
-      let rest = stat.substring(stat.indexOf('.') + 1)
-      // //console.log('REST', key, rest)
-      result[key] = this.__find_stat(rest, stats[key])
-    }
-    else if(stats){
-      result[stat] = stats[stat]
-    }
 
-    return result
-  },
-  __process_tabular: function(host, stats, session, cb, cache){
-    session.charts[host] = Object.merge(session.charts[host], Object.clone(this.__charts))
 
-    // debug_internals('__process_tabular session %o', session)
-    // let charts = this.charts[host]
-    // if(Object.clone(stats).os_networkInterfaces_stats && Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
-    // //console.log('PRE-MATCHED', Object.clone(stats).os_networkInterfaces_stats.lo_bytes)
 
-    /**
-    * @session, replaces this.__charts_instances -> session.instances && this.charts -> session.charts
-    **/
-    // if(!this.__charts_instances[host])
-    //   this.__charts_instances[host] = {}
 
-    let matched = undefined
-    Object.each(session.charts[host], function(data, path){
-      let charts = {}
-      if(data.chart){
-        charts[path] = data
-      }
-      else{
-        charts = data
-      }
 
-      // let {name, chart} = data
 
-      if(!matched)
-        matched = {}
-
-      /**
-      * we will create an instance for each one, as charts like "blockdevices"
-      * hace static properties like "prev", and you may have multiple devices overriding it
-      **/
-      // if(!data['_instances']) data['_instances'] = {}
-      if(!session.instances[host][path])
-        session.instances[host][path] = {}
-
-      Object.each(charts, function(chart_data, chart_name){
-        let {match, chart} = chart_data
-        // if(!match){
-        //   match = path
-        // }
-        // else{
-        //   match = path+'.'+match
-        // }
-
-        // if(!session.instances[host][path][chart_name])
-        //   session.instances[host][path][chart_name] = {}
-        try{
-          let rg = eval(path)
-          let obj = this.__match_stats_name(Object.clone(stats), path, match)
-          // // matched = Object.merge(matched, obj)
-          // debug_internals('PRE TO MATCHED OBJ %o %s %o',obj, path, stats)
-
-          Object.each(obj, function(obj_data, new_path){
-            let start_path = new_path.substring(0, new_path.indexOf('_'))
-            let end_path = new_path.substring(new_path.indexOf('_')+1)
-            if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
-
-            if(!session.instances[host][start_path])
-              session.instances[host][start_path] = {}
-
-            matched[start_path+'/'+end_path]= obj_data
-            // Object.each(obj_data, function(value, chart_name){
-            //   if(!matched[start_path+'/'+end_path]) matched[start_path+'/'+end_path] = {}
-            //
-            //
-            //   matched[start_path+'/'+end_path][chart_name] = value
-            // }.bind(this))
-          //   // matched[start_path+'/'+end_path] = obj_data
-        }.bind(this))
-
-
-          //debug_internals('PRE TO MATCHED %o',matched)
-
-        }
-        catch(e){
-          matched[path+'/'+chart_name] = this.__match_stats_name(Object.clone(stats), path, match)
-
-        }
-
-
-      }.bind(this))
-
-
-    }.bind(this))
-
-    // //console.log('MATCHED', matched)
-    debug_internals('TO MATCHED %o %o',session.charts, matched, session.instances)
-
-
-    if(!matched || Object.getLength(matched) == 0){
-      cb({})
-    }
-    else{
-      let buffer_output = {}
-      let count_matched = Object.keys(matched)
-      //debug_internals('COUNT_MATCHED %o', count_matched)
-
-
-      Object.each(matched, function(data, path_name){
-        let matched_chart_path = path_name.split('/')[0]
-        let matched_chart_name = path_name.split('/')[1]
-
-        // //debug_internals('buffer_output %s %s',matched_chart_path, matched_chart_name)
-
-        if(!data || Object.getLength(data) == 0){
-          count_matched.erase(path_name)
-          if(count_matched.length == 0)
-            cb(buffer_output)
-        }
-        // else if(this.charts[host][matched_chart_path]){
-        else if(session.charts[host]){
-          // session.charts[host] = Object.merge(session.charts[host], Object.clone(this.__charts))
-
-          let matched_chart_path_data = undefined
-          if(session.charts[host][matched_chart_path]){
-            matched_chart_path_data = session.charts[host][matched_chart_path]
-          }
-          else{
-            Object.each(session.charts[host], function(host_chart_data, host_chart_path){
-              try{
-                let rg = eval(host_chart_path)
-                if(rg.test(matched_chart_path)){
-                  if(!matched_chart_path_data) matched_chart_path_data = {}
-                  matched_chart_path_data[matched_chart_name] = Object.clone(host_chart_data)
-                  session.charts[host][matched_chart_path] = Object.clone(host_chart_data)
-                }
-              }
-              catch(e){}
-            })
-          }
-
-
-
-
-          let chart_data = undefined
-          if(matched_chart_path_data[matched_chart_name]){
-            chart_data = matched_chart_path_data[matched_chart_name]
-          }
-          else{
-            matched_chart_name = undefined
-            chart_data = matched_chart_path_data
-          }
-
-          // debug_internals('matched_chart %s %s ',matched_chart_path, matched_chart_name)
-
-          let no_stat_matched_name = false
-          if(chart_data.matched_name !== true)
-            no_stat_matched_name = true
-
-          if(no_stat_matched_name == false && !session.instances[host][matched_chart_path][matched_chart_name])
-            session.instances[host][matched_chart_path][matched_chart_name] = {}
-
-          let count_data = Object.keys(data)
-          //debug_internals('COUNT_DATA %o', count_data)
-
-          Object.each(data, function(stat, stat_matched_name){
-            // count_data.erase(stat_matched_name)
-
-            // //console.log('MATCHED', path_name, stat_matched_name, stat)
-            debug_internals('stat_matched_name %s %s %s',no_stat_matched_name, matched_chart_path, matched_chart_name, stat_matched_name)
-
-            if(!buffer_output[matched_chart_path]) buffer_output[matched_chart_path] = {}
-
-            /**
-            * create an instance for each stat, ex: blockdevices_sda....blockdevices_sdX
-            **/
-            let instance = undefined
-            // console.log('CHART DATA', chart_data)
-
-            if(!matched_chart_name){
-
-              // if(no_stat_matched_name && !session.instances[host][matched_chart_path]){
-              //   session.instances[host][matched_chart_path] = Object.clone(chart_data.chart)
-              //   session.instances[host][matched_chart_path].name = matched_chart_path
-              //   session.instances[host][matched_chart_path].path = matched_chart_path
-              // }
-              // else
-              if(!session.instances[host][matched_chart_path][stat_matched_name]){
-                session.instances[host][matched_chart_path][stat_matched_name] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path][stat_matched_name].name = stat_matched_name
-                session.instances[host][matched_chart_path][stat_matched_name].path = matched_chart_path
-              }
-
-              // if(!buffer_output[matched_chart_path][stat_matched_name])
-              //   buffer_output[matched_chart_path][stat_matched_name] = {}
-              // if(no_stat_matched_name){
-              //   session.instances[host][matched_chart_path] = Object.merge(
-              //     Object.clone(chart_data.chart),
-              //     session.instances[host][matched_chart_path]
-              //   )
-              //
-              //   instance = session.instances[host][matched_chart_path]
-              //
-              // }
-              // else{
-                session.instances[host][matched_chart_path][stat_matched_name] = Object.merge(
-                  Object.clone(chart_data.chart),
-                  session.instances[host][matched_chart_path][stat_matched_name]
-                )
-                instance = session.instances[host][matched_chart_path][stat_matched_name]
-              // }
-
-              // debug_internals('stat_matched_name %s %s %s',no_stat_matched_name, matched_chart_path, matched_chart_name, stat_matched_name, session.instances[host][matched_chart_path])
-
-            }
-            else{
-              // debug_internals('stat_matched_name %s %s %s',no_stat_matched_name, matched_chart_path, matched_chart_name, stat_matched_name)
-
-              if(no_stat_matched_name == true && !session.instances[host][matched_chart_path][matched_chart_name]){
-
-                session.instances[host][matched_chart_path][matched_chart_name] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path][matched_chart_name].name = matched_chart_name
-                session.instances[host][matched_chart_path][matched_chart_name].path = matched_chart_path
-              }
-              else if(!session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name]){
-
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.clone(chart_data.chart)
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name].name = stat_matched_name
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name].path = matched_chart_path+'.'+matched_chart_name
-              }
-
-
-
-              if(!buffer_output[matched_chart_path][matched_chart_name])
-                buffer_output[matched_chart_path][matched_chart_name] = {}
-
-              // if(!buffer_output[matched_chart_path][matched_chart_name])
-              //   buffer_output[matched_chart_path][matched_chart_name] = {}
-
-              if(no_stat_matched_name == true){
-                session.instances[host][matched_chart_path][matched_chart_name] = Object.merge(
-                  Object.clone(chart_data.chart),
-                  session.instances[host][matched_chart_path][matched_chart_name]
-                )
-                instance = session.instances[host][matched_chart_path][matched_chart_name]
-              }
-              else{
-                session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name] = Object.merge(
-                  Object.clone(chart_data.chart),
-                  session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
-                )
-                instance = session.instances[host][matched_chart_path][matched_chart_name][stat_matched_name]
-              }
-
-
-            }
-
-
-            // this.__process_stat(chart, name, stat)
-            if(stat){
-              // instance = Object.merge(Object.clone(chart_data.chart), instance)
-
-              // let __name = (matched_name == true ) ? stat_matched_name : key
-
-
-              // data_to_tabular(stat, chart, name, function(name, data){
-             // //console.log('BEFORE data_to_tabular',__name, key, name, chart_name, stat_matched_name)
-              if(cache == true && this.__stats_tabular[host]){
-                // //console.log(this.__stats_tabular[host])
-                if(!matched_chart_name){
-                  buffer_output[matched_chart_path] = this.__stats_tabular[host].data[matched_chart_path]
-                }
-                else{
-                  buffer_output[matched_chart_path][matched_chart_name] = this.__stats_tabular[host].data[matched_chart_path][matched_chart_name]
-                }
-                count_data.erase(stat_matched_name)
-                if(count_data.length == 0){
-                  count_matched.erase(path_name)
-                  if(count_matched.length == 0)
-                    cb(buffer_output)
-                }
-              }
-              else{
-
-                // if(matched_chart_name == 'times' && stat_matched_name == 'cpus')
-                // debug_internals('data_to_tabular->instance %o %o %s %s', instance, stat, matched_chart_name, stat_matched_name)
-
-                data_to_tabular(
-                  stat,
-                  instance,
-                  (no_stat_matched_name) ? matched_chart_name : stat_matched_name,
-                  function(name, to_buffer){
-                    if(!matched_chart_name && no_stat_matched_name){
-                      buffer_output[matched_chart_path] = to_buffer
-                    }
-                    else if(!matched_chart_name){
-                      buffer_output[matched_chart_path][name] = to_buffer
-                    }
-                    else if(matched_chart_name && no_stat_matched_name) {
-                      buffer_output[matched_chart_path][matched_chart_name] = to_buffer
-                    }
-                    else if(matched_chart_name) {
-                      buffer_output[matched_chart_path][matched_chart_name][name] = to_buffer
-                    }
-
-
-                    count_data.erase(stat_matched_name)
-
-                    // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
-
-                    if(count_data.length == 0){
-                      count_matched.erase(path_name)
-                      if(count_matched.length == 0){
-                        // debug_internals('buffer_output %o',buffer_output)
-                        cb(buffer_output)
-                      }
-                    }
-
-                  }
-                )
-              }
-
-
-            }
-            else{
-
-              delete buffer_output[matched_chart_path]//remove if no stats, so we don't get empty keys
-              count_data.erase(stat_matched_name)
-
-              // debug_internals('stat_matched_name %s %s %d %d %s', matched_chart_name, stat_matched_name, count_data.length, count_matched.length, path_name)
-
-              if(count_data.length == 0){
-                count_matched.erase(path_name)
-                if(count_matched.length == 0){
-                  //debug_internals('buffer_output %o',buffer_output)
-                  cb(buffer_output)
-                }
-              }
-
-            }
-
-
-
-
-            // counter++
-          }.bind(this))
-          // //console.log('INSTANCES', session.instances)
-
-
-        }
-        // else{
-        //   cb({})
-        // }
-
-        // count_matched.erase(path_name)
-
-      }.bind(this))
-    }
-  },
-  __get_stats: function(payload, cb){
-    //debug_internals('__get_stats %o', payload)
-
-    let {host, pipeline, path, range, req_id, session} = payload
-    // let chartsProcessedEventName = (req_id) ? 'chartsProcessed.'+req_id : 'chartsProcessed'
-    let statsProcessedEventName = (req_id) ? 'statsProcessed.'+req_id : 'statsProcessed'
-
-    //console.log('__get_stats', req_id)
-
-    let save_stats = function (payload){
-      let {id, type, doc} = payload
-      if(!id || id == undefined || id == req_id){
-        // //console.log('2 __get_stats', id)
-        // let { type, input, input_type, app } = opts
-        //debug_internals('__get_stats->save_stats %o', payload)
-
-        if(type == 'once' || type == 'range'){
-          //console.log('2 __get_stats', id)
-          // if(type == 'range')
-
-          if(doc.length == 0){
-
-            // this.charts[host] = {}
-            pipeline.removeEvent('onSaveDoc', save_stats)
-            // this.fireEvent('chartsProcessed')
-
-            this.fireEvent(statsProcessedEventName, {})
-            // this.fireEvent(chartsProcessedEventName)
-
-          }
-          else{
-            this.__process_os_doc(payload.doc, function(stats){
-              this.__process_stats_charts(host, stats, session, id)
-            }.bind(this))
-
-            /**
-            * once we get the desire stats, remove event
-            **/
-            // if(matched){
-            //   this.pipelines[host].pipeline.removeEvent('onSaveDoc', save_stats)
-            //   // this.pipelines[host].pipeline.removeEvent('onSaveMultipleDocs', save_stats)
-            // }
-            pipeline.removeEvent('onSaveDoc', save_stats)
-            // pipeline.removeEvent('onSaveMultipleDocs', save_stats)
-          }
-
-        }
-
-        if(typeof cb == 'function')
-          cb(payload)
-
-      }
-    }.bind(this)
-
-    /**
-    * onSaveDoc is exec when the input fires 'onPeriodicalDoc'
-    * so capture the output once (and for one host, as all stats are the same)
-    */
-    pipeline.addEvent('onSaveDoc', save_stats)
-    // this.pipelines[host].pipeline.addEvent('onSaveMultipleDocs', save_stats)
-    if(range){
-      pipeline.fireEvent('onRange', { id: req_id, Range: range, path: path })
-    }
-    else{
-      pipeline.fireEvent('onOnce', { id: req_id, path: path})
-    }
-
-  },
-  __process_stats_charts: function(host, stats, session, id){
-    debug_internals('__process_stats_charts-> session %o', session)
-    // this.__stats[host] = {data: stats, lastupdate: Date.now()}
-    // let chartsProcessedEventName = (id) ? 'chartsProcessed.'+id : 'chartsProcessed'
-    let statsProcessedEventName = (id) ? 'statsProcessed.'+id : 'statsProcessed'
-
-    /**
-    * @session, replaced this.charts -> session.charts
-    **/
-    // if(!this.charts[host] || Object.getLength(this.charts[host]) == 0)
-    //   this.charts[host] = Object.clone(this.__charts)
-
-    let count_paths = Object.keys(session.charts[host])
-    let matched = undefined
-
-    Object.each(session.charts[host], function(data, path){
-        let charts = {}
-        if(data.chart){
-          charts[path] = data
-        }
-        else{
-          charts = data
-        }
-
-        // let count_charts = Object.keys(charts)
-        if(Object.getLength(charts) > 0){
-          Object.each(charts, function(chart_data, chart_name){
-            let {match, chart} = chart_data
-            // if(!match){
-            //   match = path
-            // }
-            // else{
-            //   match = path+'.'+match
-            // }
-
-            matched = this.__match_stats_name(stats, path, match)
-            //debug_internals('MATCHED %o', matched)
-
-            if(matched){
-              let count_matched = Object.keys(matched)
-              Object.each(matched, function(stat, match){
-                this.__process_stat(chart, match, stat)
-
-                count_matched.erase(match)
-
-                if(count_matched.length == 0){
-                  count_paths.erase(path)
-                  // if(count_paths.length == 0)
-                  //   this.fireEvent(chartsProcessedEventName)
-                }
-
-
-
-              }.bind(this))
-            }
-            else{
-              count_paths.erase(path)
-              // if(count_paths.length == 0)
-              //   this.fireEvent(chartsProcessedEventName)
-            }
-            // count_charts.erase(chart_name)
-            // if(count_paths.length == 0 && count_charts.length == 0)
-            //   this.fireEvent('chartsProcessed')
-
-
-            // //console.log(path, chart_name)
-
-          }.bind(this))
-        }
-        else{
-          count_paths.erase(path)
-          // if(count_paths.length == 0)
-          //   this.fireEvent(chartsProcessedEventName)
-        }
-
-
-
-
-    }.bind(this))
-
-
-    this.fireEvent(statsProcessedEventName, stats)
-
-
-  },
-  __get_pipeline: function(host, socket, cb){
-    //console.log('__get_pipeline', host)
-    // let _resume = undefined
-    // let _connect = undefined
-
-    if(!this.pipelines[host]){
-      // let template = Object.clone(this.HostOSPipeline)
-      // if(!this.charts[host])
-      //   this.charts[host] = {}
-
-
-      let template = require('./pipelines/host.os')(
-  			require(ETC+'default.conn.js')(),//rethinkdb
-        // this.io,
-        // this.charts[host]
-      )
-      template.input[0].poll.conn[0].stat_host = host
-      template.input[0].poll.id += '-'+host
-      template.input[0].poll.conn[0].id = template.input[0].poll.id
-      let pipeline = new Pipeline(template)
-      this.pipelines[host] = {
-        pipeline: pipeline,
-        ids: [],
-        connected: false,
-        suspended: pipeline.inputs[0].options.suspended
-      }
-
-      this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
-        // debug_internals('pre __emit_stats %s %o', host, socket)
-        // this.__emit_stats(host, stats, socket)
-      }.bind(this))
-
-      if(this.pipelines[host].connected == false){
-        this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
-          this.pipelines[host],
-          socket,
-          cb
-        ))
-      }
-      else{
-        // if(id)
-        this.__resume_pipeline(this.pipelines[host], socket)
-
-        cb(this.pipelines[host])
-      }
-
-
-    }
-    // else{
-    //   cb(this.pipelines[host])
-    //
-    //   if(this.pipelines[host].connected == true){
-    //     _resume()
-    //   }
-    //
-    //
-    // }
-    else{
-      if(this.pipelines[host].connected == false){
-        this.pipelines[host].pipeline.inputs[0].options.conn[0].module.addEvent('onConnect', () => this.__after_connect_pipeline(
-          this.pipelines[host],
-          socket,
-          cb
-        ))
-      }
-      else{
-        // if(id)
-
-        cb(this.pipelines[host])
-
-        this.__resume_pipeline(this.pipelines[host], socket)
-      }
-    }
-
-
-  },
-  __after_connect_pipeline: function(pipeline, socket, cb){
-    pipeline.pipeline.inputs[0].options.conn[0].module.removeEvents('onConnect')
-    //debug_internals('CONECTING....')
-
-    pipeline.connected = true
-
-    cb(pipeline)
-
-    this.__resume_pipeline(pipeline, socket)
-
-
-
-  },
-  __resume_pipeline: function(pipeline, socket){
-    if(socket){
-      if(!pipeline.ids.contains(socket.id))
-        pipeline.ids.push(socket.id)
-
-      if(pipeline.suspended == true){
-        //debug_internals('RESUMING....')
-        pipeline.suspended = false
-        pipeline.pipeline.fireEvent('onResume')
-
-      }
-    }
-  },
-  __match_stats_name: function(stats, path, match){
-    // //console.log('__match_stats_name', name, stats)
-    let stat = undefined
-    if(stats){
-      try{
-        let rg = eval(path)
-        // if(name instanceof RegExp)
-        //   //debug_internals('__match_stats_name regexp %o', eval(name))
-        if(rg instanceof RegExp){
-          stat = {}
-          // //debug_internals('__match_stats_name regexp %o %o', name, stats)
-          let counter = Object.getLength(stats) - 1
-          Object.each(stats, function(data, key){
-            if(rg.test(key)){
-              // //debug_internals('__match_stats_name regexp %s', key)
-              // stat[key] = this.__match_stats_name(stats, key, match)
-              stat = Object.merge(stat, this.__match_stats_name(stats, key, match))
-            }
-
-            // if(counter == 0){
-            //   //debug_internals('__match_stats_name regexp stat %o', stat)
-            //   return stat
-            // }
-
-            counter--
-          }.bind(this))
-
-
-
-        }
-        // else{
-          //debug_internals('__match_stats_name regexp stat %o', stat)
-        return stat
-        // }
-
-      }
-      catch(e){
-        let name = path
-
-        if(match)
-         name += '.'+match
-
-        //debug_internals('__match_stats_name error %s', name)
-        if(name.indexOf('.') > -1){
-          let key = name.split('.')[0]
-          let rest = name.substring(name.indexOf('.')+1)
-          // //////console.log('__match_stats_name', stats, name)
-
-          let parse_data = function(stat_data, stat_name){
-            let matched = this.__match_stats_name(stat_data, rest)
-
-
-            // if(name == '%s.%s.%s' ){
-            //   ////console.log('__match_stats_name', name, stat_data, matched)
-            // }
-            // if(rest.indexOf('%s') > -1)
-            //   ////console.log('__match_stats_name', name, stats, matched)
-
-            stat = {}
-            if(matched){
-              if(Array.isArray(matched)){
-                Array.each(matched, function(data, index){
-                  stat[stat_name+'_'+index] = data
-                })
-              }
-              else{
-
-                // result = {}
-                // if(key == '%s'){
-                //   Object.each(matched, function(data, name){
-                // 		stat[key+'_'+name] = data
-                // 	})
-                // }
-                // else{
-                  Object.each(matched, function(data, name){
-                    stat[name] = data
-                  })
-                // }
-              }
-
-              // if(name == 'os.networkInterfaces.0.value.%s.%s.%s' ){
-              //   ////console.log('__match_stats_name', name)
-              //   // ////console.log(stat_data)
-              //   ////console.log(stat)
-              // }
-
-              return stat
-            }
-            else{
-              return undefined
-            }
-          }.bind(this)
-
-          if(key.indexOf('%') > -1){
-            stat = {}
-            Object.each(stats, function(stat_data, stat_name){
-              stat[stat_name] = parse_data(stat_data, stat_name)
-              // ////console.log('parsing....',stat)
-
-            })
-
-            return stat
-          }
-          else{
-            // ////console.log('parsing....',parse_data(stats[key], key))
-            return parse_data(stats[key], key)
-          }
-
-          // let matched = this.__match_stats_name(stats[key], rest)
-          //
-          // if(name == '%s.%s.%s' ){
-          //   ////console.log('__match_stats_name', name, stats, matched)
-          // }
-          // // if(rest.indexOf('%s') > -1)
-          // //   ////console.log('__match_stats_name', name, stats, matched)
-          //
-          // if(matched){
-          // 	if(Array.isArray(matched)){
-          // 		Array.each(matched, function(data, index){
-          // 			stat[key+'_'+index] = data
-          // 		})
-          // 	}
-          // 	else{
-          //
-          // 		// result = {}
-          //     // if(key == '%s'){
-          //     //   Object.each(matched, function(data, name){
-          // 		// 		stat[key+'_'+name] = data
-          // 		// 	})
-          //     // }
-          //     // else{
-          // 			Object.each(matched, function(data, name){
-          // 				stat[key+'_'+name] = data
-          // 			})
-          //     // }
-          // 	}
-          //
-          // 	return stat
-          // }
-          // else{
-          //   return undefined
-          // }
-        }
-        else{
-          if(name == '%d'){//we want one stat per index
-            // name = name.replace('%d')
-            stat = []
-            Array.each(stats, function(data, index){
-              stat[index] = data
-            })
-          }
-          else if(name == '%s'){//we want one stat per key
-            stat = {}
-            // name = name.replace('.%s')
-            // //////console.log()
-            // if(name == '%s')
-            //   ////console.log('stats', stats)
-
-            Object.each(stats, function(data, key){
-              stat[key] = data
-            })
-          }
-          else{
-            stat = {}
-            stat[name] = stats[name]
-          }
-
-          return stat
-        }
-      }
-
-
-    }
-    else{
-      return undefined
-    }
-
-
-  },
-  // __match_stats_name: function(stats, name){
-  // 	let stat = {}
-  // 	if(stats){
-  // 		if(name.indexOf('.') > -1){
-  // 			let key = name.split('.')[0]
-  // 			let rest = name.substring(name.indexOf('.')+1)
-  // 			// //////console.log('__match_stats_name', stats, name)
-  // 			let matched = this.__match_stats_name(stats[key], rest)
-  // 			// let result = undefined
-  // 			if(matched){
-  // 				if(Array.isArray(matched)){
-  // 					Array.each(matched, function(data, index){
-  // 						stat[key+'_'+index] = data
-  // 					})
-  // 				}
-  // 				else{
-  // 					// result = {}
-  // 					Object.each(matched, function(data, name){
-  // 						stat[key+'_'+name] = data
-  // 					})
-  // 				}
-  //
-  // 				return stat
-  // 			}
-  // 			else{
-  // 				return undefined
-  // 			}
-  // 		}
-  // 		else{
-  // 			if(name == '%d'){//we want one stat per index
-  // 				// name = name.replace('%d')
-  // 				stat = []
-  // 				Array.each(stats, function(data, index){
-  // 					stat[index] = data
-  // 				})
-  // 			}
-  // 			else if(name == '%s'){//we want one stat per key
-  // 				// name = name.replace('.%s')
-  // 				// //////console.log()
-  // 				Object.each(stats, function(data, key){
-  // 					stat[key] = data
-  // 				})
-  // 			}
-  // 			else{
-  // 				stat[name] = stats[name]
-  // 			}
-  //
-  // 			return stat
-  // 		}
-  //
-  // 	}
-  // 	else{
-  // 		return undefined
-  // 	}
-  //
-  //
-  // },
-  /**
-  * from mngr-ui-admin-lte/chart.vue
-  **/
-  __process_chart (chart, name, stat){
-    //////console.log('data_to_tabular', name, stat)
-
-    if(chart.init && typeOf(chart.init) == 'function')
-      chart.init(this, chart, name, stat, 'chart')
-
-    /**
-    * first update
-    **/
-    // if(this.stat.data.length > 0){
-    //
-    //   data_to_tabular(stat, chart, name, function (name, data){
-    //     //////console.log('data_to_tabular result', name, data)
-    //   })
-    // }
-    //
-    // this.__create_watcher(name, chart)
-
-  },
-  /**
-  * from mngr-ui-admin-lte/chart.vue
-  **/
-  __process_stat: function(chart, name, stat){
-    // debug_internals('__process_stat %o %s %o', chart, name, stat)
-    // console.log('__process_stat', chart, name, stat)
-    if(!Array.isArray(stat))
-      stat = [stat]
-
-
-    // if(Array.isArray(stat[0].value)){//like 'cpus'
-    //
-    //   this.__process_chart(
-    //     chart.pre_process(chart, name, stat),
-    //     name,
-    //     stat
-    //   )
-    //
-    // }
-    // else
-    if(isNaN(stat[0].value)){
-      //sdX.stats.
-
-      let filtered = false
-      if(chart.watch && chart.watch.filters){
-        Array.each(chart.watch.filters, function(filter){
-          let prop_to_filter = Object.keys(filter)[0]
-          let value_to_filter = filter[prop_to_filter]
-
-          value_to_filter.test = Function.from(value_to_filter.test)
-
-          if(
-            stat[0].value[prop_to_filter]
-            && value_to_filter.test(stat[0].value[prop_to_filter]) == true
-          ){
-            filtered = true
-          }
-
-        })
-      }
-      else{
-        filtered = true
-      }
-
-      if(filtered == true){
-        if(chart.pre_process){
-          chart.pre_process = Function.from(chart.pre_process)
-
-          chart = chart.pre_process(chart, name, stat)
-        }
-
-
-        this.__process_chart(chart, name, stat)
-      }
-
-    }
-    else{
-
-      if(chart.pre_process){
-        chart.pre_process = Function.from(chart.pre_process)
-
-        chart = chart.pre_process(chart, name, stat)
-      }
-
-      this.__process_chart(
-        chart,
-        name,
-        stat
-      )
-    }
-
-    return chart
-  },
-  /**
-  * from mngr-ui-admin-lte/host.vue
-  **/
-  __process_os_doc: function(doc, cb){
-    //console.log('__process_os_doc', doc)
-
-    let paths = {}
-
-    if(Array.isArray(doc)){
-      Array.each(doc, function(row){
-
-        // if(row != null && row.metadata.host == this.host){
-        if(row != null){
-          let {keys, path, host} = extract_data_os(row)
-
-          // //////console.log('ROW', keys, path)
-
-          if(!paths[path])
-            paths[path] = {}
-
-
-          Object.each(keys, function(data, key){
-            // ////////console.log('ROW', key, data)
-            if(!paths[path][key])
-              paths[path][key] = []
-
-            paths[path][key].push(data)
-          })
-        }
-      })
-    }
-    else if(doc.metadata.host == this.host){
-      let {keys, path, host} = extract_data_os(doc)
-      if(!paths[path])
-        paths[path] = {}
-
-      paths[path] = keys
-    }
-
-    cb(paths)
-
-
-  },
 
 });
