@@ -1080,7 +1080,7 @@ module.exports = new Class({
               if(type == 'tabular'){
                 // debug_internals('transform_result', transform_result)
 
-                this.cache.get(cache_key+'.'+type+'.'+path+'.'+path_key, function(err, chart_instance){
+                this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), function(err, chart_instance){
                   chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
                   chart_instance = Object.merge(chart, chart_instance)
@@ -1156,7 +1156,7 @@ module.exports = new Class({
             * @todo: 'tabular' not tested, also counter should consider this case (right now only considers functions type)
             **/
             if(type == 'tabular'){
-              this.cache.get(cache_key+'.'+type+'.'+path, function(err, chart_instance){
+              this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
                 chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
 
                 chart_instance = Object.merge(chart_instance, transform)
@@ -1228,7 +1228,7 @@ module.exports = new Class({
 
             let chart = Object.clone(require('./libs/'+type)(d, path))
 
-            this.cache.get(cache_key+'.'+type+'.'+path, function(err, chart_instance){
+            this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
               chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
               chart_instance = Object.merge(chart, chart_instance)
