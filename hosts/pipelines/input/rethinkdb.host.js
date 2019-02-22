@@ -427,7 +427,9 @@ module.exports = new Class({
 
                 if(Array.isArray(paths)){
                   Array.each(paths, function(_path, index){
-                    _path = _path.replace(/_/g, '.')//if path are format=stat, transform
+                    if(!req.query || !req.query.format)
+                      _path = _path.replace(/_/g, '.')//if path are format=stat, transform
+
                     _get_by_path(_path,{
                       id: req.id,
                       prop: 'data',

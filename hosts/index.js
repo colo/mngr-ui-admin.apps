@@ -604,6 +604,11 @@ module.exports = new Class({
           resp.json(result)
         }
         else{
+          /**
+          * @bug: result.instances.instances
+          **/
+          // result.instances = result.instances.instances
+
           socket.emit('instances', result)
         }
       }
@@ -945,7 +950,8 @@ module.exports = new Class({
           if(instances){
             // result.instances = instances
             this.__get_instances(instances, host, function(instances){
-              result.instances = instances
+              // result.instances = instances
+              result = Object.merge(result, instances)
               send_result(result)
             })
           }
@@ -1343,7 +1349,7 @@ module.exports = new Class({
       else if(counter == Object.getLength(data) - 1 && typeof cb == 'function'){
           cb(transformed)
       }
-      
+
       counter++
     }.bind(this))
 
@@ -1414,7 +1420,7 @@ module.exports = new Class({
     // Array.each()
   },
   __get_host_range: function(payload){
-    let {host, prop, paths, range, req_id, socket, cb} = payload
+    let {host, prop, paths, query, range, req_id, socket, cb} = payload
 
     this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
       debug_internals('RANGE', parse_range(range), range)
@@ -1432,70 +1438,73 @@ module.exports = new Class({
 
           cb(resp)
 
-          // if(socket && range_total == resp.range_counter){
-          //   this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
-          //   delete _get_resp[req_id]
-          // }
-          // else if(!socket) {//http request
-          //   throw new Error('TODO: add a Limit header')
+          if(socket && range_total == resp.range_counter){
             this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
             delete _get_resp[req_id]
-          // }
+          }
+          else if(!socket) {//http request
+            throw new Error('TODO: add a Limit header')
+            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            delete _get_resp[req_id]
+          }
         }
       }.bind(this)
 
       this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
 
-      // let __event_worker = function(payload, done){
-      //   pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
-      //
-      //   if(typeof done == 'function')
-      //     done()
-      // }.bind(this)
-      //
-      // if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
-      //   // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
-      //
-      //   range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
-      //
-      //   let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
-      //
-      //
-      //   do {
-      //     new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
-      //
-      //     debug_internals('firing RANGE', new_range)
-      //
-      //     q.push({
-      //       host: host,
-      //       prop: prop,
-      //       paths: paths,
-      //       id: req_id,
-      //       full_range: range,
-      //       range_counter: range_counter++,
-      //       Range: build_range(new_range)
-      //     })
-      //
-      //     new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
-      //   } while(new_range.end < parsed_range.end);
-      // }
-      // else{
-      //   __event_worker({
-      //     host: host,
-      //     prop: prop,
-      //     paths: paths,
-      //     id: req_id,
-      //     Range: range
-      //   })
-      // }
+      let __event_worker = function(payload, done){
+        pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
 
-      pipe.hosts.inputs[1].fireEvent('onRange', {
-        host: host,
-        prop: prop,
-        paths: paths,
-        id: req_id,
-        Range: range
-      })//fire only the 'host' input
+        if(typeof done == 'function')
+          done()
+      }.bind(this)
+
+      if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
+        // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
+
+        range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
+
+        let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
+
+
+        do {
+          new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
+
+          debug_internals('firing RANGE', new_range)
+
+          q.push({
+            host: host,
+            prop: prop,
+            paths: paths,
+            query: query,
+            id: req_id,
+            full_range: range,
+            range_counter: range_counter++,
+            Range: build_range(new_range)
+          })
+
+          new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
+        } while(new_range.end < parsed_range.end);
+      }
+      else{
+        __event_worker({
+          host: host,
+          prop: prop,
+          paths: paths,
+          query: query,
+          id: req_id,
+          Range: range
+        })
+      }
+
+      // pipe.hosts.inputs[1].fireEvent('onRange', {
+      //   host: host,
+      //   prop: prop,
+      //   paths: paths,
+      //   query: query,
+      //   id: req_id,
+      //   Range: range
+      // })//fire only the 'host' input
 
 
     }.bind(this))
@@ -1539,7 +1548,7 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
+            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, query, id: req_id})//fire only the 'hosts' input
 
           }.bind(this))
       }
@@ -1566,7 +1575,7 @@ module.exports = new Class({
 
               this.addEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
 
-              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
+              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, query, id: req_id})//fire only the 'hosts' input
 
             }.bind(this))
           }
