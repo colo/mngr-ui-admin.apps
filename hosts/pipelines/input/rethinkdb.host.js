@@ -14,8 +14,17 @@ const roundMilliseconds = function(timestamp){
   return d.getTime()
 }
 
+const SECOND = 1000
+const MINUTE = SECOND * 60
+const HOUR = MINUTE * 60
+const DAY = HOUR * 24
+
+
 module.exports = new Class({
   Extends: App,
+
+  // FOLD_BASE: 300,
+  MAX_RANGE_DATA_POINTS: 300,
 
   changes_buffer: [],
   changes_buffer_expire: undefined,
@@ -30,11 +39,11 @@ module.exports = new Class({
       periodical: [
         {
 					get_data_range: function(req, next, app){
-            debug_internals('get_data_range', app.data_hosts);
+            // debug_internals('get_data_range', app.data_hosts);
 						if(app.data_hosts && app.data_hosts.length > 0){
 
               Array.each(app.data_hosts, function(host){
-                debug_internals('get_data_range', host)
+                // debug_internals('get_data_range', host)
                 //get first
                 app.nth({
                   _extras: {
@@ -85,7 +94,7 @@ module.exports = new Class({
         {
 					get_data_range: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'data_range' || !req.prop)){
-              debug_internals('get_data_range', req.host, req.prop);
+              // debug_internals('get_data_range', req.host, req.prop);
 
               //get first
               app.nth({
@@ -133,7 +142,7 @@ module.exports = new Class({
         {
 					search_paths: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-              debug_internals('search_paths', req.host, req.prop);
+              // debug_internals('search_paths', req.host, req.prop);
               app.reduce({
                 _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
                 uri: app.options.db+'/ui',
@@ -162,7 +171,7 @@ module.exports = new Class({
         {
 					search_data: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'data' || !req.prop)){
-              debug_internals('search_data', req.host, req.prop);
+              // debug_internals('search_data', req.host, req.prop);
               app.map({
                 _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
                 uri: app.options.db+'/ui',
@@ -257,7 +266,7 @@ module.exports = new Class({
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
-              debug_internals('catch_all', req)
+              // debug_internals('catch_all', req)
               app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
             }
 
@@ -282,7 +291,7 @@ module.exports = new Class({
         {
 					get_data_range: function(req, next, app){
 						if(req.host && (req.prop == 'data_range' || !req.prop)){
-              debug_internals('get_data_range', req.host, req.prop);
+              // debug_internals('get_data_range', req.host, req.prop);
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -342,7 +351,7 @@ module.exports = new Class({
         {
 					search_paths: function(req, next, app){
 						if(req.host && (req.prop == 'paths' || !req.prop)){
-              debug_internals('search_paths range', req.host, req.prop, req.opt.range)
+              // debug_internals('search_paths range', req.host, req.prop, req.opt.range)
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -382,13 +391,18 @@ module.exports = new Class({
         {
 					search_data: function(req, next, app){
 						if(req.host && (req.prop == 'data' || !req.prop)){
-              debug_internals('search_data range %o', req);
+              // debug_internals('search_data range %o', req);
 
               let paths = req.paths
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
               // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
               let start = range.start
+
+              let range_length = Math.ceil((end - start) / SECOND)
+              let fold = Math.ceil((range_length / app.FOLD_BASE))
+
+              // debug_internals('range FOLD', fold)
 
               if(paths){
                 let _get_by_path = function(path, extras){
@@ -405,6 +419,13 @@ module.exports = new Class({
                       [path, req.host, 'periodical', roundMilliseconds(end)],
                       {index: 'sort_by_path'}
                     ).
+                    // fold(0, function(acc, row) {
+                    //   return acc.add(1);
+                    // }, {emit:
+                    //   function (acc, row, new_acc) {
+                    //     return app.r.branch(new_acc.eq(0), [row], new_acc.mod(fold).eq(0), [row], []);
+                    //   }
+                    // }).
                     // orderBy(r.asc.row('metadata')('timestamp')).
                     group(app.r.row('metadata')('path')).
                     ungroup()
@@ -476,6 +497,13 @@ module.exports = new Class({
                     [req.host, 'periodical', roundMilliseconds(end)],
                     {index: 'sort_by_host'}
                   ).
+                  // fold(0, function(acc, row) {
+                  //   return acc.add(1);
+                  // }, {emit:
+                  //   function (acc, row, new_acc) {
+                  //     return app.r.branch(new_acc.eq(0), [row], new_acc.mod(fold).eq(0), [row], []);
+                  //   }
+                  // }).
                   group(app.r.row('metadata')('path')).
                   ungroup()
                 })
@@ -487,7 +515,7 @@ module.exports = new Class({
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
-              debug_internals('catch_all', req.host, req.prop)
+              // debug_internals('catch_all', req.host, req.prop)
               app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
             }
 
@@ -562,7 +590,7 @@ module.exports = new Class({
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
   },
   data_range: function(err, resp, params){
-    debug_internals('data_range', err, resp, params.options)
+    // debug_internals('data_range', err, resp, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -605,7 +633,7 @@ module.exports = new Class({
       // // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
       this.hosts[host][prop][range_select] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
 
-      debug_internals('data_range', this.hosts)
+      // debug_internals('data_range', this.hosts)
 
       if(this.hosts[host][prop]['start'] != '' && this.hosts[host][prop]['end'] != '')
         if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
@@ -615,7 +643,7 @@ module.exports = new Class({
               found = true
           })
 
-          debug_internals('paths firing host...', this.hosts[host], found)
+          // debug_internals('paths firing host...', this.hosts[host], found)
 
           this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
             {input_type: this, app: null},
@@ -631,7 +659,7 @@ module.exports = new Class({
     }
   },
   unknown_property: function(params){
-    debug_internals('unknown_property', params.options)
+    // debug_internals('unknown_property', params.options)
     let extras = params.options._extras
     let host = extras.host
     let prop = extras.prop
@@ -646,7 +674,7 @@ module.exports = new Class({
     )])
   },
   data: function(err, resp, params){
-    debug_internals('data', err, params.options)
+    // debug_internals('data', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -682,6 +710,8 @@ module.exports = new Class({
     let data = {}
     resp.toArray(function(err, arr){
 
+      debug_internals('data length ', arr.length)
+
       // this.hosts[host][prop] = arr
       this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
 
@@ -699,8 +729,10 @@ module.exports = new Class({
               final_result = Object.merge(final_result,resp)
             })
 
-            // debug_internals('multipath final %o', final_result)
-
+            debug_internals('multipath final %o', final_result)
+            if(extras.range){
+              final_result = this.__step_on_max_data_points(final_result)
+            }
             // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
             this.fireEvent('onDoc', [
               (Object.getLength(final_result) > 0) ? {data: final_result} : null,
@@ -733,7 +765,10 @@ module.exports = new Class({
                 found = true
             })
 
-            // debug_internals('data firing host...', this.hosts[host])
+            debug_internals('data firing host...', this.hosts[host].data)
+            if(extras.range && this.hosts[host].data){
+              this.hosts[host].data = this.__step_on_max_data_points(this.hosts[host].data)
+            }
 
             this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
               {input_type: this, app: null},
@@ -756,8 +791,29 @@ module.exports = new Class({
 
 
   },
+  __step_on_max_data_points: function(data){
+    Object.each(data, function(result_data, result_path){
+      if(Array.isArray(result_data)){
+        result_data.sort(function(a,b) {
+          return (a.metadata.timestamp > b.metadata.timestamp) ? 1 : ((b.metadata.timestamp > a.metadata.timestamp) ? -1 : 0)
+        })
+
+        let step = Math.ceil(result_data.length / this.MAX_RANGE_DATA_POINTS)
+        if(step > 1){
+          Array.each(result_data, function(result_data_values, result_data_index){
+            if(result_data_index != 0 && (result_data_index % step) != 0)
+              result_data[result_data_index] = undefined
+          })
+
+          result_data = result_data.clean()
+        }
+      }
+    }.bind(this))
+
+    return data
+  },
   paths: function(err, resp, params){
-    debug_internals('paths', err, params.options)
+    // debug_internals('paths', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
