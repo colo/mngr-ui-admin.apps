@@ -472,6 +472,8 @@ module.exports = new Class({
 
               // debug_internals(type, socketId)
               // process.exit(1)
+              debug_internals('emiting...', prop, type)
+
               if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
                 result[prop] = result[prop][prop]
 
@@ -1078,7 +1080,7 @@ module.exports = new Class({
 
     Object.each(data, function(d, path){
 
-      debug_internals('DATA', d, type)
+      // debug_internals('DATA', d, type)
 
       if(d && d !== null){
         if (d[0] && d[0].metadata && d[0].metadata.format && d[0].metadata.format == type){
@@ -1683,7 +1685,8 @@ module.exports = new Class({
 
       const HostsPipeline = require('./pipelines/index')({
         conn: require(ETC+'default.conn.js')(),
-        host: this.options.host
+        host: this.options.host,
+        cache: this.options.cache_store
       })
 
       let hosts = new Pipeline(HostsPipeline)
@@ -1704,7 +1707,7 @@ module.exports = new Class({
         debug_internals('onSaveDoc %o', type, range)
 
         if(!range){
-          if(type == 'data' || type == 'data_range')
+          if(type == 'data' || type == 'data_range' || type == 'instances')
             this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
             // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
           else
@@ -1721,6 +1724,7 @@ module.exports = new Class({
       this.addEvent(this.ON_HOSTS_UPDATED, function(doc){//update "hosts" on "host" input
         // debug_internals('ON_HOSTS_UPDATED', this.pipeline.hosts.inputs[1])
         this.pipeline.hosts.inputs[1].conn_pollers[0].data_hosts = doc.hosts
+        this.pipeline.hosts.inputs[2].conn_pollers[0].data_hosts = doc.hosts
       }.bind(this))
 
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))

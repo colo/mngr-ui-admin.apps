@@ -5,6 +5,7 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Hosts'),
 
 const InputPollerRethinkDBHosts = require ( './input/rethinkdb.hosts.js' )
 const InputPollerRethinkDBHost = require ( './input/rethinkdb.host.js' )
+const InputCache = require ( './input/cache.js' )
 
 let cron = require('node-cron')
 
@@ -103,7 +104,7 @@ let __white_black_lists_filter = function(whitelist, blacklist, str){
 
 module.exports = function(payload){
 	// //console.log('IO', io)
-  let {conn, host} = payload
+  let {conn, host, cache} = payload
 
   debug_internals('require %o', payload)
 
@@ -147,6 +148,32 @@ module.exports = function(payload){
                 module: InputPollerRethinkDBHost,
               },
               host
+            )
+  				],
+  				connect_retry_count: -1,
+  				connect_retry_periodical: 1000,
+  				// requests: {
+  				// 	periodical: 1000,
+  				// },
+  				requests: {
+      			periodical: function(dispatch){
+  						// //////////console.log('host periodical running')
+      				return cron.schedule('* * * * * *', dispatch);//every second
+      			}
+      		},
+  			},
+  		},
+      {
+  			poll: {
+  				suspended: true,//start suspended
+  				id: "input.cache",
+  				conn: [
+            Object.merge(
+              Object.clone(cache),
+              {
+                // path_key: 'os',
+                module: InputCache,
+              }
             )
   				],
   				connect_retry_count: -1,
