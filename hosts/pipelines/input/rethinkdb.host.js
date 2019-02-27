@@ -724,23 +724,23 @@ module.exports = new Class({
           this._multi_response[id].push( result )
 
           if(this._multi_response[id].length == multipath.length){
-            let final_result = {}
+            let final_result = {data: {}, step: undefined}
             Array.each(this._multi_response[id], function(resp){
-              final_result = Object.merge(final_result,resp)
+              final_result.data = Object.merge(final_result.data,resp)
             })
 
             debug_internals('multipath final %o', final_result)
             if(extras.range){
-              final_result = this.__step_on_max_data_points(final_result)
+              final_result = this.__step_on_max_data_points(final_result.data)
             }
             // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
             this.fireEvent('onDoc', [
-              (Object.getLength(final_result) > 0) ? {data: final_result} : null,
+              (Object.getLength(final_result.data) > 0) ? final_result : null,
               Object.merge(
                 {input_type: this, app: null},
                 // {host: host, type: 'host', prop: prop, id: id}
                 extras,
-                {type: 'host'}
+                {type: 'host', step: final_result.step}
               )
             ])
             // delete this.hosts[host]
@@ -767,14 +767,14 @@ module.exports = new Class({
 
             debug_internals('data firing host...', this.hosts[host].data)
             if(extras.range && this.hosts[host].data){
-              this.hosts[host].data = this.__step_on_max_data_points(this.hosts[host].data)
+              this.hosts[host] = Object.merge(this.hosts[host], this.__step_on_max_data_points(this.hosts[host].data))
             }
 
             this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
               {input_type: this, app: null},
               // {host: host, type: 'host', prop: prop, id: id}
               extras,
-              {type: 'host'}
+              {type: 'host', step: this.hosts[host].step}
             )])
             delete this.hosts[host]
           }
@@ -792,13 +792,14 @@ module.exports = new Class({
 
   },
   __step_on_max_data_points: function(data){
+    let step = 1
     Object.each(data, function(result_data, result_path){
       if(Array.isArray(result_data)){
         result_data.sort(function(a,b) {
           return (a.metadata.timestamp > b.metadata.timestamp) ? 1 : ((b.metadata.timestamp > a.metadata.timestamp) ? -1 : 0)
         })
 
-        let step = Math.ceil(result_data.length / this.MAX_RANGE_DATA_POINTS)
+        step = Math.ceil(result_data.length / this.MAX_RANGE_DATA_POINTS)
         if(step > 1){
           Array.each(result_data, function(result_data_values, result_data_index){
             if(result_data_index != 0 && (result_data_index % step) != 0)
@@ -810,7 +811,7 @@ module.exports = new Class({
       }
     }.bind(this))
 
-    return data
+    return {data: data, step: step}
   },
   paths: function(err, resp, params){
     // debug_internals('paths', err, params.options)

@@ -436,7 +436,8 @@ module.exports = new Class({
               this.io.to(`${socketId}`).emit(type, result)
             }
             else if(type == 'data' && format == 'stat' || format == 'tabular'){
-              debug_internals('__emit data', result)
+              // if(result.step)
+              //   debug_internals('__emit data', result)
 
               result.data = result.data.data // @bug: doc.data.data ??
 
@@ -473,6 +474,8 @@ module.exports = new Class({
               // debug_internals(type, socketId)
               // process.exit(1)
               debug_internals('emiting...', prop, type)
+              // if(result.step)
+              //   debug_internals('__emit data', type, result)
 
               if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
                 result[prop] = result[prop][prop]
@@ -766,7 +769,10 @@ module.exports = new Class({
 
     let send_resp = {}
     send_resp[req_id] = function(data){
-      let {type} = data
+
+      debug_internals('send_resp', data)
+
+      let {type, step} = data
       let result = data[type]
 
       let send_result = function(data){
@@ -779,7 +785,8 @@ module.exports = new Class({
         }
 
         if(prop == 'data' && query.format) type = query.format
-
+        if(prop == 'data' && step) result.step = step
+        
         result[type] = data
 
         // if(prop) type = 'property'
