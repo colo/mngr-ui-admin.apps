@@ -802,7 +802,8 @@ module.exports = new Class({
         step = Math.ceil(result_data.length / this.MAX_RANGE_DATA_POINTS)
         if(step > 1){
           Array.each(result_data, function(result_data_values, result_data_index){
-            if(result_data_index != 0 && (result_data_index % step) != 0)
+            // if(result_data_index != 0 && (result_data_index % step) != 0)
+            if(result_data_index % step != 0)
               result_data[result_data_index] = undefined
           })
 
