@@ -702,7 +702,8 @@ module.exports = new Class({
     Array.each(instances, function(instance, index){
 
       this.cache.get(host+'.tabular.'+instance, function(err, data){
-        if(data) result[instance] = JSON.parse(data)
+        // if(data) result[instance] = JSON.parse(data)
+        if(data) result[instance] = data
 
         if(index == instances.length - 1){
           cb(result)
@@ -786,7 +787,7 @@ module.exports = new Class({
 
         if(prop == 'data' && query.format) type = query.format
         if(prop == 'data' && step) result.step = step
-        
+
         result[type] = data
 
         // if(prop) type = 'property'
@@ -1126,7 +1127,8 @@ module.exports = new Class({
                   // debug_internals('transform_result', transform_result)
 
                   this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), function(err, chart_instance){
-                    chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+                    // chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+                    chart_instance = (chart_instance) ? chart_instance : chart
 
                     chart_instance = Object.merge(chart, chart_instance)
 
@@ -1202,7 +1204,8 @@ module.exports = new Class({
               **/
               if(type == 'tabular'){
                 this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
-                  chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
+                  // chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
+                  chart_instance = (chart_instance) ? chart_instance : transform
 
                   chart_instance = Object.merge(chart_instance, transform)
                   // debug_internals('chart_instance NOT FUNC %o', chart_instance)
@@ -1274,7 +1277,8 @@ module.exports = new Class({
               let chart = Object.clone(require('./libs/'+type)(d, path))
 
               this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
-                chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+                // chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
+                chart_instance = (chart_instance) ? chart_instance : chart
 
                 chart_instance = Object.merge(chart, chart_instance)
 

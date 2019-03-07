@@ -49,7 +49,8 @@ module.exports = new Class({
                 Array.each(instances, function(instance, index){
 
                   app.cache.get(host+'.tabular.'+instance, function(err, data){
-                    if(data) result['instances'][instance] = JSON.parse(data)
+                    // if(data) result['instances'][instance] = JSON.parse(data)
+                    if(data) result['instances'][instance] = data
 
                     if(index == instances.length - 1){
 
