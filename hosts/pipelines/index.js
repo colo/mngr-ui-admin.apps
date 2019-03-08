@@ -158,7 +158,7 @@ module.exports = function(payload){
   				requests: {
       			periodical: function(dispatch){
   						// //////////console.log('host periodical running')
-      				return cron.schedule('* * * * * *', dispatch);//every second
+      				return cron.schedule('*/5 * * * * *', dispatch);//every second
       			}
       		},
   			},
