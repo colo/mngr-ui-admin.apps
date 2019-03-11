@@ -72,6 +72,7 @@ module.exports = new Class({
             {
               host: 'elk',
               port: 28015,
+              // port: 28016,
               db: 'servers',
               table: 'cache',
               module: RethinkDBStoreIn,
@@ -1695,7 +1696,7 @@ module.exports = new Class({
     if(!this.pipeline.hosts){
 
       const HostsPipeline = require('./pipelines/index')({
-        conn: require(ETC+'default.conn.js')(),
+        conn: require(ETC+'ui.conn.js')(),
         host: this.options.host,
         cache: this.options.cache_store
       })
