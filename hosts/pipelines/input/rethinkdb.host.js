@@ -33,10 +33,67 @@ module.exports = new Class({
   feed: undefined,
   close_feed: false,
 
+  register: false,
+
   options: {
 
 		requests : {
       periodical: [
+        {
+					get_changes: function(req, next, app){
+            if(app.register === true){
+  						//debug_internals('_get_last_stat %o', next);
+              let start = Date.now() - 3999
+              let end = Date.now()
+
+  						debug_internals('get_changes %s', new Date(), new Date(start));
+
+  						// let views = [];
+  						// Object.each(app.hosts, function(value, host){
+  							// debug_internals('_get_last_stat %s', host);
+
+                // Array.each(app.paths, function(path){
+                  // debug_internals('_get_last_stat %s %s', host, path);
+                  // let _func = function(){
+
+                    app.between({
+                      _extras: {
+                        id: undefined,
+                        prop: 'changes',
+                        // range_select : 'start',
+                        // host: host,
+                        // type: 'prop'
+                      },
+                      uri: app.options.db+'/ui',
+                      args: [
+                        start,
+                        end,
+                        {
+                          index: 'timestamp',
+                          leftBound: 'open',
+                          rightBound: 'open'
+                        }
+                      ],
+                      // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
+                      // orderBy: { index: app.r.desc('sort_by_path') }
+                    })
+
+                  // }.bind(app)
+
+
+    							// views.push(_func);
+
+                // })
+
+  						// });
+
+  						// Array.each(views, function(view){
+  						// 	view();
+  						// });
+  						// next(views);
+            }
+					}
+				},
         {
 					get_data_range: function(req, next, app){
             // debug_internals('get_data_range', app.data_hosts);
@@ -220,7 +277,10 @@ module.exports = new Class({
 						if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
               // debug_internals('register', req.host, req.prop);
               let {host, prop, id} = req
-              app.register(host, prop, id)
+
+              app.register = true
+              // app.register(host, prop, id)
+
               // if(!app.events[host]) app.events[host] = {}
 
               // if(prop == 'data' && !app.events[host]['data']){
@@ -239,30 +299,31 @@ module.exports = new Class({
 
 					}
 				},
-        // {
-				// 	unregister: function(req, next, app){
-				// 		if(req.host && req.type == 'unregister' && req.prop == 'data' && req.id){
-        //       // debug_internals('unregister', req.host, req.prop);
-        //       let {host, prop, id} = req
-        //       app.unregister(host, prop, id)
-        //       // if(app.events[host] && app.events[host][prop])
-        //
-        //       // app.map({
-        //       //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-        //       //   uri: app.options.db+'/ui',
-        //       //   args: function(x){ return [x('group'), x('reduction')] },
-        //       //
-        //       //   query: app.r.db(app.options.db).
-        //       //   table('ui').
-        //       //   getAll(req.host, {index: 'host'}).
-        //       //   group(app.r.row('metadata')('path')).
-        //       //   max(app.r.row('metadata')('timestamp')).
-        //       //   ungroup()
-        //       // })
-        //     }
-        //
-				// 	}
-				// },
+        {
+					unregister: function(req, next, app){
+						if(req.host && req.type == 'unregister' && req.prop == 'data' && req.id){
+              // debug_internals('unregister', req.host, req.prop);
+              // let {host, prop, id} = req
+              // app.unregister(host, prop, id)
+              app.register = false
+              // if(app.events[host] && app.events[host][prop])
+
+              // app.map({
+              //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+              //   uri: app.options.db+'/ui',
+              //   args: function(x){ return [x('group'), x('reduction')] },
+              //
+              //   query: app.r.db(app.options.db).
+              //   table('ui').
+              //   getAll(req.host, {index: 'host'}).
+              //   group(app.r.row('metadata')('path')).
+              //   max(app.r.row('metadata')('timestamp')).
+              //   ungroup()
+              // })
+            }
+
+					}
+				},
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
@@ -579,6 +640,9 @@ module.exports = new Class({
 
   	this.parent(options);//override default options
 
+    this.addEvent('onSuspend', function(){
+      this.register = false
+    }.bind(this))
 
     // this.addEvent('onResume', this.register_on_changes.bind(this))
 
@@ -703,91 +767,105 @@ module.exports = new Class({
     let id = extras.id
     let multipath = extras.multipath
 
-    if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+    if(resp && prop == 'changes'){
+      resp.toArray(function(err, results) {
+        if (err) throw err;
 
-    // if(resp) debug_internals('data', resp)
+        debug_internals('changes', results.length)
 
-    let data = {}
-    resp.toArray(function(err, arr){
+        if(results.length > 0)
+          this.__process_changes(results)
 
-      debug_internals('data length ', arr.length)
+      }.bind(this));
+    }
+    else{
 
-      // this.hosts[host][prop] = arr
-      this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
+      if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-        if(multipath){
-          let index = multipath.index
-          if(!this._multi_response[id]) this._multi_response[id] = []
+      // if(resp) debug_internals('data', resp)
 
-          // debug_internals('multipath %o', id, multipath, this._multi_response[id].length)
+      let data = {}
+      resp.toArray(function(err, arr){
 
-          this._multi_response[id].push( result )
+        debug_internals('data length ', arr.length)
 
-          if(this._multi_response[id].length == multipath.length){
-            let final_result = {data: {}, step: undefined}
-            Array.each(this._multi_response[id], function(resp){
-              final_result.data = Object.merge(final_result.data,resp)
-            })
+        // this.hosts[host][prop] = arr
+        this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
 
-            debug_internals('multipath final %o', final_result)
-            if(extras.range){
-              final_result = this.__step_on_max_data_points(final_result.data)
+          if(multipath){
+            let index = multipath.index
+            if(!this._multi_response[id]) this._multi_response[id] = []
+
+            // debug_internals('multipath %o', id, multipath, this._multi_response[id].length)
+
+            this._multi_response[id].push( result )
+
+            if(this._multi_response[id].length == multipath.length){
+              let final_result = {data: {}, step: undefined}
+              Array.each(this._multi_response[id], function(resp){
+                final_result.data = Object.merge(final_result.data,resp)
+              })
+
+              debug_internals('multipath final %o', final_result)
+              if(extras.range){
+                final_result = this.__step_on_max_data_points(final_result.data)
+              }
+              // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
+              this.fireEvent('onDoc', [
+                (Object.getLength(final_result.data) > 0) ? final_result : null,
+                Object.merge(
+                  {input_type: this, app: null},
+                  // {host: host, type: 'host', prop: prop, id: id}
+                  extras,
+                  {type: 'host', step: final_result.step}
+                )
+              ])
+              // delete this.hosts[host]
+
+              delete this._multi_response[id]
             }
-            // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
-            this.fireEvent('onDoc', [
-              (Object.getLength(final_result.data) > 0) ? final_result : null,
-              Object.merge(
+            // }
+
+          }
+          else{
+
+            if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+
+            // debug_internals('data firing host...', this.hosts, host)
+
+            this.hosts[host][prop] = result
+
+            if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+              let found = false
+              Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+                if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
+                  found = true
+              })
+
+              debug_internals('data firing host...', this.hosts[host].data)
+              if(extras.range && this.hosts[host].data){
+                this.hosts[host] = Object.merge(this.hosts[host], this.__step_on_max_data_points(this.hosts[host].data))
+              }
+
+              this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
                 {input_type: this, app: null},
                 // {host: host, type: 'host', prop: prop, id: id}
                 extras,
-                {type: 'host', step: final_result.step}
-              )
-            ])
-            // delete this.hosts[host]
-
-            delete this._multi_response[id]
-          }
-          // }
-
-        }
-        else{
-
-          if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
-
-          // debug_internals('data firing host...', this.hosts, host)
-
-          this.hosts[host][prop] = result
-
-          if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
-            let found = false
-            Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-              if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
-                found = true
-            })
-
-            debug_internals('data firing host...', this.hosts[host].data)
-            if(extras.range && this.hosts[host].data){
-              this.hosts[host] = Object.merge(this.hosts[host], this.__step_on_max_data_points(this.hosts[host].data))
+                {type: 'host', step: this.hosts[host].step}
+              )])
+              delete this.hosts[host]
             }
-
-            this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
-              {input_type: this, app: null},
-              // {host: host, type: 'host', prop: prop, id: id}
-              extras,
-              {type: 'host', step: this.hosts[host].step}
-            )])
-            delete this.hosts[host]
           }
-        }
+
+
+
+        }.bind(this))
 
 
 
       }.bind(this))
 
-
-
-    }.bind(this))
-
+    }
 
 
   },
@@ -842,6 +920,7 @@ module.exports = new Class({
     let prop = extras.prop
     let type = extras.type
     let id = extras.id
+
 
     if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
@@ -1000,6 +1079,35 @@ module.exports = new Class({
     }
 
 
+  },
+  __process_changes: function(buffer){
+    let data = {}
+    Array.each(buffer, function(doc){
+      let path = doc.metadata.path
+      let host = doc.metadata.host
+
+      if(!data[host]) data[host] = {}
+      if(!data[host][path]) data[host][path] = []
+      data[host][path].push(doc)
+
+    }.bind(this))
+
+    Object.each(data, function(host_data, host){
+      // debug_internals('changes emiting %o', host, host_data)
+      // let doc = {}
+      // doc[host] = host_data
+      // this.fireEvent('onDoc', [doc, Object.merge(
+      //   {input_type: this, app: null},
+      //   // {host: host, type: 'host', prop: prop, id: id}
+      //   // {type: prop, host: host}
+      // )])
+      this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+        {input_type: this, app: null},
+        // {host: host, type: 'host', prop: prop, id: id}
+        {type: 'data', host: host}
+      )])
+
+    }.bind(this))
   },
   // changes: function(err, resp, params){
   //   let extras = params.options._extras
