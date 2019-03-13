@@ -33,7 +33,8 @@ module.exports = new Class({
   feed: undefined,
   close_feed: false,
 
-  register: false,
+  registered: {},
+  hosts_ranges: {},
 
   options: {
 
@@ -41,35 +42,46 @@ module.exports = new Class({
       periodical: [
         {
 					get_changes: function(req, next, app){
-            if(app.register === true){
+            if(app.registered){
+              let hosts = []
+              Object.each(app.registered, function(registered_data, id){
+                // debug_internals('get_changes', registered_data)
+                Object.each(registered_data, function(props, host){
+
+                  if(props.contains('data'))//if registered for "data"
+                    hosts = hosts.combine([host])
+
+                })
+              })
   						//debug_internals('_get_last_stat %o', next);
               let start = Date.now() - 3999
               let end = Date.now()
 
-  						debug_internals('get_changes %s', new Date(), new Date(start));
+  						debug_internals('get_changes %s', new Date(), new Date(start), app.hosts_ranges, hosts);
 
   						// let views = [];
   						// Object.each(app.hosts, function(value, host){
   							// debug_internals('_get_last_stat %s', host);
 
-                // Array.each(app.paths, function(path){
+                Array.each(hosts, function(host){
                   // debug_internals('_get_last_stat %s %s', host, path);
                   // let _func = function(){
-
+                  if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
                     app.between({
                       _extras: {
                         id: undefined,
                         prop: 'changes',
                         // range_select : 'start',
-                        // host: host,
+                        host: host,
                         // type: 'prop'
                       },
                       uri: app.options.db+'/ui',
                       args: [
-                        start,
-                        end,
+                        [host, 'periodical', app.hosts_ranges[host].end - 1999],
+                        [host, 'periodical', app.hosts_ranges[host].end],
                         {
-                          index: 'timestamp',
+                          // index: 'timestamp',
+                          index: 'sort_by_host',
                           leftBound: 'open',
                           rightBound: 'open'
                         }
@@ -78,7 +90,7 @@ module.exports = new Class({
                       // orderBy: { index: app.r.desc('sort_by_path') }
                     })
 
-                  // }.bind(app)
+                }.bind(app))
 
 
     							// views.push(_func);
@@ -275,10 +287,15 @@ module.exports = new Class({
         {
 					register: function(req, next, app){
 						if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
-              // debug_internals('register', req.host, req.prop);
+              debug_internals('register', req.host, req.prop, req.id);
               let {host, prop, id} = req
 
-              app.register = true
+              // app.register = true
+              if(!app.registered[id]) app.registered[id] = {}
+              if(!app.registered[id][host]) app.registered[id][host] = []
+
+              app.registered[id][host] = app.registered[id][host].combine([prop])
+
               // app.register(host, prop, id)
 
               // if(!app.events[host]) app.events[host] = {}
@@ -301,11 +318,27 @@ module.exports = new Class({
 				},
         {
 					unregister: function(req, next, app){
-						if(req.host && req.type == 'unregister' && req.prop == 'data' && req.id){
-              // debug_internals('unregister', req.host, req.prop);
-              // let {host, prop, id} = req
+						if(req.type == 'unregister'){
+
+              // throw new Error()
+
+              let {host, prop, id} = req
               // app.unregister(host, prop, id)
-              app.register = false
+              // app.register = false
+              if(app.registered[id]){
+                if(host && prop && app.registered[id][host])
+                  app.registered[id][host] = app.registered[id][host].erase(prop)
+
+                if(app.registered[id][host].length == 0 || (host && !prop))
+                  delete app.registered[id][host]
+
+
+                if(Object.getLength(app.registered[id]) == 0 || !host)
+                  delete app.registered[id]
+              }
+
+              debug_internals('unregister', req.host, req.prop, req.id, app.registered);
+
               // if(app.events[host] && app.events[host][prop])
 
               // app.map({
@@ -641,7 +674,7 @@ module.exports = new Class({
   	this.parent(options);//override default options
 
     this.addEvent('onSuspend', function(){
-      this.register = false
+      this.registered = {}
     }.bind(this))
 
     // this.addEvent('onResume', this.register_on_changes.bind(this))
@@ -708,6 +741,8 @@ module.exports = new Class({
           })
 
           // debug_internals('paths firing host...', this.hosts[host], found)
+
+          this.hosts_ranges[host] = this.hosts[host]['data_range']
 
           this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
             {input_type: this, app: null},
@@ -842,7 +877,9 @@ module.exports = new Class({
                   found = true
               })
 
-              debug_internals('data firing host...', this.hosts[host].data)
+              // debug_internals('data firing host...', this.hosts[host].data)
+              debug_internals('data firing host...', host)
+
               if(extras.range && this.hosts[host].data){
                 this.hosts[host] = Object.merge(this.hosts[host], this.__step_on_max_data_points(this.hosts[host].data))
               }

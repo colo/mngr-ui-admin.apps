@@ -1894,6 +1894,8 @@ module.exports = new Class({
 		this.log('hosts', 'info', 'hosts started');
   },
   socket: function(socket){
+    debug_internals('socket.io connect', socket.id)
+
 		this.parent(socket)
 
     socket.compress(true)
@@ -1927,6 +1929,12 @@ module.exports = new Class({
       // }.bind(this))
 
       // this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
+      if(this.pipeline.hosts)
+        this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+          type: 'unregister',
+          id: socket.id,
+        })//fire only the 'host' input
+
       this.__get_session_id_by_socket(socket.id, function(err, sid){
         debug_internals('disconnect __get_session_by_socket', err, sid)
         if(sid)
@@ -1937,6 +1945,8 @@ module.exports = new Class({
         this.pipeline.ids.erase(socket.id)
         this.pipeline.ids = this.pipeline.ids.clean()
       }
+
+
 
       if(this.pipeline.ids.length == 0 && this.pipeline.hosts){ // && this.pipeline.suspended == false
         this.pipeline.suspended = true
