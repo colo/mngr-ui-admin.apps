@@ -318,6 +318,7 @@ module.exports = new Class({
 				},
         {
 					unregister: function(req, next, app){
+
 						if(req.type == 'unregister'){
 
               // throw new Error()
@@ -329,7 +330,7 @@ module.exports = new Class({
                 if(host && prop && app.registered[id][host])
                   app.registered[id][host] = app.registered[id][host].erase(prop)
 
-                if(app.registered[id][host].length == 0 || (host && !prop))
+                if((host && app.registered[id][host].length == 0) || (host && !prop))
                   delete app.registered[id][host]
 
 
@@ -337,7 +338,7 @@ module.exports = new Class({
                   delete app.registered[id]
               }
 
-              debug_internals('unregister', req.host, req.prop, req.id, app.registered);
+              debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
 
               // if(app.events[host] && app.events[host][prop])
 
@@ -360,7 +361,7 @@ module.exports = new Class({
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
-              // debug_internals('catch_all', req)
+              debug_internals('catch_all', req)
               app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
             }
 

@@ -158,6 +158,14 @@ module.exports = new Class({
   					// middlewares: [], //socket.use(fn)
   				}
         ],
+        'off': [
+          {
+  					// path: ':events',
+  					// once: true, //socket.once
+  					callbacks: ['unregister'],
+  					// middlewares: [], //socket.use(fn)
+  				}
+        ],
 				// charts: [{
 				// 	// path: ':param',
 				// 	// once: true, //socket.once
@@ -491,6 +499,115 @@ module.exports = new Class({
     }
 
   },
+  __process_register_unregister: function(payload, cb){
+    let {type, id, events, session} = payload
+
+    if(events && events !== null){
+
+      if(!Array.isArray(events))
+        events = [events]
+
+      Array.each(events, function(event){
+        if(typeof event === 'string'){
+          // if(!this.events[event]) this.events[event] = []
+          // if(!this.events[event].contains(id)) this.events[event].push(id)
+          if(type == 'register') session.events.include(event)
+          else session.events = session.events.erase(event)
+        }
+        else{
+          let {host, prop, format} = event
+          debug_internals(type+' Object', host, prop, format)
+          if(host){
+            // if(!this.hosts_events[host]) this.hosts_events[host] = {}
+            // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
+            // this.hosts_events[host][prop].push({id: id, format: format})
+
+            if(!session.hosts_events[host]) session.hosts_events[host] = []
+
+            if(type == 'register' && session.hosts_events[host].some(function(item){
+              return item.prop == event.prop && item.format == event.format
+            }) !== true)
+              session.hosts_events[host].push(event)
+
+            if(type == 'unregister'){
+              Array.each(session.hosts_events[host], function(item, index){
+                if(item.prop == event.prop && item.format == event.format)
+                  session.hosts_events[host][index] = undefined
+              })
+              session.hosts_events[host] = session.hosts_events[host].clean()
+            }
+
+            // if(prop == 'data'){
+            /**
+            * @todo: pipelines should protect you from firing events before being connected
+            **/
+            if(prop == 'data' && this.pipeline.connected[1] == true){
+              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+                host: host,
+                type: type,
+                prop: 'data',
+                query: {format: format},
+                // paths: paths,
+                id: id,
+              })//fire only the 'host' input
+            }
+          }
+        }
+
+
+
+
+      }.bind(this))
+
+      cb(undefined, {code: 200, status: type+' for '+events.join(',')+' events'})
+    }
+    else{
+      cb({code: 500, status: type+'no event specified'}, undefined)
+    }
+  },
+  unregister: function(){
+    let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
+    let {events} = params
+    let id = (socket) ? socket.id : req.session.id
+    let session = this.__process_session(req, socket)
+    session.send_register_resp = session.send_register_resp+1 || 0
+    let req_id = id +'.'+session.send_register_resp
+
+    debug_internals('unregister %o', events)
+
+    let send_resp = {}
+    send_resp[req_id] = function(err, result){
+      // debug_internals('register.send_resp %o', err, result)
+      if(err){
+        if(resp){
+          resp.status(err.code).json(err)
+        }
+        else{
+          socket.emit('off', err)
+        }
+      }
+      else{
+        if(resp){
+          resp.json(result)
+        }
+        else{
+          socket.emit('off', result)
+        }
+      }
+
+      delete send_resp[req_id]
+    }
+
+    this.__process_register_unregister(
+      {
+        type: 'unregister',
+        id: id,
+        events: events,
+        session: session,
+      },
+      send_resp[req_id]
+    )
+  },
   register: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
     let {events} = params
@@ -524,58 +641,68 @@ module.exports = new Class({
       delete send_resp[req_id]
     }
 
-    if(events && events !== null){
+    this.__process_register_unregister(
+      {
+        type: 'register',
+        id: id,
+        events: events,
+        session: session,
+      },
+      send_resp[req_id]
+    )
 
-      if(!Array.isArray(events))
-        events = [events]
-
-      Array.each(events, function(event){
-        if(typeof event === 'string'){
-          // if(!this.events[event]) this.events[event] = []
-          // if(!this.events[event].contains(id)) this.events[event].push(id)
-          session.events.include(event)
-        }
-        else{
-          let {host, prop, format} = event
-          debug_internals('register Object', host, prop, format)
-          if(host){
-            // if(!this.hosts_events[host]) this.hosts_events[host] = {}
-            // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
-            // this.hosts_events[host][prop].push({id: id, format: format})
-
-            if(!session.hosts_events[host]) session.hosts_events[host] = []
-
-            if(session.hosts_events[host].some(function(item){ return item.prop == event.prop && item.format == event.format }) !== true)
-              session.hosts_events[host].push(event)
-
-
-            // if(prop == 'data'){
-            /**
-            * @todo: pipelines should protect you from firing events before being connected
-            **/
-            if(prop == 'data' && this.pipeline.connected[1] == true){
-              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-                host: host,
-                type: 'register',
-                prop: 'data',
-                query: {format: format},
-                // paths: paths,
-                id: id,
-              })//fire only the 'host' input
-            }
-          }
-        }
-
-
-
-
-      }.bind(this))
-
-      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(',')+' events'})
-    }
-    else{
-      send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
-    }
+    // if(events && events !== null){
+    //
+    //   if(!Array.isArray(events))
+    //     events = [events]
+    //
+    //   Array.each(events, function(event){
+    //     if(typeof event === 'string'){
+    //       // if(!this.events[event]) this.events[event] = []
+    //       // if(!this.events[event].contains(id)) this.events[event].push(id)
+    //       session.events.include(event)
+    //     }
+    //     else{
+    //       let {host, prop, format} = event
+    //       debug_internals('register Object', host, prop, format)
+    //       if(host){
+    //         // if(!this.hosts_events[host]) this.hosts_events[host] = {}
+    //         // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
+    //         // this.hosts_events[host][prop].push({id: id, format: format})
+    //
+    //         if(!session.hosts_events[host]) session.hosts_events[host] = []
+    //
+    //         if(session.hosts_events[host].some(function(item){ return item.prop == event.prop && item.format == event.format }) !== true)
+    //           session.hosts_events[host].push(event)
+    //
+    //
+    //         // if(prop == 'data'){
+    //         /**
+    //         * @todo: pipelines should protect you from firing events before being connected
+    //         **/
+    //         if(prop == 'data' && this.pipeline.connected[1] == true){
+    //           this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+    //             host: host,
+    //             type: 'register',
+    //             prop: 'data',
+    //             query: {format: format},
+    //             // paths: paths,
+    //             id: id,
+    //           })//fire only the 'host' input
+    //         }
+    //       }
+    //     }
+    //
+    //
+    //
+    //
+    //   }.bind(this))
+    //
+    //   send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(',')+' events'})
+    // }
+    // else{
+    //   send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
+    // }
   },
   host_instances: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'instances'])
@@ -1929,11 +2056,15 @@ module.exports = new Class({
       // }.bind(this))
 
       // this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
-      if(this.pipeline.hosts)
+      if(this.pipeline.hosts){
+        debug_internals('TO UNREGISTER', socket.id)
         this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
           type: 'unregister',
           id: socket.id,
+          host: undefined,
+          prop: undefined,
         })//fire only the 'host' input
+      }
 
       this.__get_session_id_by_socket(socket.id, function(err, sid){
         debug_internals('disconnect __get_session_by_socket', err, sid)
