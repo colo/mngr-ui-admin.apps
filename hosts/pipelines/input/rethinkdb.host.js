@@ -77,8 +77,11 @@ module.exports = new Class({
                       },
                       uri: app.options.db+'/ui',
                       args: [
-                        [host, 'periodical', app.hosts_ranges[host].end - 1999],
-                        [host, 'periodical', app.hosts_ranges[host].end],
+                        /**
+                        * 1001ms time lapse (previous second from "now")
+                        **/
+                        [host, 'periodical', app.hosts_ranges[host].end - 2000],
+                        [host, 'periodical', app.hosts_ranges[host].end - 999],
                         {
                           // index: 'timestamp',
                           index: 'sort_by_host',
