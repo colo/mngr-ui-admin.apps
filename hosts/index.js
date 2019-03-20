@@ -13,8 +13,11 @@ const ETC =  process.env.NODE_ENV === 'production'
 let Pipeline = require('js-pipeline')
 let jscaching = require('js-caching')
 
-let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
-let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
+// let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
+// let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
+
+let RedisStoreIn = require('js-caching/libs/stores/redis').input
+let RedisStoreOut = require('js-caching/libs/stores/redis').output
 
 // let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
@@ -66,19 +69,38 @@ module.exports = new Class({
       suspended: false,
       ttl: 1999,
       stores: [
+        // {
+        //   id: 'rethinkdb',
+        //   conn: [
+        //     {
+        //       host: 'elk',
+        //       port: 28015,
+        //       // port: 28016,
+        //       db: 'servers',
+        //       table: 'cache',
+        //       module: RethinkDBStoreIn,
+        //     },
+        //   ],
+        //   module: RethinkDBStoreOut,
+        // }
         {
-          id: 'rethinkdb',
+          id: 'redis',
           conn: [
             {
               host: 'elk',
-              port: 28015,
+              // port: 28015,
               // port: 28016,
-              db: 'servers',
-              table: 'cache',
-              module: RethinkDBStoreIn,
+              db: 0,
+              // table: 'cache',
+              module: RedisStoreIn,
             },
           ],
-          module: RethinkDBStoreOut,
+          module: RedisStoreOut,
+          buffer:{
+            size: -1,
+            // expire: 0 //ms
+            expire: 999 //ms
+          }
         }
       ],
     },
