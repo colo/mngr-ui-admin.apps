@@ -41,75 +41,6 @@ module.exports = new Class({
 		requests : {
       periodical: [
         {
-					get_changes: function(req, next, app){
-            if(app.registered){
-              let hosts = []
-              Object.each(app.registered, function(registered_data, id){
-                // debug_internals('get_changes', registered_data)
-                Object.each(registered_data, function(props, host){
-
-                  if(props.contains('data'))//if registered for "data"
-                    hosts = hosts.combine([host])
-
-                })
-              })
-  						//debug_internals('_get_last_stat %o', next);
-              let start = Date.now() - 3999
-              let end = Date.now()
-
-  						debug_internals('get_changes %s', new Date(), new Date(start), app.hosts_ranges, hosts);
-
-  						// let views = [];
-  						// Object.each(app.hosts, function(value, host){
-  							// debug_internals('_get_last_stat %s', host);
-
-                Array.each(hosts, function(host){
-                  // debug_internals('_get_last_stat %s %s', host, path);
-                  // let _func = function(){
-                  if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
-                    app.between({
-                      _extras: {
-                        id: undefined,
-                        prop: 'changes',
-                        // range_select : 'start',
-                        host: host,
-                        // type: 'prop'
-                      },
-                      uri: app.options.db+'/ui',
-                      args: [
-                        /**
-                        * 1001ms time lapse (previous second from "now")
-                        **/
-                        [host, 'periodical', app.hosts_ranges[host].end - 2000],
-                        [host, 'periodical', app.hosts_ranges[host].end - 999],
-                        {
-                          // index: 'timestamp',
-                          index: 'sort_by_host',
-                          leftBound: 'open',
-                          rightBound: 'open'
-                        }
-                      ],
-                      // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
-                      // orderBy: { index: app.r.desc('sort_by_path') }
-                    })
-
-                }.bind(app))
-
-
-    							// views.push(_func);
-
-                // })
-
-  						// });
-
-  						// Array.each(views, function(view){
-  						// 	view();
-  						// });
-  						// next(views);
-            }
-					}
-				},
-        {
 					get_data_range: function(req, next, app){
             // debug_internals('get_data_range', app.data_hosts);
 						if(app.data_hosts && app.data_hosts.length > 0){
@@ -148,7 +79,7 @@ module.exports = new Class({
                   args: -1,
                   query: app.r.db(app.options.db).table('ui').
                   between(
-                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)], //last 5 secs
+                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(6000)], //last 6 secs
                     [host, 'periodical', ''],
                     {index: 'sort_by_host'}
                   )
@@ -160,6 +91,76 @@ module.exports = new Class({
 
 					}
 				},
+        {
+					get_changes: function(req, next, app){
+            if(app.registered){
+              let hosts = []
+              Object.each(app.registered, function(registered_data, id){
+                // debug_internals('get_changes', registered_data)
+                Object.each(registered_data, function(props, host){
+
+                  if(props.contains('data'))//if registered for "data"
+                    hosts = hosts.combine([host])
+
+                })
+              })
+  						//debug_internals('_get_last_stat %o', next);
+              // let start = Date.now() - 3999
+              // let end = Date.now()
+
+  						debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
+
+  						// let views = [];
+  						// Object.each(app.hosts, function(value, host){
+  							// debug_internals('_get_last_stat %s', host);
+
+                Array.each(hosts, function(host){
+                  // debug_internals('_get_last_stat %s %s', host, path);
+                  // let _func = function(){
+                  if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
+                    app.between({
+                      _extras: {
+                        id: undefined,
+                        prop: 'changes',
+                        // range_select : 'start',
+                        host: host,
+                        // type: 'prop'
+                      },
+                      uri: app.options.db+'/ui',
+                      args: [
+                        /**
+                        * 1001ms time lapse (previous second from "now")
+                        **/
+                        [host, 'periodical', app.hosts_ranges[host].end - 2000],
+                        [host, 'periodical', app.hosts_ranges[host].end],
+                        {
+                          // index: 'timestamp',
+                          index: 'sort_by_host',
+                          leftBound: 'open',
+                          rightBound: 'open'
+                        }
+                      ],
+                      // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
+                      // orderBy: { index: app.r.desc('sort_by_path') }
+                    })
+
+                }.bind(app))
+
+
+    							// views.push(_func);
+
+                // })
+
+  						// });
+
+  						// Array.each(views, function(view){
+  						// 	view();
+  						// });
+  						// next(views);
+            }
+					}
+				},
+
 
       ],
       once: [
@@ -225,7 +226,7 @@ module.exports = new Class({
                 query: app.r.db(app.options.db).table('ui').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, 'periodical', Date.now() - 60000],
+                  [req.host, 'periodical', Date.now() - 10000], //60000
                   [req.host, 'periodical', Date.now()],
                   {index: 'sort_by_host'}
                 ).
@@ -253,7 +254,7 @@ module.exports = new Class({
                 table('ui').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, 'periodical', Date.now() - 60000],
+                  [req.host, 'periodical', Date.now() - 10000], //60000
                   [req.host, 'periodical', Date.now()],
                   {index: 'sort_by_host'}
                 ).
@@ -287,33 +288,19 @@ module.exports = new Class({
         //     }
         //
 				// 	}
+        // },
         {
 					register: function(req, next, app){
 						if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
               debug_internals('register', req.host, req.prop, req.id);
               let {host, prop, id} = req
 
-              // app.register = true
+              // app.register(host, prop, id)
+
               if(!app.registered[id]) app.registered[id] = {}
               if(!app.registered[id][host]) app.registered[id][host] = []
 
               app.registered[id][host] = app.registered[id][host].combine([prop])
-
-              // app.register(host, prop, id)
-
-              // if(!app.events[host]) app.events[host] = {}
-
-              // if(prop == 'data' && !app.events[host]['data']){
-              //   // app.events[host]['data'] = true
-              //   app.changes({
-              //      _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
-              //      uri: app.options.db+'/ui',
-              //      // args: {includeTypes: true, squash: 1.1},
-              //      args: {includeTypes: true, squash: 1},
-              //      query: app.r.db(app.options.db).table('ui')
-              //   })
-              // }
-
 
             }
 
@@ -326,9 +313,10 @@ module.exports = new Class({
 
               // throw new Error()
 
-              let {host, prop, id} = req
+              // let {host, prop, id} = req
               // app.unregister(host, prop, id)
-              // app.register = false
+
+
               if(app.registered[id]){
                 if(host && prop && app.registered[id][host])
                   app.registered[id][host] = app.registered[id][host].erase(prop)
@@ -343,20 +331,7 @@ module.exports = new Class({
 
               debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
 
-              // if(app.events[host] && app.events[host][prop])
 
-              // app.map({
-              //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
-              //   args: function(x){ return [x('group'), x('reduction')] },
-              //
-              //   query: app.r.db(app.options.db).
-              //   table('ui').
-              //   getAll(req.host, {index: 'host'}).
-              //   group(app.r.row('metadata')('path')).
-              //   max(app.r.row('metadata')('timestamp')).
-              //   ungroup()
-              // })
             }
 
 					}
@@ -1026,101 +1001,104 @@ module.exports = new Class({
   //   debug_internals('unregister', this.events)
   //
   // },
-  register: function(host, prop, id){
-    // debug_internals('register', host, prop, id)
-
-    // if(!this.events[host]) this.events[host] = {}
-    // if(!this.events[host][prop]) this.events[host][prop] = []
-    // this.events[host][prop].push(id)
-
-    if(!this.feed){
-
-      let _close = function(){
-        debug_internals('closing cursor onSuspend')
-        if(this.feed){
-          this.feed.close(function (err) {
-            this.close_feed = true
-
-            if (err){
-              debug_internals('err closing cursor onSuspend', err)
-            }
-          }.bind(this))
-
-          this.feed = undefined
-        }
-
-        this.removeEvent('onSuspend', _close)
-      }.bind(this)
-
-      this.addEvent('onSuspend', _close)
-
-
-      if(!this.changes_buffer_expire)
-        this.changes_buffer_expire = Date.now()
-
-      this.r.db(this.options.db).table('ui').changes({includeTypes: true, squash: 1}).run(this.conn, function(err, cursor) {
-
-        this.feed = cursor
-
-        this.feed.each(function(err, row){
-
-          /**
-          * https://www.rethinkdb.com/api/javascript/each/
-          * Iteration can be stopped prematurely by returning false from the callback.
-          */
-          if(this.close_feed === true){ this.close_feed = false; return false }
-
-          // debug_internals('changes %s', new Date())
-          if(row && row !== null ){
-            if(row.type == 'add'){
-              // debug_internals('changes add %s %o', new Date(), row.new_val)
-              // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
-              this.changes_buffer.push(row.new_val)
-            }
-
-            if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
-              // console.log('onPeriodicalDoc', this.changes_buffer.length)
-              // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
-              let data = {}
-              Array.each(this.changes_buffer, function(doc){
-                let path = doc.metadata.path
-                let host = doc.metadata.host
-
-                if(!data[host]) data[host] = {}
-                if(!data[host][path]) data[host][path] = []
-                data[host][path].push(doc)
-
-              }.bind(this))
-
-              Object.each(data, function(host_data, host){
-                // debug_internals('changes emiting %o', host, host_data)
-                this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
-                  {input_type: this, app: null},
-                  // {host: host, type: 'host', prop: prop, id: id}
-                  {type: prop, host: host}
-                )])
-
-
-              }.bind(this))
-
-
-              // debug_internals('changes %s', new Date(), data)
-
-              this.changes_buffer_expire = Date.now()
-              this.changes_buffer = []
-            }
-
-          }
-
-
-        }.bind(this))
-
-      }.bind(this))
-
-    }
-
-
-  },
+  // register: function(host, prop, id){
+  //   // debug_internals('register', host, prop, id)
+  //
+  //   if(!this.events[host]) this.events[host] = {}
+  //   if(!this.events[host][prop]) this.events[host][prop] = []
+  //   this.events[host][prop].push(id)
+  //
+  //   if(!this.feed){
+  //
+  //     let _close = function(){
+  //       debug_internals('closing cursor onSuspend')
+  //       if(this.feed){
+  //         this.feed.close(function (err) {
+  //           this.close_feed = true
+  //
+  //           if (err){
+  //             debug_internals('err closing cursor onSuspend', err)
+  //           }
+  //         }.bind(this))
+  //
+  //         this.feed = undefined
+  //       }
+  //
+  //       this.removeEvent('onSuspend', _close)
+  //     }.bind(this)
+  //
+  //     this.addEvent('onSuspend', _close)
+  //
+  //
+  //     if(!this.changes_buffer_expire)
+  //       this.changes_buffer_expire = Date.now()
+  //
+  //     this.r.db(this.options.db).
+  //       table('ui').
+  //       changes({includeTypes: true, squash: 1}).
+  //       run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
+  //
+  //       this.feed = cursor
+  //
+  //       this.feed.each(function(err, row){
+  //
+  //         /**
+  //         * https://www.rethinkdb.com/api/javascript/each/
+  //         * Iteration can be stopped prematurely by returning false from the callback.
+  //         */
+  //         if(this.close_feed === true){ this.close_feed = false; return false }
+  //
+  //         // debug_internals('changes %s', new Date())
+  //         if(row && row !== null ){
+  //           if(row.type == 'add'){
+  //             // debug_internals('changes add %s %o', new Date(), row.new_val)
+  //             // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+  //             this.changes_buffer.push(row.new_val)
+  //           }
+  //
+  //           if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
+  //             // console.log('onPeriodicalDoc', this.changes_buffer.length)
+  //             // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+  //             let data = {}
+  //             Array.each(this.changes_buffer, function(doc){
+  //               let path = doc.metadata.path
+  //               let host = doc.metadata.host
+  //
+  //               if(!data[host]) data[host] = {}
+  //               if(!data[host][path]) data[host][path] = []
+  //               data[host][path].push(doc)
+  //
+  //             }.bind(this))
+  //
+  //             Object.each(data, function(host_data, host){
+  //               // debug_internals('changes emiting %o', host, host_data)
+  //               this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+  //                 {input_type: this, app: null},
+  //                 // {host: host, type: 'host', prop: prop, id: id}
+  //                 {type: prop, host: host}
+  //               )])
+  //
+  //
+  //             }.bind(this))
+  //
+  //
+  //             // debug_internals('changes %s', new Date(), data)
+  //
+  //             this.changes_buffer_expire = Date.now()
+  //             this.changes_buffer = []
+  //           }
+  //
+  //         }
+  //
+  //
+  //       }.bind(this))
+  //
+  //     }.bind(this))
+  //
+  //   }
+  //
+  //
+  // },
   __process_changes: function(buffer){
     let data = {}
     Array.each(buffer, function(doc){

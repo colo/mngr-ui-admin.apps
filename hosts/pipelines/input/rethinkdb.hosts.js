@@ -45,9 +45,16 @@ module.exports = new Class({
                   return left.merge(right)
               },
 
-              query: app.r.db(app.options.db).table('periodical').between(Date.now() - 60000, Date.now(), {index: 'timestamp'}).map(function(doc) {
-                return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
-              }.bind(app))
+              query: app.r.db(app.options.db).
+                      table('periodical').
+                      between(
+                        Date.now() - 10000, //60000
+                        Date.now(),
+                        {index: 'timestamp'}
+                      ).
+                      map(function(doc) {
+                        return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
+                      }.bind(app))
             })
 
 
