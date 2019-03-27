@@ -560,25 +560,31 @@ module.exports = new Class({
               session.hosts_events[host] = session.hosts_events[host].clean()
             }
 
+            if(this.options.on_demand){
+              ui_rest_client.api.get({
+                uri: "/events/once",
+                qs: {
+                  type: type,
+                  id: id,
+                  hosts: [host],
+                  pipeline_id: 'ui',
+                }
+              })
+
+              let rest_event = (type == 'register') ? 'resume' : 'suspend'
+              ui_rest_client.api.get({
+                uri: '/events/'+rest_event,
+                qs: {
+                  pipeline_id: 'ui',
+                },
+              })
+            }
+
             // if(prop == 'data'){
             /**
             * @todo: pipelines should protect you from firing events before being connected
             **/
             if(prop == 'data' && this.pipeline.connected[1] == true){
-              if(this.options.on_demand){
-                ui_rest_client.api.get({
-                  uri: "/events/once",
-                  qs: {
-                    type: type,
-                    id: id,
-                    hosts: [host]
-      						}
-                })
-
-                ui_rest_client.api.get({
-                  uri: '/events/resume'
-                })
-              }
 
               this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
                 host: host,
@@ -2096,6 +2102,25 @@ module.exports = new Class({
       // this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
       if(this.pipeline.hosts){
         debug_internals('TO UNREGISTER', socket.id)
+        if(this.options.on_demand){
+          ui_rest_client.api.get({
+            uri: "/events/once",
+            qs: {
+              type: 'unregister',
+              id: socket.id,
+              // hosts: [host],
+              pipeline_id: 'ui',
+            }
+          })
+
+          ui_rest_client.api.get({
+            uri: '/events/suspend',
+            qs: {
+              pipeline_id: 'ui',
+            },
+          })
+        }
+
         this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
           type: 'unregister',
           id: socket.id,
