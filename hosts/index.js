@@ -31,6 +31,7 @@ let parse_range = require('./libs/parse_range')
 let build_range = require('./libs/build_range')
 
 const qrate = require('qrate');
+const ui_rest_client = require('./clients/ui.rest')(require(ETC+'ui.rest.js'))
 
 module.exports = new Class({
   Extends: App,
@@ -564,6 +565,21 @@ module.exports = new Class({
             * @todo: pipelines should protect you from firing events before being connected
             **/
             if(prop == 'data' && this.pipeline.connected[1] == true){
+              if(this.options.on_demand){
+                ui_rest_client.api.get({
+                  uri: "/events/once",
+                  qs: {
+                    type: type,
+                    id: id,
+                    hosts: [host]
+      						}
+                })
+
+                ui_rest_client.api.get({
+                  uri: '/events/resume'
+                })
+              }
+
               this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
                 host: host,
                 type: type,

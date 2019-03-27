@@ -131,7 +131,7 @@ module.exports = new Class({
                         /**
                         * 1001ms time lapse (previous second from "now")
                         **/
-                        [host, 'periodical', app.hosts_ranges[host].end - 2000],
+                        [host, 'periodical', app.hosts_ranges[host].end - 1999],
                         [host, 'periodical', app.hosts_ranges[host].end],
                         {
                           // index: 'timestamp',
