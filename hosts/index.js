@@ -42,6 +42,7 @@ module.exports = new Class({
   ON_HOST_UPDATED: 'onHostUpdated',
   ON_HOST_RANGE: 'onHostRange',
   ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
+  ON_HOST_PATHS_UPDATED: 'onHostPathsUpdated',
   ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
   ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
 
@@ -452,15 +453,18 @@ module.exports = new Class({
       if(session && session.hosts_events[host]){
         Array.each(session.hosts_events[host], function(event){
 
-          if(type == 'data')
-            debug_internals('__emit_registered_events', event)
+          // if(type == 'data')
+          debug_internals('__emit_registered_events', type, event)
 
           let result = Object.clone(doc)
 
           if(event && event !== null && event.prop == type){
             let {format} = event
 
-            if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
+            if(type == 'paths')
+              debug_internals('TYPE PATHS', result)
+
+            if(type == 'paths' && ( format == 'stat' || format == 'tabular') && result['paths']){
               Array.each(result['paths'], function(path, index){
                 result['paths'][index] = path.replace(/\./g, '_')
               })
@@ -509,10 +513,22 @@ module.exports = new Class({
               // if(result.step)
               //   debug_internals('__emit data', type, result)
 
-              if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
-                result[prop] = result[prop][prop]
+              // if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
+              //   result[prop] = result[prop][prop]
 
-              this.io.to(`${socketId}`).emit(type, result)
+              if(result[type] && result[type][type] || result[type][type] == null)// @bug: ex -> data_range.data_range
+                result[type] = result[type][type]
+
+              if(result[type]){
+                let resp = {
+                  host: host,
+                  type: type,
+                }
+
+                resp[type] = result[type]
+                this.io.to(`${socketId}`).emit(type, resp)
+              }
+
             }
 
           }
@@ -1909,7 +1925,7 @@ module.exports = new Class({
         debug_internals('onSaveDoc %o', type, range)
 
         if(!range){
-          if(type == 'data' || type == 'data_range' || type == 'instances')
+          if(type == 'data' || type == 'data_range' || type == 'instances' || type == 'paths')
             this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
             // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
           else
@@ -1931,6 +1947,7 @@ module.exports = new Class({
 
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
+      this.addEvent(this.ON_HOST_PATHS_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_DATA_RANGE_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
 

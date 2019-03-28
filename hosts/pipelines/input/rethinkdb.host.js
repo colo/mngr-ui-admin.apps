@@ -26,12 +26,17 @@ module.exports = new Class({
   // FOLD_BASE: 300,
   MAX_RANGE_DATA_POINTS: 300,
 
-  changes_buffer: [],
-  changes_buffer_expire: undefined,
+  feeds: {},
+  close_feeds: {},
+  changes_buffer: {},
+  changes_buffer_expire: {},
+
+  // changes_buffer: [],
+  // changes_buffer_expire: undefined,
 
   events: {},
-  feed: undefined,
-  close_feed: false,
+  // feed: undefined,
+  // close_feed: false,
 
   registered: {},
   hosts_ranges: {},
@@ -92,74 +97,107 @@ module.exports = new Class({
 					}
 				},
         {
-					get_changes: function(req, next, app){
-            if(app.registered){
-              let hosts = []
-              Object.each(app.registered, function(registered_data, id){
-                // debug_internals('get_changes', registered_data)
-                Object.each(registered_data, function(props, host){
+					search_paths: function(req, next, app){
+						// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
+            if(app.data_hosts && app.data_hosts.length > 0){
+              Array.each(app.data_hosts, function(host){
+              // debug_internals('search_paths', req.host, req.prop);
+                app.reduce({
+                  _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
+                  uri: app.options.db+'/ui',
+                  args: function(left, right) {
+                      return left.merge(right)
+                  },
 
-                  if(props.contains('data'))//if registered for "data"
-                    hosts = hosts.combine([host])
-
+                  query: app.r.db(app.options.db).table('ui').
+                  // getAll(req.host, {index: 'host'}).
+                  between(
+                    [host, 'periodical', Date.now() - 6000],
+                    [host, 'periodical', ''],
+                    {index: 'sort_by_host'}
+                  ).
+                  map(function(doc) {
+                    return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+                  }.bind(app))
+                  // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+                  //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+                  // }.bind(app))
                 })
+
               })
-  						//debug_internals('_get_last_stat %o', next);
-              // let start = Date.now() - 3999
-              // let end = Date.now()
-
-  						debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
-
-  						// let views = [];
-  						// Object.each(app.hosts, function(value, host){
-  							// debug_internals('_get_last_stat %s', host);
-
-                Array.each(hosts, function(host){
-                  // debug_internals('_get_last_stat %s %s', host, path);
-                  // let _func = function(){
-                  if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
-                    app.between({
-                      _extras: {
-                        id: undefined,
-                        prop: 'changes',
-                        // range_select : 'start',
-                        host: host,
-                        // type: 'prop'
-                      },
-                      uri: app.options.db+'/ui',
-                      args: [
-                        /**
-                        * 1001ms time lapse (previous second from "now")
-                        **/
-                        [host, 'periodical', app.hosts_ranges[host].end - 1999],
-                        [host, 'periodical', app.hosts_ranges[host].end],
-                        {
-                          // index: 'timestamp',
-                          index: 'sort_by_host',
-                          leftBound: 'open',
-                          rightBound: 'open'
-                        }
-                      ],
-                      // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
-                      // orderBy: { index: app.r.desc('sort_by_path') }
-                    })
-
-                }.bind(app))
-
-
-    							// views.push(_func);
-
-                // })
-
-  						// });
-
-  						// Array.each(views, function(view){
-  						// 	view();
-  						// });
-  						// next(views);
             }
+
 					}
 				},
+        // {
+				// 	get_changes: function(req, next, app){
+        //     if(app.registered){
+        //       let hosts = []
+        //       Object.each(app.registered, function(registered_data, id){
+        //         // debug_internals('get_changes', registered_data)
+        //         Object.each(registered_data, function(props, host){
+        //
+        //           if(props.contains('data'))//if registered for "data"
+        //             hosts = hosts.combine([host])
+        //
+        //         })
+        //       })
+  			// 			//debug_internals('_get_last_stat %o', next);
+        //       // let start = Date.now() - 3999
+        //       // let end = Date.now()
+        //
+  			// 			debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
+        //
+  			// 			// let views = [];
+  			// 			// Object.each(app.hosts, function(value, host){
+  			// 				// debug_internals('_get_last_stat %s', host);
+        //
+        //         Array.each(hosts, function(host){
+        //           // debug_internals('_get_last_stat %s %s', host, path);
+        //           // let _func = function(){
+        //           if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
+        //             app.between({
+        //               _extras: {
+        //                 id: undefined,
+        //                 prop: 'changes',
+        //                 // range_select : 'start',
+        //                 host: host,
+        //                 // type: 'prop'
+        //               },
+        //               uri: app.options.db+'/ui',
+        //               args: [
+        //                 /**
+        //                 * 1001ms time lapse (previous second from "now")
+        //                 **/
+        //                 [host, 'periodical', app.hosts_ranges[host].end - 1999],
+        //                 [host, 'periodical', app.hosts_ranges[host].end],
+        //                 {
+        //                   // index: 'timestamp',
+        //                   index: 'sort_by_host',
+        //                   leftBound: 'open',
+        //                   rightBound: 'open'
+        //                 }
+        //               ],
+        //               // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
+        //               // orderBy: { index: app.r.desc('sort_by_path') }
+        //             })
+        //
+        //         }.bind(app))
+        //
+        //
+    		// 					// views.push(_func);
+        //
+        //         // })
+        //
+  			// 			// });
+        //
+  			// 			// Array.each(views, function(view){
+  			// 			// 	view();
+  			// 			// });
+  			// 			// next(views);
+        //     }
+				// 	}
+				// },
 
 
       ],
@@ -295,12 +333,12 @@ module.exports = new Class({
               debug_internals('register', req.host, req.prop, req.id);
               let {host, prop, id} = req
 
-              // app.register(host, prop, id)
+              app.register(host, prop, id)
 
-              if(!app.registered[id]) app.registered[id] = {}
-              if(!app.registered[id][host]) app.registered[id][host] = []
-
-              app.registered[id][host] = app.registered[id][host].combine([prop])
+              // if(!app.registered[id]) app.registered[id] = {}
+              // if(!app.registered[id][host]) app.registered[id][host] = []
+              //
+              // app.registered[id][host] = app.registered[id][host].combine([prop])
 
             }
 
@@ -313,23 +351,23 @@ module.exports = new Class({
 
               // throw new Error()
 
-              // let {host, prop, id} = req
-              // app.unregister(host, prop, id)
+              let {host, prop, id} = req
+              app.unregister(host, prop, id)
 
 
-              if(app.registered[id]){
-                if(host && prop && app.registered[id][host])
-                  app.registered[id][host] = app.registered[id][host].erase(prop)
-
-                if((host && app.registered[id][host].length == 0) || (host && !prop))
-                  delete app.registered[id][host]
-
-
-                if(Object.getLength(app.registered[id]) == 0 || !host)
-                  delete app.registered[id]
-              }
-
-              debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
+              // if(app.registered[id]){
+              //   if(host && prop && app.registered[id][host])
+              //     app.registered[id][host] = app.registered[id][host].erase(prop)
+              //
+              //   if((host && app.registered[id][host].length == 0) || (host && !prop))
+              //     delete app.registered[id][host]
+              //
+              //
+              //   if(Object.getLength(app.registered[id]) == 0 || !host)
+              //     delete app.registered[id]
+              // }
+              //
+              // debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
 
 
             }
@@ -909,7 +947,7 @@ module.exports = new Class({
     return {data: data, step: step}
   },
   paths: function(err, resp, params){
-    // debug_internals('paths', err, params.options)
+    debug_internals('paths', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -953,6 +991,8 @@ module.exports = new Class({
           found = true
       })
 
+      // debug_internals('paths firing host...', this.hosts[host])
+
       // debug_internals('paths firing host...', this.hosts[host], Object.merge(
       //   extras,
       //   {type: 'host'}
@@ -962,7 +1002,8 @@ module.exports = new Class({
       this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
         {input_type: this, app: null},
         extras,
-        {type: 'host'}
+        // {type: 'host'}
+        {type: (id === undefined) ? 'paths' : 'host'}
         // {host: host, type: 'host', prop: prop, id: id}
       )])
       delete this.hosts[host]
@@ -972,133 +1013,166 @@ module.exports = new Class({
 
     // }
   },
-  // unregister: function(host, prop, id){
-  //   debug_internals('unregister', host, prop, id)
-  //
-  //   if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
-  //     this.events[host][prop].erase(id)
-  //     this.events[host][prop] = this.events[host][prop].clean()
-  //
-  //     if(this.events[host][prop].length == 0){
-  //       delete this.events[host][prop]
-  //     }
-  //   }
-  //
-  //   if(this.events[host] && Object.getLength(this.events[host]) == 0)
-  //     delete this.events[host]
-  //
-  //   if(Object.getLength(this.events) == 0 && this.feed){
-  //     debug_internals('unregister closing')
-  //     this.feed.close(function (err) {
-  //       this.close_feed = true
-  //       if (err){
-  //         debug_internals('err closing cursor', err)
-  //       }
-  //     }.bind(this))
-  //     this.feed = undefined
-  //   }
-  //
-  //   debug_internals('unregister', this.events)
-  //
-  // },
-  // register: function(host, prop, id){
-  //   // debug_internals('register', host, prop, id)
-  //
-  //   if(!this.events[host]) this.events[host] = {}
-  //   if(!this.events[host][prop]) this.events[host][prop] = []
-  //   this.events[host][prop].push(id)
-  //
-  //   if(!this.feed){
-  //
-  //     let _close = function(){
-  //       debug_internals('closing cursor onSuspend')
-  //       if(this.feed){
-  //         this.feed.close(function (err) {
-  //           this.close_feed = true
-  //
-  //           if (err){
-  //             debug_internals('err closing cursor onSuspend', err)
-  //           }
-  //         }.bind(this))
-  //
-  //         this.feed = undefined
-  //       }
-  //
-  //       this.removeEvent('onSuspend', _close)
-  //     }.bind(this)
-  //
-  //     this.addEvent('onSuspend', _close)
-  //
-  //
-  //     if(!this.changes_buffer_expire)
-  //       this.changes_buffer_expire = Date.now()
-  //
-  //     this.r.db(this.options.db).
-  //       table('ui').
-  //       changes({includeTypes: true, squash: 1}).
-  //       run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
-  //
-  //       this.feed = cursor
-  //
-  //       this.feed.each(function(err, row){
-  //
-  //         /**
-  //         * https://www.rethinkdb.com/api/javascript/each/
-  //         * Iteration can be stopped prematurely by returning false from the callback.
-  //         */
-  //         if(this.close_feed === true){ this.close_feed = false; return false }
-  //
-  //         // debug_internals('changes %s', new Date())
-  //         if(row && row !== null ){
-  //           if(row.type == 'add'){
-  //             // debug_internals('changes add %s %o', new Date(), row.new_val)
-  //             // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
-  //             this.changes_buffer.push(row.new_val)
-  //           }
-  //
-  //           if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
-  //             // console.log('onPeriodicalDoc', this.changes_buffer.length)
-  //             // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
-  //             let data = {}
-  //             Array.each(this.changes_buffer, function(doc){
-  //               let path = doc.metadata.path
-  //               let host = doc.metadata.host
-  //
-  //               if(!data[host]) data[host] = {}
-  //               if(!data[host][path]) data[host][path] = []
-  //               data[host][path].push(doc)
-  //
-  //             }.bind(this))
-  //
-  //             Object.each(data, function(host_data, host){
-  //               // debug_internals('changes emiting %o', host, host_data)
-  //               this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
-  //                 {input_type: this, app: null},
-  //                 // {host: host, type: 'host', prop: prop, id: id}
-  //                 {type: prop, host: host}
-  //               )])
-  //
-  //
-  //             }.bind(this))
-  //
-  //
-  //             // debug_internals('changes %s', new Date(), data)
-  //
-  //             this.changes_buffer_expire = Date.now()
-  //             this.changes_buffer = []
-  //           }
-  //
-  //         }
-  //
-  //
-  //       }.bind(this))
-  //
-  //     }.bind(this))
-  //
-  //   }
-  //
-  //
-  // },
+  unregister: function(host, prop, id){
+    debug_internals('unregister', host, prop, id)
+
+    if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
+      this.events[host][prop].erase(id)
+      this.events[host][prop] = this.events[host][prop].clean()
+
+      if(this.events[host][prop].length == 0){
+        delete this.events[host][prop]
+      }
+    }
+
+    if(this.events[host] && Object.getLength(this.events[host]) == 0)
+      delete this.events[host]
+
+    if(Object.getLength(this.events) == 0 && this.feeds[host]){
+      debug_internals('unregister closing')
+      this.__close_changes(host)
+      // this.feeds[host].close(function (err) {
+      //   this.close_feed = true
+      //   if (err){
+      //     debug_internals('err closing cursor', err)
+      //   }
+      // }.bind(this))
+      // this.feed = undefined
+    }
+
+    debug_internals('unregister', this.events)
+
+  },
+  __close_changes: function(host){
+    if(this.feeds[host]){
+      this.feeds[host].close(function (err) {
+        this.close_feeds[host] = true
+
+        if (err){
+          debug_internals('err closing cursor onSuspend', err)
+        }
+      }.bind(this))
+
+      this.feeds[host] = undefined
+    }
+
+    // this.removeEvent('onSuspend', this.__close_changes)
+  },
+  register: function(host, prop, id){
+    // debug_internals('register', host, prop, id)
+
+    if(!this.events[host]) this.events[host] = {}
+    if(!this.events[host][prop]) this.events[host][prop] = []
+    this.events[host][prop].push(id)
+
+    if(!this.feeds[host]){
+
+      // let _close = function(){
+      //   debug_internals('closing cursor onSuspend')
+      //   if(this.feed){
+      //     this.feed.close(function (err) {
+      //       this.close_feed = true
+      //
+      //       if (err){
+      //         debug_internals('err closing cursor onSuspend', err)
+      //       }
+      //     }.bind(this))
+      //
+      //     this.feed = undefined
+      //   }
+      //
+      //   this.removeEvent('onSuspend', _close)
+      // }.bind(this)
+
+      // this.addEvent('onSuspend', _close)
+      this.addEvent('onSuspend', this.__close_changes.pass(host, this))
+
+
+      if(!this.changes_buffer[host]) this.changes_buffer[host] = []
+
+      if(!this.changes_buffer_expire[host]) this.changes_buffer_expire[host] = Date.now()
+
+      this.r.db(this.options.db).
+        table('ui').
+        getAll(host, {index: 'host'}).
+        changes({includeTypes: true, squash: 1}).
+        run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
+
+        this.feeds[host] = cursor
+
+        this.feeds[host].each(function(err, row){
+
+          /**
+          * https://www.rethinkdb.com/api/javascript/each/
+          * Iteration can be stopped prematurely by returning false from the callback.
+          */
+          if(this.close_feeds[host] === true){ this.close_feeds[host] = false; this.feeds[host] = undefined; return false }
+
+          // debug_internals('changes %s', new Date())
+          if(row && row !== null ){
+            if(row.type == 'add'){
+              // debug_internals('changes add %s %o', new Date(), row.new_val)
+              // debug_internals("changes add now: %s \n timstamp: %s \n expire: %s \n host: %s \n path: %s",
+              //   new Date(roundMilliseconds(Date.now())),
+              //   new Date(roundMilliseconds(row.new_val.metadata.timestamp)),
+              //   new Date(roundMilliseconds(this.changes_buffer_expire[host])),
+              //   row.new_val.metadata.host,
+              //   row.new_val.metadata.path
+              // )
+
+              this.changes_buffer[host].push(row.new_val)
+            }
+
+            if(this.changes_buffer_expire[host] < Date.now() - 900 && this.changes_buffer[host].length > 0){
+              // console.log('onPeriodicalDoc', this.changes_buffer.length)
+
+              this.__process_changes(this.changes_buffer[host])
+
+              // debug_internals('changes %s', new Date(), data)
+
+              this.changes_buffer_expire[host] = Date.now()
+              this.changes_buffer[host] = []
+
+              // let data = {}
+              // Array.each(this.changes_buffer, function(doc){
+              //   let path = doc.metadata.path
+              //   let host = doc.metadata.host
+              //
+              //   if(!data[host]) data[host] = {}
+              //   if(!data[host][path]) data[host][path] = []
+              //   data[host][path].push(doc)
+              //
+              // }.bind(this))
+              //
+              // Object.each(data, function(host_data, host){
+              //   // debug_internals('changes emiting %o', host, host_data)
+              //   this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+              //     {input_type: this, app: null},
+              //     // {host: host, type: 'host', prop: prop, id: id}
+              //     {type: prop, host: host}
+              //   )])
+              //
+              //
+              // }.bind(this))
+              //
+              //
+              // // debug_internals('changes %s', new Date(), data)
+              //
+              // this.changes_buffer_expire = Date.now()
+              // this.changes_buffer = []
+            }
+
+          }
+
+
+        }.bind(this))
+
+      }.bind(this))
+
+    }
+
+
+  },
   __process_changes: function(buffer){
     let data = {}
     Array.each(buffer, function(doc){
