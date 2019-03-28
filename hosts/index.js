@@ -560,7 +560,7 @@ module.exports = new Class({
               session.hosts_events[host] = session.hosts_events[host].clean()
             }
 
-            if(this.options.on_demand){
+            if(this.options.on_demand && type == 'unregister'){
               ui_rest_client.api.get({
                 uri: "/events/once",
                 qs: {
@@ -585,6 +585,25 @@ module.exports = new Class({
             * @todo: pipelines should protect you from firing events before being connected
             **/
             if(prop == 'data' && this.pipeline.connected[1] == true){
+              if(this.options.on_demand && type == 'register'){
+                ui_rest_client.api.get({
+                  uri: "/events/once",
+                  qs: {
+                    type: type,
+                    id: id,
+                    hosts: [host],
+                    pipeline_id: 'ui',
+                  }
+                })
+
+                let rest_event = (type == 'register') ? 'resume' : 'suspend'
+                ui_rest_client.api.get({
+                  uri: '/events/'+rest_event,
+                  qs: {
+                    pipeline_id: 'ui',
+                  },
+                })
+              }
 
               this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
                 host: host,
