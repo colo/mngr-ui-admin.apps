@@ -461,8 +461,11 @@ module.exports = new Class({
           if(event && event !== null && event.prop == type){
             let {format} = event
 
-            if(type == 'paths')
-              debug_internals('TYPE PATHS', result)
+            // if(type == 'paths')
+            //   debug_internals('TYPE PATHS', result)
+
+            if(result[type] && result[type][type] || result[type][type] == null)// @bug: ex -> data_range.data_range
+              result[type] = result[type][type]
 
             if(type == 'paths' && ( format == 'stat' || format == 'tabular') && result['paths']){
               Array.each(result['paths'], function(path, index){
@@ -473,9 +476,10 @@ module.exports = new Class({
             }
             else if(type == 'data' && format == 'stat' || format == 'tabular'){
               // if(result.step)
-              //   debug_internals('__emit data', result)
 
-              result.data = result.data.data // @bug: doc.data.data ??
+
+              // result.data = result.data.data // @bug: doc.data.data ??
+              debug_internals('__emit data', result)
 
               this.__transform_data('stat', result.data, host, function(value){
                 // result = stat
@@ -516,8 +520,14 @@ module.exports = new Class({
               // if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
               //   result[prop] = result[prop][prop]
 
-              if(result[type] && result[type][type] || result[type][type] == null)// @bug: ex -> data_range.data_range
+
+              if(type == 'instances')//BUG
+                debug_internals('emiting...', result)
+
+              if(type != 'instances' && result[type] && (result[type][type] || result[type][type] == null))// @bug: ex -> data_range.data_range
                 result[type] = result[type][type]
+
+
 
               if(result[type]){
                 let resp = {

@@ -54,7 +54,7 @@ module.exports = new Class({
 
                     if(index == instances.length - 1){
 
-                      // debug_internals('get_instances instance', result)
+                      debug_internals('get_instances instance', result)
 
                       app.fireEvent('onDoc', [result, Object.merge(
                         {input_type: app, app: null},
