@@ -31,7 +31,10 @@ let parse_range = require('./libs/parse_range')
 let build_range = require('./libs/build_range')
 
 const qrate = require('qrate');
-const ui_rest_client = require('./clients/ui.rest')(require(ETC+'ui.rest.js'))
+
+const ui_rest_client_conf = require(ETC+'ui.rest.js')
+const ui_rest = require('./clients/ui.rest')
+const ui_rest_client = new ui_rest(ui_rest_client_conf)
 
 module.exports = new Class({
   Extends: App,
@@ -446,6 +449,8 @@ module.exports = new Class({
     if(this.io.connected[socketId] && this.io.connected[socketId].connected){
       let {type, host, prop} = doc
 
+      // debug_internals('__emit_registered_events', type, session.events, doc)
+
       if(session && session.events.contains(type))
         this.io.to(`${socketId}`).emit(type, doc)
 
@@ -521,8 +526,8 @@ module.exports = new Class({
               //   result[prop] = result[prop][prop]
 
 
-              if(type == 'instances')//BUG
-                debug_internals('emiting...', result)
+              // if(type == 'instances')//BUG
+              //   debug_internals('emiting...', result)
 
               if(type != 'instances' && result[type] && (result[type][type] || result[type][type] == null))// @bug: ex -> data_range.data_range
                 result[type] = result[type][type]
@@ -588,7 +593,7 @@ module.exports = new Class({
 
             if(this.options.on_demand && type == 'unregister'){
               ui_rest_client.api.get({
-                uri: "/events/once",
+                uri: "events/once",
                 qs: {
                   type: type,
                   id: id,
@@ -599,7 +604,7 @@ module.exports = new Class({
 
               let rest_event = (type == 'register') ? 'resume' : 'suspend'
               ui_rest_client.api.get({
-                uri: '/events/'+rest_event,
+                uri: 'events/'+rest_event,
                 qs: {
                   pipeline_id: 'ui',
                 },
@@ -613,7 +618,7 @@ module.exports = new Class({
             if(prop == 'data' && this.pipeline.connected[1] == true){
               if(this.options.on_demand && type == 'register'){
                 ui_rest_client.api.get({
-                  uri: "/events/once",
+                  uri: "events/once",
                   qs: {
                     type: type,
                     id: id,
@@ -624,7 +629,7 @@ module.exports = new Class({
 
                 let rest_event = (type == 'register') ? 'resume' : 'suspend'
                 ui_rest_client.api.get({
-                  uri: '/events/'+rest_event,
+                  uri: 'events/'+rest_event,
                   qs: {
                     pipeline_id: 'ui',
                   },
@@ -1727,6 +1732,30 @@ module.exports = new Class({
       //   })
       // }
 
+      /**
+      * if it's "on_demand", fireEvent once range has been processed byt "ui" server
+      **/
+
+      if(this.options.on_demand && query.format == 'tabular'){//last one ain't right..check is only to prevent multiple calls for stat|tabular
+        debug_internals('RANGE', prop, query)
+        ui_rest_client.api.get({
+          uri: "events/range",
+          qs: {
+            hosts: host,
+            // prop: prop,
+            // paths: paths,
+            // query: query,
+            id: req_id,
+            range: range,
+            pipeline_id: 'ui',
+          },
+          headers: {
+            'Range': range
+          }
+        })
+      }
+      // else{}
+
       pipe.hosts.inputs[1].fireEvent('onRange', {
         host: host,
         prop: prop,
@@ -1735,6 +1764,7 @@ module.exports = new Class({
         id: req_id,
         Range: range
       })//fire only the 'host' input
+
 
 
     }.bind(this))
@@ -1914,7 +1944,13 @@ module.exports = new Class({
       const HostsPipeline = require('./pipelines/index')({
         conn: require(ETC+'ui.conn.js')(),
         host: this.options.host,
-        cache: this.options.cache_store
+        cache: this.options.cache_store,
+        ui: Object.merge(
+          ui_rest_client_conf,
+          {
+            load: 'apps/hosts/clients'
+          }
+        )
       })
 
       let hosts = new Pipeline(HostsPipeline)
@@ -2060,6 +2096,11 @@ module.exports = new Class({
       if(!pipeline.ids.contains(id))
         pipeline.ids.push(id)
 
+      if(pipeline.hosts.inputs[3].conn_pollers[0])
+        pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'].ids = pipeline.ids
+
+      // debug_internals('__resume_pipeline pipeline.hosts.inputs[3].conn_pollers[0]', pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'])
+
       if(pipeline.suspended == true){
         debug_internals('__resume_pipeline this.pipeline.connected', pipeline.connected)
         // let __resume = function(){
@@ -2146,35 +2187,6 @@ module.exports = new Class({
       // }.bind(this))
 
       // this.__update_sessions({id: socket.id, type: 'socket'}, true)//true == remove
-      if(this.pipeline.hosts){
-        debug_internals('TO UNREGISTER', socket.id)
-        if(this.options.on_demand){
-          ui_rest_client.api.get({
-            uri: "/events/once",
-            qs: {
-              type: 'unregister',
-              id: socket.id,
-              // hosts: [host],
-              pipeline_id: 'ui',
-            }
-          })
-
-          ui_rest_client.api.get({
-            uri: '/events/suspend',
-            qs: {
-              pipeline_id: 'ui',
-            },
-          })
-        }
-
-        this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-          type: 'unregister',
-          id: socket.id,
-          host: undefined,
-          prop: undefined,
-        })//fire only the 'host' input
-      }
-
       this.__get_session_id_by_socket(socket.id, function(err, sid){
         debug_internals('disconnect __get_session_by_socket', err, sid)
         if(sid)
@@ -2185,6 +2197,41 @@ module.exports = new Class({
         this.pipeline.ids.erase(socket.id)
         this.pipeline.ids = this.pipeline.ids.clean()
       }
+
+      if(this.pipeline.hosts){
+        debug_internals('TO UNREGISTER', socket.id)
+        if(this.options.on_demand){
+          ui_rest_client.api.get({
+            uri: "events/once",
+            qs: {
+              type: 'unregister',
+              id: socket.id,
+              // hosts: [host],
+              pipeline_id: 'ui',
+            }
+          })
+
+          ui_rest_client.api.get({
+            uri: 'events/suspend',
+            qs: {
+              pipeline_id: 'ui',
+            },
+          })
+
+          this.pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'].ids = this.pipeline.ids
+        }
+
+        this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+          type: 'unregister',
+          id: socket.id,
+          host: undefined,
+          prop: undefined,
+        })//fire only the 'host' input
+
+
+      }
+
+
 
 
 

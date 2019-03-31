@@ -790,7 +790,7 @@ module.exports = new Class({
     )])
   },
   data: function(err, resp, params){
-    // debug_internals('data', err, params.options)
+    debug_internals('data', err, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -839,10 +839,11 @@ module.exports = new Class({
       let data = {}
       resp.toArray(function(err, arr){
 
-        debug_internals('data length ', arr.length)
+        // debug_internals('data length ', arr.length)
 
         // this.hosts[host][prop] = arr
         this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
+
 
           if(multipath){
             let index = multipath.index
@@ -881,13 +882,17 @@ module.exports = new Class({
           }
           else{
 
+
+
             if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
             // debug_internals('data firing host...', this.hosts, host)
 
             this.hosts[host][prop] = result
 
-            if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+            debug_internals('data length ', result, this.hosts[host])
+
+            if(Object.getLength(result) == 0 || type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
               let found = false
               Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
                 if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
