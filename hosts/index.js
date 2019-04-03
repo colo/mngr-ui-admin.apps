@@ -920,12 +920,12 @@ module.exports = new Class({
 
   },
   __get_instances: function(instances, host, cb){
-    let result = {}
+    let result = { instances: {} }
     Array.each(instances, function(instance, index){
 
       this.cache.get(host+'.tabular.'+instance, function(err, data){
         // if(data) result[instance] = JSON.parse(data)
-        if(data) result[instance] = data
+        if(data) result['instances'][instance] = data
 
         if(index == instances.length - 1){
           cb(result)

@@ -60,7 +60,7 @@ module.exports = new Class({
     // table: undefined,
     redis: {},
 
-    scan_count: 100,
+    scan_count: 5000,
     scan_host_expire: SECOND * 10,
 
 		requests : {
@@ -468,113 +468,188 @@ module.exports = new Class({
       ],
 
       range: [
-        // {
-				// 	get_data_range: function(req, next, app){
-				// 		if(req.host && (req.prop == 'data_range' || !req.prop)){
-        //       // debug_internals('get_data_range', req.host, req.prop);
-        //
-        //       let range = req.opt.range
-        //       let end = (range.end != null) ?  range.end : Date.now()
-        //       // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
-        //       let start = range.start
-        //
-        //
-        //       //get first
-        //       app.nth({
-        //         _extras: {
-        //           id: req.id,
-        //           prop: 'data_range',
-        //           range_select : 'start',
-        //           host: req.host,
-        //           type: (!req.prop) ? 'host' : 'prop',
-        //           range: req.opt.range,
-        //           full_range: req.full_range,
-        //           range_counter: req.range_counter
-        //         },
-        //         uri: app.options.db+'/ui',
-        //         args: 0,
-        //         query: app.r.db(app.options.db).table('ui').
-        //         between(
-        //           [req.host, 'periodical', start],
-        //           [req.host, 'periodical', end],
-        //           {index: 'sort_by_host'}
-        //         )
-        //       })
-        //
-        //       //get last
-        //       app.nth({
-        //         _extras: {
-        //           id: req.id,
-        //           prop: 'data_range',
-        //           range_select : 'end',
-        //           host: req.host,
-        //           type: (!req.prop) ? 'host' : 'prop',
-        //           range: req.opt.range,
-        //           full_range: req.full_range,
-        //           range_counter: req.range_counter
-        //         },
-        //         uri: app.options.db+'/ui',
-        //         args: -1,
-        //         query: app.r.db(app.options.db).table('ui').
-        //         between(
-        //           [req.host, 'periodical', start],
-        //           [req.host, 'periodical', end],
-        //           {index: 'sort_by_host'}
-        //         )
-        //       })
-        //
-        //
-        //     }
-        //
-				// 	}
-				// },
-        // {
-				// 	search_paths: function(req, next, app){
-				// 		if(req.host && (req.prop == 'paths' || !req.prop)){
-        //       // debug_internals('search_paths range', req.host, req.prop, req.opt.range)
-        //
-        //       let range = req.opt.range
-        //       let end = (range.end != null) ?  range.end : Date.now()
-        //       // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
-        //       let start = range.start
-        //
-        //       // app.reduce({
-        //       //   _extras: {
-        //       //     id: req.id,
-        //       //     prop: 'paths',
-        //       //     host: req.host,
-        //       //     type: (!req.prop) ? 'host' : 'prop',
-        //       //     range: req.opt.range,
-        //       //     full_range: req.full_range,
-        //       //     range_counter: req.range_counter
-        //       //   },
-        //       //   uri: app.options.db+'/ui',
-        //       //   args: function(left, right) {
-        //       //       return left.merge(right)
-        //       //   },
-        //       //
-        //       //   query: app.r.db(app.options.db).
-        //       //   table('ui').
-        //       //   between(
-        //       //     [req.host, 'periodical', roundMilliseconds(start)],
-        //       //     [req.host, 'periodical', roundMilliseconds(end)],
-        //       //     {index: 'sort_by_host'}
-        //       //   ).
-        //       //   map(function(doc) {
-        //       //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-        //       //   }.bind(app))
-        //       // })
-        //     }
-        //
-				// 	}
-				// },
+        {
+					get_data_range: function(req, next, app){
+						if(req.host && (req.prop == 'data_range' || !req.prop)){
+              debug_internals('get_data_range', req.host, req.prop);
+
+              let range = req.opt.range
+              let end = (range.end != null) ?  range.end : Date.now()
+              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
+              let start = range.start
+              let host = req.host
+
+              app.__scan(function(){
+
+                let timestamps = app.__get_timestamps(app.scan_hosts[host].keys, start, end)
+
+                // debug_internals('get_data_range', host, app.scan_hosts[host].keys, timestamps)
+
+                if(timestamps.length > 0){
+                  // let start_ts = end_ts = undefined
+                  // Array.each(timestamps, function(ts){
+                  //   if(!start_ts || (ts < start_ts && ts >= start))
+                  //     start_ts = ts
+                  //
+                  //   if(!end_ts || (ts > end_ts && ts <= end))
+                  //     end_ts = ts
+                  // })
+
+                  app.data_range(
+                    undefined,
+                    { metadata: { timestamp: timestamps[0] }},
+                    {
+                      options:{
+                        _extras: {
+                          id: req.id,
+                          prop: 'data_range',
+                          range_select : 'start',
+                          host: req.host,
+                          type: (!req.prop) ? 'host' : 'prop',
+                          range: req.opt.range,
+                          full_range: req.full_range,
+                          range_counter: req.range_counter
+                        }
+                      }
+                    }
+                  )
+
+                  app.data_range(
+                    undefined,
+                    { metadata: { timestamp: timestamps[timestamps.length - 1] }},
+                    {
+                      options: {
+                        _extras: {
+                          id: req.id,
+                          prop: 'data_range',
+                          range_select : 'end',
+                          host: req.host,
+                          type: (!req.prop) ? 'host' : 'prop',
+                          range: req.opt.range,
+                          full_range: req.full_range,
+                          range_counter: req.range_counter
+                        }
+                      }
+                    }
+                  )
+                }
+
+              }, app)
+
+
+
+              //
+              // //get first
+              // app.nth({
+              //   _extras: {
+              //     id: req.id,
+              //     prop: 'data_range',
+              //     range_select : 'start',
+              //     host: req.host,
+              //     type: (!req.prop) ? 'host' : 'prop',
+              //     range: req.opt.range,
+              //     full_range: req.full_range,
+              //     range_counter: req.range_counter
+              //   },
+              //   uri: app.options.db+'/ui',
+              //   args: 0,
+              //   query: app.r.db(app.options.db).table('ui').
+              //   between(
+              //     [req.host, 'periodical', start],
+              //     [req.host, 'periodical', end],
+              //     {index: 'sort_by_host'}
+              //   )
+              // })
+              //
+              // //get last
+              // app.nth({
+              //   _extras: {
+              //     id: req.id,
+              //     prop: 'data_range',
+              //     range_select : 'end',
+              //     host: req.host,
+              //     type: (!req.prop) ? 'host' : 'prop',
+              //     range: req.opt.range,
+              //     full_range: req.full_range,
+              //     range_counter: req.range_counter
+              //   },
+              //   uri: app.options.db+'/ui',
+              //   args: -1,
+              //   query: app.r.db(app.options.db).table('ui').
+              //   between(
+              //     [req.host, 'periodical', start],
+              //     [req.host, 'periodical', end],
+              //     {index: 'sort_by_host'}
+              //   )
+              // })
+
+
+            }
+
+					}
+				},
+        {
+					search_paths: function(req, next, app){
+						if(req.host && (req.prop == 'paths' || !req.prop)){
+              // debug_internals('search_paths range', req.host, req.prop, req.opt.range)
+
+              let range = req.opt.range
+              let end = (range.end != null) ?  range.end : Date.now()
+              // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
+              let start = range.start
+              let host = req.host
+
+              app.__scan(function(){
+                let paths = app.__get_paths(app.scan_hosts[host].keys, host, start, end)
+                debug_internals('search_paths', host, paths);
+
+                if(Object.getLength(paths) > 0)
+                  app.paths(
+                    undefined,
+                    paths,
+                    {
+                      options: {
+                        _extras: {id: req.id, prop: 'paths', host: host, type: (!req.prop) ? 'host' : 'prop'},
+                      }
+                    }
+                  )
+
+              }, app)
+
+              // app.reduce({
+              //   _extras: {
+              //     id: req.id,
+              //     prop: 'paths',
+              //     host: req.host,
+              //     type: (!req.prop) ? 'host' : 'prop',
+              //     range: req.opt.range,
+              //     full_range: req.full_range,
+              //     range_counter: req.range_counter
+              //   },
+              //   uri: app.options.db+'/ui',
+              //   args: function(left, right) {
+              //       return left.merge(right)
+              //   },
+              //
+              //   query: app.r.db(app.options.db).
+              //   table('ui').
+              //   between(
+              //     [req.host, 'periodical', roundMilliseconds(start)],
+              //     [req.host, 'periodical', roundMilliseconds(end)],
+              //     {index: 'sort_by_host'}
+              //   ).
+              //   map(function(doc) {
+              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+              //   }.bind(app))
+              // })
+            }
+
+					}
+				},
         {
 					search_data: function(req, next, app){
 						if(req.host && (req.prop == 'data' || !req.prop)){
               let host = req.host
-
-              // debug_internals('search_data range %o', req);
-
               let paths = req.paths
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -584,61 +659,75 @@ module.exports = new Class({
               let range_length = Math.ceil((end - start) / SECOND)
               let fold = Math.ceil((range_length / app.FOLD_BASE))
 
+              debug_internals('search_data range %o', host);
+
               // debug_internals('range FOLD', fold)
 
-              if(paths){
-                let _get_by_path = function(path, extras){
+              // if(paths){
+              //   let _get_by_path = function(path, extras){
+              //
+              //     // app.map({
+              //     //   _extras: extras,
+              //     //   uri: app.options.db+'/ui',
+              //     //   args: function(x){ return [x('group'),x('reduction')] },
+              //     //
+              //     //   query: app.r.db(app.options.db).
+              //     //   table('ui').
+              //     //   between(
+              //     //     [path, req.host, 'periodical', roundMilliseconds(start)],
+              //     //     [path, req.host, 'periodical', roundMilliseconds(end)],
+              //     //     {index: 'sort_by_path'}
+              //     //   ).
+              //     //   group(app.r.row('metadata')('path')).
+              //     //   ungroup()
+              //     // })
+              //
+              //   }
+              //
+              //   if(Array.isArray(paths)){
+              //     Array.each(paths, function(_path, index){
+              //       if(!req.query || !req.query.format)
+              //         _path = _path.replace(/_/g, '.')//if path are format=stat, transform
+              //
+              //       _get_by_path(_path,{
+              //         id: req.id,
+              //         prop: 'data',
+              //         host: req.host,
+              //         type: (!req.prop) ? 'host' : 'prop',
+              //         range: req.opt.range,
+              //         full_range: req.full_range,
+              //         range_counter: req.range_counter,
+              //         multipath: {index: index, length: paths.length}
+              //       })
+              //     })
+              //   }
+              //   else{
+              //     _get_by_path(paths, {
+              //       id: req.id,
+              //       prop: 'data',
+              //       host: req.host,
+              //       type: (!req.prop) ? 'host' : 'prop',
+              //       range: req.opt.range,
+              //       full_range: req.full_range,
+              //       range_counter: req.range_counter
+              //     })
+              //   }
+              //
+              // }
+              // else{
 
-                  // app.map({
-                  //   _extras: extras,
-                  //   uri: app.options.db+'/ui',
-                  //   args: function(x){ return [x('group'),x('reduction')] },
-                  //
-                  //   query: app.r.db(app.options.db).
-                  //   table('ui').
-                  //   between(
-                  //     [path, req.host, 'periodical', roundMilliseconds(start)],
-                  //     [path, req.host, 'periodical', roundMilliseconds(end)],
-                  //     {index: 'sort_by_path'}
-                  //   ).
-                  //   group(app.r.row('metadata')('path')).
-                  //   ungroup()
-                  // })
-
+              app.__scan(function(){
+                if(!paths){
+                  paths = app.__get_paths(app.scan_hosts[host].keys, host, start, end)
                 }
+                // else{
+                //   debug_internals('search_data range paths', paths)
+                //   process.exit(1)
+                // }
 
-                if(Array.isArray(paths)){
-                  Array.each(paths, function(_path, index){
-                    if(!req.query || !req.query.format)
-                      _path = _path.replace(/_/g, '.')//if path are format=stat, transform
 
-                    _get_by_path(_path,{
-                      id: req.id,
-                      prop: 'data',
-                      host: req.host,
-                      type: (!req.prop) ? 'host' : 'prop',
-                      range: req.opt.range,
-                      full_range: req.full_range,
-                      range_counter: req.range_counter,
-                      multipath: {index: index, length: paths.length}
-                    })
-                  })
-                }
-                else{
-                  _get_by_path(paths, {
-                    id: req.id,
-                    prop: 'data',
-                    host: req.host,
-                    type: (!req.prop) ? 'host' : 'prop',
-                    range: req.opt.range,
-                    full_range: req.full_range,
-                    range_counter: req.range_counter
-                  })
-                }
 
-              }
-              else{
-                let paths = app.__get_paths(app.scan_hosts[host].keys, host)
+                debug_internals('search_data range %s', host, paths);
 
                 app.__get_data(
                   host,
@@ -658,13 +747,17 @@ module.exports = new Class({
                             type: (!req.prop) ? 'host' : 'prop',
                             range: req.opt.range,
                             full_range: req.full_range,
-                            range_counter: req.range_counter
+                            range_counter: req.range_counter,
+                            // multipath: {index: index, length: paths.length}
                           },
                         }
                       }
                     )
                   }
                 )
+              }, app)
+
+
 
                 // app.map({
                 //   _extras: {
@@ -696,7 +789,7 @@ module.exports = new Class({
                 //   group(app.r.row('metadata')('path')).
                 //   ungroup()
                 // })
-              }
+              // }
             }
 
 					}
@@ -830,6 +923,8 @@ module.exports = new Class({
 
         self.conn.scan(self.scan_cursor[host], 'MATCH', host+"\.*", 'COUNT', self.options.scan_count, function(err, result) {
 
+          // debug_internals('scan result', result)
+
           if(!err){
             if(!self.scan_hosts[host]) self.scan_hosts[host] = {keys: [], timestamp: Date.now()}
 
@@ -848,29 +943,33 @@ module.exports = new Class({
       }.bind(self))
     }
   },
-  __get_timestamps: function(keys){
+  __get_timestamps: function(keys, start, end){
     let timestamps = []
     Array.each(keys, function(key){
       let ts = key.substring(key.indexOf('@') + 1) * 1
 
-      // debug_internals('__get_timestamps ts', ts)
+      // debug_internals('__get_timestamps ts', ts, start, end, ((!start || ts >= start) && (!end || ts <= end)))
 
-      timestamps.push(ts)
+      if((!start || ts >= start) && (!end || ts <= end)){
+        timestamps.push(ts)
+      }
     })
 
     timestamps = timestamps.sort(function(a, b){ return a - b})
 
     return timestamps
   },
-  __get_paths: function(keys, host){
+  __get_paths: function(keys, host, start, end){
+
     let paths = {}
     Array.each(keys, function(key){
+      let ts = key.substring(key.indexOf('@') + 1) * 1
       let path = key.substring(0, key.indexOf('@'))
       path = path.replace(host+'.', '')
       // debug_internals('__get_timestamps ts', ts)
 
-      // paths.push(path)
-      paths[path] = true
+      if((!start || ts >= start) && (!end || ts <= end))
+        paths[path] = true
     })
     // paths = paths.filter(function(value, index, self) {
     //   return self.indexOf(value) === index;
@@ -880,7 +979,7 @@ module.exports = new Class({
     return paths
   },
   __get_data: function(host, paths, start, end, cb){
-    let _paths = Object.keys(paths)
+    let _paths = (Array.isArray(paths)) ? Array.clone(paths) : Object.keys(paths)
     debug_internals('__get_data', host, paths, start, end)
     let _keys = []
     // start = roundMilliseconds(start)
@@ -1074,9 +1173,10 @@ module.exports = new Class({
     let id = extras.id
     let multipath = extras.multipath
 
-    let result = resp
+
 
     if(resp && prop == 'changes'){
+      let result = resp
       // let results = resp
       // resp.toArray(function(err, results) {
         if (err) throw err;
@@ -1089,6 +1189,20 @@ module.exports = new Class({
       // }.bind(this));
     }
     else{
+      let result = {}
+
+      /**
+      * this replace the coerceTo('object') from rethinkdb
+      **/
+      Array.each(resp, function(value, index){
+        if(value && value.metadata && value.metadata.path){
+          if(!result[value.metadata.path]) result[value.metadata.path] = []
+
+          result[value.metadata.path].push(value)
+          // debug_internals('resp', value)
+          // process.exit(1)
+        }
+      })
 
       if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
@@ -1103,42 +1217,42 @@ module.exports = new Class({
         // this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
 
 
-          if(multipath){
-            let index = multipath.index
-            if(!this._multi_response[id]) this._multi_response[id] = []
-
-            // debug_internals('multipath %o', id, multipath, this._multi_response[id].length)
-
-            this._multi_response[id].push( result )
-
-            if(this._multi_response[id].length == multipath.length){
-              let final_result = {data: {}, step: undefined}
-              Array.each(this._multi_response[id], function(resp){
-                final_result.data = Object.merge(final_result.data,resp)
-              })
-
-              debug_internals('multipath final %o', final_result)
-              if(extras.range){
-                final_result = this.__step_on_max_data_points(final_result.data)
-              }
-              // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
-              this.fireEvent('onDoc', [
-                (Object.getLength(final_result.data) > 0) ? final_result : null,
-                Object.merge(
-                  {input_type: this, app: null},
-                  // {host: host, type: 'host', prop: prop, id: id}
-                  extras,
-                  {type: 'host', step: final_result.step}
-                )
-              ])
-              // delete this.hosts[host]
-
-              delete this._multi_response[id]
-            }
-            // }
-
-          }
-          else{
+          // if(multipath){
+          //   let index = multipath.index
+          //   if(!this._multi_response[id]) this._multi_response[id] = []
+          //
+          //   // debug_internals('multipath %o', id, multipath, this._multi_response[id].length)
+          //
+          //   this._multi_response[id].push( result )
+          //
+          //   if(this._multi_response[id].length == multipath.length){
+          //     let final_result = {data: {}, step: undefined}
+          //     Array.each(this._multi_response[id], function(resp){
+          //       final_result.data = Object.merge(final_result.data,resp)
+          //     })
+          //
+          //     debug_internals('multipath final %o', final_result)
+          //     if(extras.range){
+          //       final_result = this.__step_on_max_data_points(final_result.data)
+          //     }
+          //     // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
+          //     this.fireEvent('onDoc', [
+          //       (Object.getLength(final_result.data) > 0) ? final_result : null,
+          //       Object.merge(
+          //         {input_type: this, app: null},
+          //         // {host: host, type: 'host', prop: prop, id: id}
+          //         extras,
+          //         {type: 'host', step: final_result.step}
+          //       )
+          //     ])
+          //     // delete this.hosts[host]
+          //
+          //     delete this._multi_response[id]
+          //   }
+          //   // }
+          //
+          // }
+          // else{
 
 
 
@@ -1172,7 +1286,7 @@ module.exports = new Class({
               )])
               delete this.hosts[host]
             }
-          }
+          // }
 
 
 
