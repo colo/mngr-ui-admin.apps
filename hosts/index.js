@@ -1855,7 +1855,7 @@ module.exports = new Class({
       debug_internals('get hosts cache %o %o %s', err, result, req_id)
       if(!result){
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
-            // // debug_internals('send_resp', pipe)
+            debug_internals('send_resp', pipe)
 
             let _get_resp = {}
             _get_resp[req_id] = function(resp){
@@ -1971,6 +1971,7 @@ module.exports = new Class({
         debug_internals('onSaveDoc %o', type, range)
 
         if(!range){
+          debug_internals('onSaveDoc %o', type, doc)
           if(type == 'data' || type == 'data_range' || type == 'instances' || type == 'paths')
             this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
             // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
@@ -2002,7 +2003,7 @@ module.exports = new Class({
       // }.bind(this))
 
       this.__after_connect_inputs(
-        this.__resume_pipeline.pass([this.pipeline, id, cb])
+        this.__resume_pipeline.pass([this.pipeline, id, cb], this)
         // this.__after_connect_pipeline(
         //   this.pipeline,
         //   id,
@@ -2042,7 +2043,7 @@ module.exports = new Class({
     else{
         if(this.pipeline.hosts.inputs.length != this.pipeline.connected.length){
           this.__after_connect_inputs(
-            this.__resume_pipeline.pass([this.pipeline, id, cb])
+            this.__resume_pipeline.pass([this.pipeline, id, cb], this)
             // this.__after_connect_pipeline(
             //   this.pipeline,
             //   id,
@@ -2064,7 +2065,7 @@ module.exports = new Class({
   __after_connect_inputs: function(cb){
 
     let _client_connect = function(index){
-      // debug_internals('__get_pipeline %o', index, cb)
+      debug_internals('__after_connect_inputs %d', index)
 
       // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
       //   this.pipeline,
@@ -2096,7 +2097,7 @@ module.exports = new Class({
       if(!pipeline.ids.contains(id))
         pipeline.ids.push(id)
 
-      if(pipeline.hosts.inputs[3].conn_pollers[0])
+      if(this.options.on_demand && pipeline.hosts.inputs[3].conn_pollers[0])
         pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'].ids = pipeline.ids
 
       // debug_internals('__resume_pipeline pipeline.hosts.inputs[3].conn_pollers[0]', pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'])

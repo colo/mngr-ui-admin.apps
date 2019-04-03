@@ -4,7 +4,10 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Hosts'),
     debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Hosts:Internals');
 
 const InputPollerRethinkDBHosts = require ( './input/rethinkdb.hosts.js' )
-const InputPollerRethinkDBHost = require ( './input/rethinkdb.host.js' )
+// const InputPollerRethinkDBHost = require ( './input/rethinkdb.host.js' )
+
+const InputPollerRedisHost = require ( './input/redis.host.js' )
+
 const InputCache = require ( './input/cache.js' )
 
 let PollHttp = require('js-pipeline/input/poller/poll/http')
@@ -147,12 +150,17 @@ module.exports = function(payload){
   				id: "input.host",
   				conn: [
             Object.merge(
-              Object.clone(conn),
+              // Object.clone(conn),
+              // Object.clone(cache.stores),
+
               {
                 // path_key: 'os',
-                module: InputPollerRethinkDBHost,
+                // module: InputPollerRethinkDBHost,
+                host: 'elk',
+                db: 0,
+                module: InputPollerRedisHost,
               },
-              host
+              // host
             )
   				],
   				connect_retry_count: -1,
