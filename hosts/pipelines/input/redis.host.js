@@ -60,14 +60,14 @@ module.exports = new Class({
     // table: undefined,
     redis: {},
 
-    scan_count: 5000,
+    scan_count: 500,
     scan_host_expire: SECOND * 10,
 
 		requests : {
       periodical: [
         {
           scan: function(req, next, app){
-            app.__scan(undefined, app)
+            app.__scan(undefined, undefined, app)
             // Object.each(app.scan_hosts, function(data, host){
             //   if(data.timestamp + app.options.scan_host_expire < Date.now())
             //     delete app.scan_hosts[host]
@@ -293,7 +293,7 @@ module.exports = new Class({
 						if(req.host && !req.type && (req.prop == 'data_range' || !req.prop)){
               let host = req.host
 
-              app.__scan(function(){
+              app.__scan(host, function(){
 
                 let timestamps = app.__get_timestamps(app.scan_hosts[host].keys)
 
@@ -349,7 +349,7 @@ module.exports = new Class({
               debug_internals('search_paths', req.host, req.prop);
               let host = req.host
 
-              app.__scan(function(){
+              app.__scan(host, function(){
                 let paths = app.__get_paths(app.scan_hosts[host].keys, host)
                 debug_internals('search_paths', host, paths);
 
@@ -377,7 +377,7 @@ module.exports = new Class({
 						if(req.host && !req.type && (req.prop == 'data' || !req.prop)){
               let host = req.host
 
-              app.__scan(function(){
+              app.__scan(host, function(){
                 debug_internals('search_data', host, app.hosts_ranges)
 
                 if(app.hosts_ranges[host] && app.hosts_ranges[host].end){
@@ -479,7 +479,7 @@ module.exports = new Class({
               let start = range.start
               let host = req.host
 
-              app.__scan(function(){
+              app.__scan(host, function(){
 
                 let timestamps = app.__get_timestamps(app.scan_hosts[host].keys, start, end)
 
@@ -599,7 +599,7 @@ module.exports = new Class({
               let start = range.start
               let host = req.host
 
-              app.__scan(function(){
+              app.__scan(host, function(){
                 let paths = app.__get_paths(app.scan_hosts[host].keys, host, start, end)
                 debug_internals('search_paths', host, paths);
 
@@ -716,7 +716,7 @@ module.exports = new Class({
               // }
               // else{
 
-              app.__scan(function(){
+              app.__scan(host, function(){
                 if(!paths){
                   paths = app.__get_paths(app.scan_hosts[host].keys, host, start, end)
                 }
@@ -905,17 +905,20 @@ module.exports = new Class({
     debug_internals('initialize', this.options)
 
   },
-  __scan: function(cb, self){
-    debug_internals('__scan', self.data_hosts, self.scan_hosts, self.scan_cursor)
+  __scan: function(hosts, cb, self){
+    hosts = hosts || self.data_hosts
+    if(!Array.isArray(hosts)) hosts = [hosts]
+
+    debug_internals('__scan', hosts, self.scan_hosts, self.scan_cursor)
 
     Object.each(self.scan_hosts, function(data, host){
       if(data.timestamp + self.options.scan_host_expire < Date.now())
         delete self.scan_hosts[host]
     })
 
-    if(self.data_hosts && self.data_hosts.length > 0){
+    if(hosts && hosts.length > 0){
 
-      Array.each(self.data_hosts, function(host){
+      Array.each(hosts, function(host){
 
         if(!self.scan_cursor[host]) self.scan_cursor[host] = 0
 
