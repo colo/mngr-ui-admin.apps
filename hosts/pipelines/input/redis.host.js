@@ -60,7 +60,7 @@ module.exports = new Class({
     // table: undefined,
     redis: {},
 
-    scan_count: 500,
+    scan_count: 1000,
     scan_host_expire: SECOND * 10,
 
 		requests : {
@@ -68,30 +68,30 @@ module.exports = new Class({
         {
           scan: function(req, next, app){
             app.__scan(undefined, undefined, app)
-            // Object.each(app.scan_hosts, function(data, host){
-            //   if(data.timestamp + app.options.scan_host_expire < Date.now())
-            //     delete app.scan_hosts[host]
-            // })
-            //
-            // if(app.data_hosts && app.data_hosts.length > 0){
-            //   Array.each(app.data_hosts, function(host){
-            //     if(!app.scan_cursor[host]) app.scan_cursor[host] = 0
-            //
-            //     app.conn.scan(app.scan_cursor[host], 'MATCH', host+"\.*", 'COUNT', app.options.scan_count, function(err, result) {
-            //       // debug_internals('scan', err, result)
-            //       if(!err){
-            //         if(!app.scan_hosts[host]) app.scan_hosts[host] = {keys: [], timestamp: Date.now()}
-            //
-            //         app.scan_hosts[host].keys.combine(result[1])
-            //
-            //         app.scan_cursor[host] = result[0]
-            //       }
-            //       // this.fireEvent(this.ON_DOC_SAVED, [err, result])
-            //     }.bind(this))
-            //
-            //
-            //   })
-            // }
+          //   // Object.each(app.scan_hosts, function(data, host){
+          //   //   if(data.timestamp + app.options.scan_host_expire < Date.now())
+          //   //     delete app.scan_hosts[host]
+          //   // })
+          //   //
+          //   // if(app.data_hosts && app.data_hosts.length > 0){
+          //   //   Array.each(app.data_hosts, function(host){
+          //   //     if(!app.scan_cursor[host]) app.scan_cursor[host] = 0
+          //   //
+          //   //     app.conn.scan(app.scan_cursor[host], 'MATCH', host+"\.*", 'COUNT', app.options.scan_count, function(err, result) {
+          //   //       // debug_internals('scan', err, result)
+          //   //       if(!err){
+          //   //         if(!app.scan_hosts[host]) app.scan_hosts[host] = {keys: [], timestamp: Date.now()}
+          //   //
+          //   //         app.scan_hosts[host].keys.combine(result[1])
+          //   //
+          //   //         app.scan_cursor[host] = result[0]
+          //   //       }
+          //   //       // this.fireEvent(this.ON_DOC_SAVED, [err, result])
+          //   //     }.bind(this))
+          //   //
+          //   //
+          //   //   })
+          //   // }
           }
         },
         {
@@ -101,6 +101,7 @@ module.exports = new Class({
 
               Array.each(app.data_hosts, function(host){
 
+                // app.__scan(host, function(){
                 let timestamps = app.__get_timestamps(app.scan_hosts[host].keys)
                 debug_internals('get_data_range', host, timestamps)
 
@@ -137,6 +138,9 @@ module.exports = new Class({
                     }
                   )
                 }
+                // }, app)
+
+
 
 
               })
@@ -151,6 +155,8 @@ module.exports = new Class({
             if(app.data_hosts && app.data_hosts.length > 0){
 
               Array.each(app.data_hosts, function(host){
+
+                // app.__scan(host, function(){
                 let paths = app.__get_paths(app.scan_hosts[host].keys, host)
                 debug_internals('search_paths', host, paths);
 
@@ -164,6 +170,10 @@ module.exports = new Class({
                       }
                     }
                   )
+
+                // }, app)
+
+
 
 
               })
@@ -197,14 +207,16 @@ module.exports = new Class({
                 Array.each(hosts, function(host){
                   // debug_internals('_get_last_stat %s %s', host, path);
                   // let _func = function(){
+
+                  // app.__scan(host, function(){
                   if(app.hosts_ranges[host] && app.hosts_ranges[host].end){
                     let paths = app.__get_paths(app.scan_hosts[host].keys, host)
 
                     app.__get_data(
                       host,
                       paths,
-                      app.hosts_ranges[host].end - 2000,
-                      app.hosts_ranges[host].end -1000,
+                      roundMilliseconds(app.hosts_ranges[host].end) - SECOND * 2,
+                      roundMilliseconds(app.hosts_ranges[host].end),
                       function(err, data){
                         app.data(
                           err,
@@ -222,32 +234,10 @@ module.exports = new Class({
                       }
                     )
 
-
-                    // app.between({
-                    //   _extras: {
-                    //     id: undefined,
-                    //     prop: 'changes',
-                    //     // range_select : 'start',
-                    //     host: host,
-                    //     // type: 'prop'
-                    //   },
-                    //   uri: app.options.db+'/ui',
-                    //   args: [
-                    //     /**
-                    //     * 1001ms time lapse (previous second from "now")
-                    //     **/
-                    //     [host, 'periodical', app.hosts_ranges[host].end - 1999],
-                    //     [host, 'periodical', app.hosts_ranges[host].end],
-                    //     {
-                    //       // index: 'timestamp',
-                    //       index: 'sort_by_host',
-                    //       leftBound: 'open',
-                    //       rightBound: 'open'
-                    //     }
-                    //   ],
-                    //
-                    // })
                   }
+                  // }, app)
+
+
 
                 }.bind(app))
 

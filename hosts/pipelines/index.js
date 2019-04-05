@@ -178,8 +178,9 @@ module.exports = function(payload){
   		},
       {
   			poll: {
+          NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
   				suspended: true,//start suspended
-  				id: "input.cache",
+  				id: "ui.cache",
   				conn: [
             Object.merge(
               Object.clone(cache),

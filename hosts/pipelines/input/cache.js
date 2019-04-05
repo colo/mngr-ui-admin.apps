@@ -33,6 +33,9 @@ module.exports = new Class({
   ON_CONNECT_ERROR: 'onConnectError',
 
   options: {
+    NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
+    id: 'ui.cache',
+
     requests : {
       periodical: [{
         get_instances: function(req, next, app){

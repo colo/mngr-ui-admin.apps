@@ -71,6 +71,8 @@ module.exports = new Class({
     },
 
     cache_store: {
+      NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
+      id: 'ui.cache',
       suspended: false,
       ttl: 1999,
       stores: [
@@ -89,7 +91,8 @@ module.exports = new Class({
         //   module: RethinkDBStoreOut,
         // }
         {
-          id: 'redis',
+          NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
+          id: 'ui.cache',
           conn: [
             {
               host: 'elk',
