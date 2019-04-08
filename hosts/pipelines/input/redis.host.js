@@ -35,8 +35,8 @@ module.exports = new Class({
   // FOLD_BASE: 300,
   MAX_RANGE_DATA_POINTS: 300,
 
-  feeds: {},
-  close_feeds: {},
+  feeds: undefined,
+  close_feed: undefined,
   changes_buffer: {},
   changes_buffer_expire: {},
 
@@ -65,185 +65,185 @@ module.exports = new Class({
 
 		requests : {
       periodical: [
-        {
-          scan: function(req, next, app){
-            app.__scan(undefined, undefined, app)
-          //   // Object.each(app.scan_hosts, function(data, host){
-          //   //   if(data.timestamp + app.options.scan_host_expire < Date.now())
-          //   //     delete app.scan_hosts[host]
-          //   // })
-          //   //
-          //   // if(app.data_hosts && app.data_hosts.length > 0){
-          //   //   Array.each(app.data_hosts, function(host){
-          //   //     if(!app.scan_cursor[host]) app.scan_cursor[host] = 0
-          //   //
-          //   //     app.conn.scan(app.scan_cursor[host], 'MATCH', host+"\.*", 'COUNT', app.options.scan_count, function(err, result) {
-          //   //       // debug_internals('scan', err, result)
-          //   //       if(!err){
-          //   //         if(!app.scan_hosts[host]) app.scan_hosts[host] = {keys: [], timestamp: Date.now()}
-          //   //
-          //   //         app.scan_hosts[host].keys.combine(result[1])
-          //   //
-          //   //         app.scan_cursor[host] = result[0]
-          //   //       }
-          //   //       // this.fireEvent(this.ON_DOC_SAVED, [err, result])
-          //   //     }.bind(this))
-          //   //
-          //   //
-          //   //   })
-          //   // }
-          }
-        },
-        {
-					get_data_range: function(req, next, app){
-            debug_internals('get_data_range', app.data_hosts);
-						if(app.data_hosts && app.data_hosts.length > 0){
-
-              Array.each(app.data_hosts, function(host){
-
-                // app.__scan(host, function(){
-                let timestamps = app.__get_timestamps(app.scan_hosts[host].keys)
-                debug_internals('get_data_range', host, timestamps)
-
-                if(timestamps.length > 0){
-                  app.data_range(
-                    undefined,
-                    { metadata: { timestamp: timestamps[0] }},
-                    {
-                      options:{
-                        _extras: {
-                          id: undefined,
-                          prop: 'data_range',
-                          range_select : 'start',
-                          host: host,
-                          type: 'prop'
-                        }
-                      }
-                    }
-                  )
-
-                  app.data_range(
-                    undefined,
-                    { metadata: { timestamp: timestamps[timestamps.length - 1] }},
-                    {
-                      options: {
-                        _extras: {
-                          id: undefined,
-                          prop: 'data_range',
-                          range_select : 'end',
-                          host: host,
-                          type: 'prop'
-                        }
-                      }
-                    }
-                  )
-                }
-                // }, app)
-
-
-
-
-              })
-
-            }
-
-					}
-				},
-        {
-					search_paths: function(req, next, app){
-						// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-            if(app.data_hosts && app.data_hosts.length > 0){
-
-              Array.each(app.data_hosts, function(host){
-
-                // app.__scan(host, function(){
-                let paths = app.__get_paths(app.scan_hosts[host].keys, host)
-                debug_internals('search_paths', host, paths);
-
-                if(Object.getLength(paths) > 0)
-                  app.paths(
-                    undefined,
-                    paths,
-                    {
-                      options: {
-                        _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
-                      }
-                    }
-                  )
-
-                // }, app)
-
-
-
-
-              })
-            }
-
-					}
-				},
-        {
-					get_changes: function(req, next, app){
-            if(app.registered){
-              let hosts = []
-              Object.each(app.registered, function(registered_data, id){
-                // debug_internals('get_changes', registered_data)
-                Object.each(registered_data, function(props, host){
-
-                  if(props.contains('data'))//if registered for "data"
-                    hosts = hosts.combine([host])
-
-                })
-              })
-  						//debug_internals('_get_last_stat %o', next);
-              // let start = Date.now() - 3999
-              // let end = Date.now()
-
-  						debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
-
-  						// let views = [];
-  						// Object.each(app.hosts, function(value, host){
-  							// debug_internals('_get_last_stat %s', host);
-
-                Array.each(hosts, function(host){
-                  // debug_internals('_get_last_stat %s %s', host, path);
-                  // let _func = function(){
-
-                  // app.__scan(host, function(){
-                  if(app.hosts_ranges[host] && app.hosts_ranges[host].end){
-                    let paths = app.__get_paths(app.scan_hosts[host].keys, host)
-
-                    app.__get_data(
-                      host,
-                      paths,
-                      roundMilliseconds(app.hosts_ranges[host].end) - SECOND * 2,
-                      roundMilliseconds(app.hosts_ranges[host].end),
-                      function(err, data){
-                        app.data(
-                          err,
-                          data,
-                          {
-                            options: {
-                              _extras: {
-                                id: undefined,
-                                prop: 'changes',
-                                host: host,
-                              },
-                            }
-                          }
-                        )
-                      }
-                    )
-
-                  }
-                  // }, app)
-
-
-
-                }.bind(app))
-
-            }
-					}
-				},
+        // {
+        //   scan: function(req, next, app){
+        //     app.__scan(undefined, undefined, app)
+        //   //   // Object.each(app.scan_hosts, function(data, host){
+        //   //   //   if(data.timestamp + app.options.scan_host_expire < Date.now())
+        //   //   //     delete app.scan_hosts[host]
+        //   //   // })
+        //   //   //
+        //   //   // if(app.data_hosts && app.data_hosts.length > 0){
+        //   //   //   Array.each(app.data_hosts, function(host){
+        //   //   //     if(!app.scan_cursor[host]) app.scan_cursor[host] = 0
+        //   //   //
+        //   //   //     app.conn.scan(app.scan_cursor[host], 'MATCH', host+"\.*", 'COUNT', app.options.scan_count, function(err, result) {
+        //   //   //       // debug_internals('scan', err, result)
+        //   //   //       if(!err){
+        //   //   //         if(!app.scan_hosts[host]) app.scan_hosts[host] = {keys: [], timestamp: Date.now()}
+        //   //   //
+        //   //   //         app.scan_hosts[host].keys.combine(result[1])
+        //   //   //
+        //   //   //         app.scan_cursor[host] = result[0]
+        //   //   //       }
+        //   //   //       // this.fireEvent(this.ON_DOC_SAVED, [err, result])
+        //   //   //     }.bind(this))
+        //   //   //
+        //   //   //
+        //   //   //   })
+        //   //   // }
+        //   }
+        // },
+        // {
+				// 	get_data_range: function(req, next, app){
+        //     debug_internals('get_data_range', app.data_hosts);
+				// 		if(app.data_hosts && app.data_hosts.length > 0){
+        //
+        //       Array.each(app.data_hosts, function(host){
+        //
+        //         // app.__scan(host, function(){
+        //         let timestamps = app.__get_timestamps(app.scan_hosts[host].keys)
+        //         debug_internals('get_data_range', host, timestamps)
+        //
+        //         if(timestamps.length > 0){
+        //           app.data_range(
+        //             undefined,
+        //             { metadata: { timestamp: timestamps[0] }},
+        //             {
+        //               options:{
+        //                 _extras: {
+        //                   id: undefined,
+        //                   prop: 'data_range',
+        //                   range_select : 'start',
+        //                   host: host,
+        //                   type: 'prop'
+        //                 }
+        //               }
+        //             }
+        //           )
+        //
+        //           app.data_range(
+        //             undefined,
+        //             { metadata: { timestamp: timestamps[timestamps.length - 1] }},
+        //             {
+        //               options: {
+        //                 _extras: {
+        //                   id: undefined,
+        //                   prop: 'data_range',
+        //                   range_select : 'end',
+        //                   host: host,
+        //                   type: 'prop'
+        //                 }
+        //               }
+        //             }
+        //           )
+        //         }
+        //         // }, app)
+        //
+        //
+        //
+        //
+        //       })
+        //
+        //     }
+        //
+				// 	}
+				// },
+        // {
+				// 	search_paths: function(req, next, app){
+				// 		// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
+        //     if(app.data_hosts && app.data_hosts.length > 0){
+        //
+        //       Array.each(app.data_hosts, function(host){
+        //
+        //         // app.__scan(host, function(){
+        //         let paths = app.__get_paths(app.scan_hosts[host].keys, host)
+        //         debug_internals('search_paths', host, paths);
+        //
+        //         if(Object.getLength(paths) > 0)
+        //           app.paths(
+        //             undefined,
+        //             paths,
+        //             {
+        //               options: {
+        //                 _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
+        //               }
+        //             }
+        //           )
+        //
+        //         // }, app)
+        //
+        //
+        //
+        //
+        //       })
+        //     }
+        //
+				// 	}
+				// },
+        // {
+				// 	get_changes: function(req, next, app){
+        //     if(app.registered){
+        //       let hosts = []
+        //       Object.each(app.registered, function(registered_data, id){
+        //         // debug_internals('get_changes', registered_data)
+        //         Object.each(registered_data, function(props, host){
+        //
+        //           if(props.contains('data'))//if registered for "data"
+        //             hosts = hosts.combine([host])
+        //
+        //         })
+        //       })
+  			// 			//debug_internals('_get_last_stat %o', next);
+        //       // let start = Date.now() - 3999
+        //       // let end = Date.now()
+        //
+  			// 			debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
+        //
+  			// 			// let views = [];
+  			// 			// Object.each(app.hosts, function(value, host){
+  			// 				// debug_internals('_get_last_stat %s', host);
+        //
+        //         Array.each(hosts, function(host){
+        //           // debug_internals('_get_last_stat %s %s', host, path);
+        //           // let _func = function(){
+        //
+        //           // app.__scan(host, function(){
+        //           if(app.hosts_ranges[host] && app.hosts_ranges[host].end){
+        //             let paths = app.__get_paths(app.scan_hosts[host].keys, host)
+        //
+        //             app.__get_data(
+        //               host,
+        //               paths,
+        //               roundMilliseconds(app.hosts_ranges[host].end) - SECOND * 2,
+        //               roundMilliseconds(app.hosts_ranges[host].end),
+        //               function(err, data){
+        //                 app.data(
+        //                   err,
+        //                   data,
+        //                   {
+        //                     options: {
+        //                       _extras: {
+        //                         id: undefined,
+        //                         prop: 'changes',
+        //                         host: host,
+        //                       },
+        //                     }
+        //                   }
+        //                 )
+        //               }
+        //             )
+        //
+        //           }
+        //           // }, app)
+        //
+        //
+        //
+        //         }.bind(app))
+        //
+        //     }
+				// 	}
+				// },
 
 
       ],
@@ -407,12 +407,12 @@ module.exports = new Class({
               debug_internals('register', req.host, req.prop, req.id);
               let {host, prop, id} = req
 
-              // app.register(host, prop, id)
+              app.register(host, prop, id)
 
-              if(!app.registered[id]) app.registered[id] = {}
-              if(!app.registered[id][host]) app.registered[id][host] = []
-
-              app.registered[id][host] = app.registered[id][host].combine([prop])
+              // if(!app.registered[id]) app.registered[id] = {}
+              // if(!app.registered[id][host]) app.registered[id][host] = []
+              //
+              // app.registered[id][host] = app.registered[id][host].combine([prop])
 
             }
 
@@ -422,25 +422,26 @@ module.exports = new Class({
 					unregister: function(req, next, app){
 
 						if(req.type == 'unregister'){
-
-              // throw new Error()
-
               let {host, prop, id} = req
-              // app.unregister(host, prop, id)
+              app.unregister(host, prop, id)
 
-              if(app.registered[id]){
-                if(host && prop && app.registered[id][host])
-                  app.registered[id][host] = app.registered[id][host].erase(prop)
-
-                if((host && app.registered[id][host].length == 0) || (host && !prop))
-                  delete app.registered[id][host]
+              // debug_internals('unregister', req)
+              // process.exit(1)
 
 
-                if(Object.getLength(app.registered[id]) == 0 || !host)
-                  delete app.registered[id]
-              }
-
-              debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
+              // if(app.registered[id]){
+              //   if(host && prop && app.registered[id][host])
+              //     app.registered[id][host] = app.registered[id][host].erase(prop)
+              //
+              //   if((host && app.registered[id][host].length == 0) || (host && !prop))
+              //     delete app.registered[id][host]
+              //
+              //
+              //   if(Object.getLength(app.registered[id]) == 0 || !host)
+              //     delete app.registered[id]
+              // }
+              //
+              // debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
 
             }
 
@@ -1395,121 +1396,365 @@ module.exports = new Class({
 
     // }
   },
-  // unregister: function(host, prop, id){
-  //   debug_internals('unregister', host, prop, id)
-  //
-  //   if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
-  //     this.events[host][prop].erase(id)
-  //     this.events[host][prop] = this.events[host][prop].clean()
-  //
-  //     if(this.events[host][prop].length == 0){
-  //       delete this.events[host][prop]
-  //     }
-  //   }
-  //
-  //   if(this.events[host] && Object.getLength(this.events[host]) == 0)
-  //     delete this.events[host]
-  //
-  //   if(Object.getLength(this.events) == 0 && this.feeds[host]){
-  //     debug_internals('unregister closing')
-  //     this.__close_changes(host)
-  //     // this.feeds[host].close(function (err) {
-  //     //   this.close_feed = true
-  //     //   if (err){
-  //     //     debug_internals('err closing cursor', err)
-  //     //   }
-  //     // }.bind(this))
-  //     // this.feed = undefined
-  //   }
-  //
-  //   debug_internals('unregister', this.events)
-  //
-  // },
-  // __close_changes: function(host){
-  //   if(this.feeds[host]){
-  //     this.feeds[host].close(function (err) {
-  //       this.close_feeds[host] = true
-  //
-  //       if (err){
-  //         debug_internals('err closing cursor onSuspend', err)
-  //       }
-  //     }.bind(this))
-  //
-  //     this.feeds[host] = undefined
-  //   }
-  //
-  //   // this.removeEvent('onSuspend', this.__close_changes)
-  // },
-  // register: function(host, prop, id){
-  //   // debug_internals('register', host, prop, id)
-  //
-  //   if(!this.events[host]) this.events[host] = {}
-  //   if(!this.events[host][prop]) this.events[host][prop] = []
-  //   this.events[host][prop].push(id)
-  //
-  //   if(!this.feeds[host]){
-  //
-  //     this.addEvent('onSuspend', this.__close_changes.pass(host, this))
-  //
-  //
-  //     if(!this.changes_buffer[host]) this.changes_buffer[host] = []
-  //
-  //     if(!this.changes_buffer_expire[host]) this.changes_buffer_expire[host] = Date.now()
-  //
-  //     this.r.db(this.options.db).
-  //       table('ui').
-  //       getAll(host, {index: 'host'}).
-  //       changes({includeTypes: true, squash: 1}).
-  //       run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
-  //
-  //       this.feeds[host] = cursor
-  //
-  //       this.feeds[host].each(function(err, row){
-  //
-  //         /**
-  //         * https://www.rethinkdb.com/api/javascript/each/
-  //         * Iteration can be stopped prematurely by returning false from the callback.
-  //         */
-  //         if(this.close_feeds[host] === true){ this.close_feeds[host] = false; this.feeds[host] = undefined; return false }
-  //
-  //         // debug_internals('changes %s', new Date())
-  //         if(row && row !== null ){
-  //           if(row.type == 'add'){
-  //             // debug_internals('changes add %s %o', new Date(), row.new_val)
-  //             // debug_internals("changes add now: %s \n timstamp: %s \n expire: %s \n host: %s \n path: %s",
-  //             //   new Date(roundMilliseconds(Date.now())),
-  //             //   new Date(roundMilliseconds(row.new_val.metadata.timestamp)),
-  //             //   new Date(roundMilliseconds(this.changes_buffer_expire[host])),
-  //             //   row.new_val.metadata.host,
-  //             //   row.new_val.metadata.path
-  //             // )
-  //
-  //             this.changes_buffer[host].push(row.new_val)
-  //           }
-  //
-  //           if(this.changes_buffer_expire[host] < Date.now() - 900 && this.changes_buffer[host].length > 0){
-  //             // console.log('onPeriodicalDoc', this.changes_buffer.length)
-  //
-  //             this.__process_changes(this.changes_buffer[host])
-  //
-  //             // debug_internals('changes %s', new Date(), data)
-  //
-  //             this.changes_buffer_expire[host] = Date.now()
-  //             this.changes_buffer[host] = []
-  //
-  //           }
-  //
-  //         }
-  //
-  //
-  //       }.bind(this))
-  //
-  //     }.bind(this))
-  //
-  //   }
-  //
-  //
-  // },
+  unregister: function(hosts, props, id){
+    debug_internals('unregister', hosts, props, id)
+    if(!hosts){
+      hosts = Object.keys(this.events)
+    }
+    else if(!Array.isArray(hosts)){
+      hosts = [hosts]
+    }
+
+    Array.each(hosts, function(host){
+      if(!props){
+        props = Object.keys(this.events[host])
+      }
+      else if(!Array.isArray(props)){
+        props = [props]
+      }
+
+      Array.each(props, function(prop){
+        if(this.events[host][prop] && this.events[host][prop].contains(id)){
+          this.events[host][prop].erase(id)
+          this.events[host][prop] = this.events[host][prop].clean()
+
+          if(this.events[host][prop].length == 0){
+            delete this.events[host][prop]
+          }
+        }
+      }.bind(this))
+
+
+
+      if(this.events[host] && Object.getLength(this.events[host]) == 0)
+        delete this.events[host]
+    }.bind(this))
+
+    debug_internals('unregister', this.events, id)
+    // process.exit(1)
+
+    if(Object.getLength(this.events) == 0 && this.feed){
+      debug_internals('unregister closing')
+      this.__close_changes()
+
+      // this.feeds[host].close(function (err) {
+      //   this.close_feed = true
+      //   if (err){
+      //     debug_internals('err closing cursor', err)
+      //   }
+      // }.bind(this))
+      // this.feed = undefined
+    }
+
+    debug_internals('unregister', this.events)
+
+  },
+  __close_changes: function(){
+    // debug_internals('__close_changes', this.feed)
+    // process.exit(1)
+    if(this.feed){
+      this.feed.unsubscribe(this.options.channel,function(){
+
+        // this.feed.end(true)
+        this.feed.quit(function(){
+          debug_internals('__close_changes', this.feed)
+          // process.exit(1)
+
+          this.close_feed = true
+
+          // if (err){
+          //   debug_internals('err closing cursor onSuspend', err)
+          // }
+          this.feed = undefined
+        }.bind(this))
+
+
+
+      }.bind(this))
+
+
+      // this.feed.quit()
+      // this.close_feed = true
+
+    }
+
+    // this.removeEvent('onSuspend', this.__close_changes)
+  },
+  register: function(host, prop, id){
+    // debug_internals('register', host, prop, id)
+
+    if(!this.events[host]) this.events[host] = {}
+    if(!this.events[host][prop]) this.events[host][prop] = []
+    this.events[host][prop].combine([id])//avoid duplicates ids
+
+    if(!this.changes_buffer[host]) this.changes_buffer[host] = []
+    if(!this.changes_buffer_expire[host]) this.changes_buffer_expire[host] = Date.now()
+
+    if(!this.feed){
+
+      this.addEvent('onSuspend', this.__close_changes.pass(undefined, this))
+
+      let opts = Object.merge(
+        this.options.redis,
+        {
+          host: this.options.host,
+          port: this.options.port,
+          db: this.options.db
+        }
+      )
+
+      // let _cb = function(err, conn){
+      //   if(!err){
+      //     // this.feed = conn
+      //
+      //     this.feed.on("message", function(channel, message) {
+      //       // console.log("Message '" + message + "' on channel '" + channel + "' arrived!")
+      //
+      //       // debug_internals('message', channel, message)
+      //       // if(this.close_feed === true){
+      //       //   this.close_feed = false
+      //       //   if(this.feed)
+      //       //     this.feed.quit()
+      //       //
+      //       //   this.feed = undefined
+      //       // }
+      //
+      //       if(channel == this.options.channel){
+      //         let _message_host = message.substring(0, message.indexOf('.'))
+      //
+      //         // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer)
+      //         // throw new Error()
+      //
+      //         if(this.changes_buffer[_message_host])
+      //           this.changes_buffer[_message_host].push(message)
+      //
+      //         if(
+      //           this.changes_buffer_expire[_message_host]
+      //           && this.changes_buffer_expire[_message_host] < Date.now() - 900
+      //           && this.changes_buffer[_message_host].length > 0
+      //         ){
+      //           // console.log('onPeriodicalDoc', this.changes_buffer.length)
+      //
+      //           // this.__process_changes(this.changes_buffer[host])
+      //
+      //           // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer[_message_host])
+      //           // throw new Error()
+      //           this.__get_data_range(this.changes_buffer[host], host)
+      //           this.__search_paths(this.changes_buffer[host], host)
+      //           this.__get_changes(this.changes_buffer[host], host)
+      //
+      //           this.changes_buffer_expire[_message_host] = Date.now()
+      //           this.changes_buffer[_message_host] = []
+      //
+      //         }
+      //
+      //       }
+      //     }.bind(this));
+      //
+      //     this.feed.subscribe(this.options.channel)
+      //   }
+      //   // connect_cb = (typeOf(connect_cb) ==  "function") ? connect_cb.bind(this) : this.connect.bind(this)
+      //   // connect_cb(err, conn, opts)
+      // }.bind(this)
+
+      this.feed = redis.createClient(opts)
+
+      this.feed.on("message", function(channel, message) {
+        // console.log("Message '" + message + "' on channel '" + channel + "' arrived!")
+
+        // debug_internals('message', channel, message)
+        // if(this.close_feed === true){
+        //   this.close_feed = false
+        //   if(this.feed)
+        //     this.feed.quit()
+        //
+        //   this.feed = undefined
+        // }
+
+        if(channel == this.options.channel){
+          let _message_host = message.substring(0, message.indexOf('.'))
+
+          // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer)
+          // throw new Error()
+
+          if(this.changes_buffer[_message_host])
+            this.changes_buffer[_message_host].push(message)
+
+          if(
+            this.changes_buffer_expire[_message_host]
+            && this.changes_buffer_expire[_message_host] < Date.now() - 900
+            && this.changes_buffer[_message_host].length > 0
+          ){
+            // console.log('onPeriodicalDoc', this.changes_buffer.length)
+
+            // this.__process_changes(this.changes_buffer[host])
+
+            // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer[_message_host])
+            // throw new Error()
+            this.__get_data_range(this.changes_buffer[_message_host], _message_host)
+            this.__search_paths(this.changes_buffer[_message_host], _message_host)
+            this.__get_changes(this.changes_buffer[_message_host], _message_host)
+
+            this.changes_buffer_expire[_message_host] = Date.now()
+            this.changes_buffer[_message_host] = []
+
+          }
+
+        }
+      }.bind(this));
+
+      this.feed.subscribe(this.options.channel)
+
+      // this.feed.on('connect', function(){ _cb(undefined, this.feed) }.bind(this))
+      // this.feed.on('error', function(err){ this.feed = undefined }.bind(this))
+
+      // this.r.db(this.options.db).
+      //   table('ui').
+      //   getAll(host, {index: 'host'}).
+      //   changes({includeTypes: true, squash: 1}).
+      //   run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
+      //
+      //   this.feeds[host] = cursor
+      //
+      //   this.feeds[host].each(function(err, row){
+      //
+      //     /**
+      //     * https://www.rethinkdb.com/api/javascript/each/
+      //     * Iteration can be stopped prematurely by returning false from the callback.
+      //     */
+      //     if(this.close_feeds[host] === true){ this.close_feeds[host] = false; this.feeds[host] = undefined; return false }
+      //
+      //     // debug_internals('changes %s', new Date())
+      //     if(row && row !== null ){
+      //       if(row.type == 'add'){
+      //         // debug_internals('changes add %s %o', new Date(), row.new_val)
+      //         // debug_internals("changes add now: %s \n timstamp: %s \n expire: %s \n host: %s \n path: %s",
+      //         //   new Date(roundMilliseconds(Date.now())),
+      //         //   new Date(roundMilliseconds(row.new_val.metadata.timestamp)),
+      //         //   new Date(roundMilliseconds(this.changes_buffer_expire[host])),
+      //         //   row.new_val.metadata.host,
+      //         //   row.new_val.metadata.path
+      //         // )
+      //
+      //         this.changes_buffer[host].push(row.new_val)
+      //       }
+      //
+      //       if(this.changes_buffer_expire[host] < Date.now() - 900 && this.changes_buffer[host].length > 0){
+      //         // console.log('onPeriodicalDoc', this.changes_buffer.length)
+      //
+      //         this.__process_changes(this.changes_buffer[host])
+      //
+      //         // debug_internals('changes %s', new Date(), data)
+      //
+      //         this.changes_buffer_expire[host] = Date.now()
+      //         this.changes_buffer[host] = []
+      //
+      //       }
+      //
+      //     }
+      //
+      //
+      //   }.bind(this))
+      //
+      // }.bind(this))
+
+    }
+
+
+  },
+
+  __search_paths: function(keys, host){
+
+    let paths = this.__get_paths(keys, host)
+    debug_internals('search_paths', host, paths);
+
+    if(Object.getLength(paths) > 0)
+      this.paths(
+        undefined,
+        paths,
+        {
+          options: {
+            _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
+          }
+        }
+      )
+
+	},
+
+	__get_data_range: function(keys, host){
+
+    let timestamps = this.__get_timestamps(keys)
+    debug_internals('get_data_range', host, timestamps)
+
+    if(timestamps.length > 0){
+      this.data_range(
+        undefined,
+        { metadata: { timestamp: timestamps[0] }},
+        {
+          options:{
+            _extras: {
+              id: undefined,
+              prop: 'data_range',
+              range_select : 'start',
+              host: host,
+              type: 'prop'
+            }
+          }
+        }
+      )
+
+      this.data_range(
+        undefined,
+        { metadata: { timestamp: timestamps[timestamps.length - 1] }},
+        {
+          options: {
+            _extras: {
+              id: undefined,
+              prop: 'data_range',
+              range_select : 'end',
+              host: host,
+              type: 'prop'
+            }
+          }
+        }
+      )
+    }
+    // }, app)
+
+
+
+  },
+  __get_changes: function(keys, host){
+
+		debug_internals('get_changes %s', new Date(), host);
+
+    let paths = this.__get_paths(keys, host)
+    let timestamps = this.__get_timestamps(keys)
+    let start = timestamps[0]
+    let end = timestamps[timestamps.length - 1]
+    this.__get_data(
+      host,
+      paths,
+      start,
+      end,
+      function(err, data){
+        this.data(
+          err,
+          data,
+          {
+            options: {
+              _extras: {
+                id: undefined,
+                prop: 'changes',
+                host: host,
+              },
+            }
+          }
+        )
+      }.bind(this)
+    )
+
+	},
   __process_changes: function(buffer){
     let data = {}
     Array.each(buffer, function(doc){

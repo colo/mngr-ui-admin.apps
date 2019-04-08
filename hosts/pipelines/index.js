@@ -158,6 +158,7 @@ module.exports = function(payload){
                 // module: InputPollerRethinkDBHost,
                 host: 'elk',
                 db: 0,
+                channel: 'ui',
                 module: InputPollerRedisHost,
               },
               // host
