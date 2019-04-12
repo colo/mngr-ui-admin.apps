@@ -388,7 +388,7 @@ module.exports = new Class({
   __get_session_id_by_socket: function(socketId, cb){
     debug_internals('__get_session_id_by_socket', socketId)
 
-    if(typeof this.session_store.all == 'function'){
+    if(this.session_store && typeof this.session_store.all == 'function'){
       try{
         this.session_store.all(function(err, sessions){
           if(err) cb(err, sessions)
@@ -411,7 +411,7 @@ module.exports = new Class({
         debug_internals('this.session_store.get error', e)
       }
     }
-    else if(this.session_store.sessions){//MemoryStore
+    else if(this.session_store && this.session_store.sessions){//MemoryStore
       debug_internals('__get_session_id_by_socket this.session_store.sessions', this.session_store.sessions)
       let found = false
       Object.each(this.session_store.sessions, function(session, sid){
