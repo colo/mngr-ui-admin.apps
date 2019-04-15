@@ -306,7 +306,7 @@ module.exports = new Class({
   },
   __get_session_by_id: function(id, cb){
 
-    if(typeof this.session_store.get == 'function'){
+    if(this.session_store && typeof this.session_store.get == 'function'){
       try{
         this.session_store.get(id, cb)
       }
@@ -314,7 +314,7 @@ module.exports = new Class({
         debug_internals('this.session_store.get error', e)
       }
     }
-    else if(this.session_store.sessions[id]){//MemoryStore
+    else if(this.session_store && this.session_store.sessions[id]){//MemoryStore
       cb(undefined, this.session_store.sessions[id])
     }
     else{
