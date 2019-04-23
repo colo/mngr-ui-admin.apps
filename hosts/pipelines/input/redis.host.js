@@ -1559,46 +1559,52 @@ module.exports = new Class({
 
       this.feed = redis.createClient(opts)
 
-      this.feed.on("message", function(channel, message) {
-        // console.log("Message '" + message + "' on channel '" + channel + "' arrived!")
-
-        // debug_internals('message', channel, message)
-        // if(this.close_feed === true){
-        //   this.close_feed = false
-        //   if(this.feed)
-        //     this.feed.quit()
-        //
-        //   this.feed = undefined
-        // }
+      this.feed.on("message", function(channel, messages) {
+        debug('feed message', messages)
 
         if(channel == this.options.channel){
-          let _message_host = message.substring(0, message.indexOf('.'))
+          messages = messages.split(',')
+          Array.each(messages, function(message, index){
+            let _message_host = message.substring(0, message.indexOf('.'))
 
-          // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer)
-          // throw new Error()
-
-          if(this.changes_buffer[_message_host])
-            this.changes_buffer[_message_host].push(message)
-
-          if(
-            this.changes_buffer_expire[_message_host]
-            && this.changes_buffer_expire[_message_host] < Date.now() - 900
-            && this.changes_buffer[_message_host].length > 0
-          ){
-            // console.log('onPeriodicalDoc', this.changes_buffer.length)
-
-            // this.__process_changes(this.changes_buffer[host])
-
-            // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer[_message_host])
+            // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer)
             // throw new Error()
-            this.__get_data_range(this.changes_buffer[_message_host], _message_host)
-            this.__search_paths(this.changes_buffer[_message_host], _message_host)
-            this.__get_changes(this.changes_buffer[_message_host], _message_host)
 
-            this.changes_buffer_expire[_message_host] = Date.now()
-            this.changes_buffer[_message_host] = []
+            if(this.changes_buffer[_message_host])
+              this.changes_buffer[_message_host].push(message)
 
-          }
+            // if(
+            //   this.changes_buffer_expire[_message_host]
+            //   && this.changes_buffer_expire[_message_host] < Date.now() - 999
+            //   && this.changes_buffer[_message_host].length > 0
+            // ){
+            //   // console.log('onPeriodicalDoc', this.changes_buffer.length)
+            //
+            //   // this.__process_changes(this.changes_buffer[host])
+            //
+            //   // debug_internals('changes %s', new Date(), _message_host, this.changes_buffer[_message_host])
+            //   // throw new Error()
+            //   this.__get_data_range(this.changes_buffer[_message_host], _message_host)
+            //   this.__search_paths(this.changes_buffer[_message_host], _message_host)
+            //   this.__get_changes(this.changes_buffer[_message_host], _message_host)
+            //
+            //   this.changes_buffer_expire[_message_host] = Date.now()
+            //   this.changes_buffer[_message_host] = []
+            //
+            // }
+            if(index === messages.length -1){
+              Object.each(this.changes_buffer, function(host_buffer, host){
+                this.__get_data_range(host_buffer, host)
+                this.__search_paths(host_buffer, host)
+                this.__get_changes(host_buffer, host)
+
+                this.changes_buffer_expire[host] = Date.now()
+                this.changes_buffer[host] = []
+              }.bind(this))
+            }
+          }.bind(this))
+
+
 
         }
       }.bind(this));
