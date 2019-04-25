@@ -116,6 +116,33 @@ module.exports = function(payload){
 
   debug_internals('require %o', payload)
 
+  let ui_conf = {
+    poll: {
+      suspended: true,//start suspended
+      id: "input.ui_rest",
+      conn: [
+        Object.merge(
+          Object.clone(ui),
+          {
+            // path_key: 'os',
+            module: UIPollHttp,
+          }
+        )
+      ],
+      connect_retry_count: -1,
+      connect_retry_periodical: 1000,
+      // requests: {
+      // 	periodical: 1000,
+      // },
+      requests: {
+        periodical: function(dispatch){
+          // //////////console.log('host periodical running')
+          return cron.schedule('* * * * * *', dispatch);//every second
+        }
+      },
+    },
+  }
+
   let conf = {
   	input: [
   		{
@@ -204,32 +231,7 @@ module.exports = function(payload){
       		},
   			},
   		},
-      {
-  			poll: {
-  				suspended: true,//start suspended
-  				id: "input.ui_rest",
-  				conn: [
-            Object.merge(
-              Object.clone(ui),
-              {
-                // path_key: 'os',
-                module: UIPollHttp,
-              }
-            )
-  				],
-  				connect_retry_count: -1,
-  				connect_retry_periodical: 1000,
-  				// requests: {
-  				// 	periodical: 1000,
-  				// },
-  				requests: {
-      			periodical: function(dispatch){
-  						// //////////console.log('host periodical running')
-      				return cron.schedule('* * * * * *', dispatch);//every second
-      			}
-      		},
-  			},
-  		}
+
   	],
     filters: [
   		// decompress,
@@ -337,5 +339,8 @@ module.exports = function(payload){
   	// ]
   }
 
+  if(ui)
+    conf.input.push(ui_conf)
+    
   return conf
 }

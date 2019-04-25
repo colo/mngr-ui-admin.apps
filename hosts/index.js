@@ -34,7 +34,7 @@ const qrate = require('qrate');
 
 const ui_rest_client_conf = require(ETC+'ui.rest.js')
 const ui_rest = require('./clients/ui.rest')
-const ui_rest_client = new ui_rest(ui_rest_client_conf)
+
 
 module.exports = new Class({
   Extends: App,
@@ -63,6 +63,8 @@ module.exports = new Class({
   session_store: undefined,
 
 	options: {
+    ui_rest_client: undefined,
+
     id: 'hosts',
     path: 'hosts',
 
@@ -595,7 +597,7 @@ module.exports = new Class({
             }
 
             if(this.options.on_demand && type == 'unregister'){
-              ui_rest_client.api.get({
+              this.ui_rest_client.api.get({
                 uri: "events/once",
                 qs: {
                   type: type,
@@ -606,7 +608,7 @@ module.exports = new Class({
               })
 
               let rest_event = (type == 'register') ? 'resume' : 'suspend'
-              ui_rest_client.api.get({
+              this.ui_rest_client.api.get({
                 uri: 'events/'+rest_event,
                 qs: {
                   pipeline_id: 'ui',
@@ -620,7 +622,7 @@ module.exports = new Class({
             **/
             if(prop == 'data' && this.pipeline.connected[1] == true){
               if(this.options.on_demand && type == 'register'){
-                ui_rest_client.api.get({
+                this.ui_rest_client.api.get({
                   uri: "events/once",
                   qs: {
                     type: type,
@@ -631,7 +633,7 @@ module.exports = new Class({
                 })
 
                 let rest_event = (type == 'register') ? 'resume' : 'suspend'
-                ui_rest_client.api.get({
+                this.ui_rest_client.api.get({
                   uri: 'events/'+rest_event,
                   qs: {
                     pipeline_id: 'ui',
@@ -1375,14 +1377,20 @@ module.exports = new Class({
                       // instances.push(this.__transform_name(path+'.'+path_key))
                       instances[this.__transform_name(path+'.'+path_key)] = chart_instance
 
-                      this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                      /**
+                      * race condition between this app && ui?
+                      **/
+                      // this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                       if(
                         transform_result_counter == transform_result_length - 1
                         && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                       ){
-                        this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
-                        // cb(transformed)
+                        /**
+                        * race condition between this app && ui?
+                        **/
+                        // this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
+                        cb(transformed[type])
                       }
 
                       transform_result_counter++
@@ -1454,14 +1462,20 @@ module.exports = new Class({
 
 
                     instances[this.__transform_name(path)] = chart_instance
-                    this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                    /**
+                    * race condition between this app && ui?
+                    **/
+                    // this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                     if(
                       transform_result_counter == transform_result_length - 1
                       && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                     ){
-                      this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
-                      // cb(transformed)
+                      /**
+                      * race condition between this app && ui?
+                      **/
+                      // this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
+                      cb(transformed[type])
                     }
 
                     transform_result_counter++
@@ -1540,14 +1554,20 @@ module.exports = new Class({
                   // instances.push(this.__transform_name(path))
                   instances[this.__transform_name(path)] = chart_instance
 
-                  this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                  /**
+                  * race condition between this app && ui?
+                  **/
+                  // this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                   if(
                     transform_result_counter == transform_result_length - 1
                     && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                   ){
-                    this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
-                    // cb(transformed)
+                    /**
+                    * race condition between this app && ui?
+                    **/
+                    // this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
+                    cb(transformed[type])
                   }
 
                   transform_result_counter++
@@ -1741,7 +1761,7 @@ module.exports = new Class({
 
       if(this.options.on_demand && query.format == 'tabular'){//last one ain't right..check is only to prevent multiple calls for stat|tabular
         debug_internals('RANGE', prop, query)
-        ui_rest_client.api.get({
+        this.ui_rest_client.api.get({
           uri: "events/range",
           qs: {
             hosts: host,
@@ -1948,7 +1968,7 @@ module.exports = new Class({
         conn: require(ETC+'ui.conn.js')(),
         host: this.options.host,
         cache: this.options.cache_store,
-        ui: Object.merge(
+        ui: (this.options.on_demand !== true) ? undefined : Object.merge(
           ui_rest_client_conf,
           {
             load: 'apps/hosts/clients'
@@ -2143,6 +2163,8 @@ module.exports = new Class({
 
     this.cache = new jscaching(this.options.cache_store)
 
+    if(this.options.on_demand)
+      this.ui_rest_client = new ui_rest(ui_rest_client_conf)
 
     // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', function(){
     //   // debug_internals('connected')
