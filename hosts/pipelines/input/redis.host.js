@@ -461,6 +461,8 @@ module.exports = new Class({
       range: [
         {
 					get_data_range: function(req, next, app){
+            // process.exit(1)
+
 						if(req.host && (req.prop == 'data_range' || !req.prop)){
               debug_internals('range get_data_range', req.host, req.prop);
 
