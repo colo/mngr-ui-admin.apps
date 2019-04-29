@@ -462,7 +462,7 @@ module.exports = new Class({
         {
 					get_data_range: function(req, next, app){
 						if(req.host && (req.prop == 'data_range' || !req.prop)){
-              debug_internals('get_data_range', req.host, req.prop);
+              debug_internals('range get_data_range', req.host, req.prop);
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -474,7 +474,7 @@ module.exports = new Class({
 
                 let timestamps = app.__get_timestamps(app.scan_hosts[host].keys, start, end)
 
-                // debug_internals('get_data_range', host, app.scan_hosts[host].keys, timestamps)
+                debug_internals('get_data_range', host, app.scan_hosts[host].keys, timestamps)
 
                 if(timestamps.length > 0){
                   // let start_ts = end_ts = undefined
@@ -528,53 +528,6 @@ module.exports = new Class({
               }, app)
 
 
-
-              //
-              // //get first
-              // app.nth({
-              //   _extras: {
-              //     id: req.id,
-              //     prop: 'data_range',
-              //     range_select : 'start',
-              //     host: req.host,
-              //     type: (!req.prop) ? 'host' : 'prop',
-              //     range: req.opt.range,
-              //     full_range: req.full_range,
-              //     range_counter: req.range_counter
-              //   },
-              //   uri: app.options.db+'/ui',
-              //   args: 0,
-              //   query: app.r.db(app.options.db).table('ui').
-              //   between(
-              //     [req.host, 'periodical', start],
-              //     [req.host, 'periodical', end],
-              //     {index: 'sort_by_host'}
-              //   )
-              // })
-              //
-              // //get last
-              // app.nth({
-              //   _extras: {
-              //     id: req.id,
-              //     prop: 'data_range',
-              //     range_select : 'end',
-              //     host: req.host,
-              //     type: (!req.prop) ? 'host' : 'prop',
-              //     range: req.opt.range,
-              //     full_range: req.full_range,
-              //     range_counter: req.range_counter
-              //   },
-              //   uri: app.options.db+'/ui',
-              //   args: -1,
-              //   query: app.r.db(app.options.db).table('ui').
-              //   between(
-              //     [req.host, 'periodical', start],
-              //     [req.host, 'periodical', end],
-              //     {index: 'sort_by_host'}
-              //   )
-              // })
-
-
             }
 
 					}
@@ -607,32 +560,7 @@ module.exports = new Class({
 
               }, app)
 
-              // app.reduce({
-              //   _extras: {
-              //     id: req.id,
-              //     prop: 'paths',
-              //     host: req.host,
-              //     type: (!req.prop) ? 'host' : 'prop',
-              //     range: req.opt.range,
-              //     full_range: req.full_range,
-              //     range_counter: req.range_counter
-              //   },
-              //   uri: app.options.db+'/ui',
-              //   args: function(left, right) {
-              //       return left.merge(right)
-              //   },
-              //
-              //   query: app.r.db(app.options.db).
-              //   table('ui').
-              //   between(
-              //     [req.host, 'periodical', roundMilliseconds(start)],
-              //     [req.host, 'periodical', roundMilliseconds(end)],
-              //     {index: 'sort_by_host'}
-              //   ).
-              //   map(function(doc) {
-              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-              //   }.bind(app))
-              // })
+
             }
 
 					}
@@ -652,71 +580,11 @@ module.exports = new Class({
 
               debug_internals('search_data range %o', host);
 
-              // debug_internals('range FOLD', fold)
-
-              // if(paths){
-              //   let _get_by_path = function(path, extras){
-              //
-              //     // app.map({
-              //     //   _extras: extras,
-              //     //   uri: app.options.db+'/ui',
-              //     //   args: function(x){ return [x('group'),x('reduction')] },
-              //     //
-              //     //   query: app.r.db(app.options.db).
-              //     //   table('ui').
-              //     //   between(
-              //     //     [path, req.host, 'periodical', roundMilliseconds(start)],
-              //     //     [path, req.host, 'periodical', roundMilliseconds(end)],
-              //     //     {index: 'sort_by_path'}
-              //     //   ).
-              //     //   group(app.r.row('metadata')('path')).
-              //     //   ungroup()
-              //     // })
-              //
-              //   }
-              //
-              //   if(Array.isArray(paths)){
-              //     Array.each(paths, function(_path, index){
-              //       if(!req.query || !req.query.format)
-              //         _path = _path.replace(/_/g, '.')//if path are format=stat, transform
-              //
-              //       _get_by_path(_path,{
-              //         id: req.id,
-              //         prop: 'data',
-              //         host: req.host,
-              //         type: (!req.prop) ? 'host' : 'prop',
-              //         range: req.opt.range,
-              //         full_range: req.full_range,
-              //         range_counter: req.range_counter,
-              //         multipath: {index: index, length: paths.length}
-              //       })
-              //     })
-              //   }
-              //   else{
-              //     _get_by_path(paths, {
-              //       id: req.id,
-              //       prop: 'data',
-              //       host: req.host,
-              //       type: (!req.prop) ? 'host' : 'prop',
-              //       range: req.opt.range,
-              //       full_range: req.full_range,
-              //       range_counter: req.range_counter
-              //     })
-              //   }
-              //
-              // }
-              // else{
-
               app.__scan(host, function(){
                 if(!paths){
-                  paths = app.__get_paths(app.scan_hosts[host].keys, host, start, end)
+                  // paths = app.__get_paths(app.scan_hosts[host].keys, host, start, end)
+                  paths = app.__get_paths(app.scan_hosts[host].keys, host)
                 }
-                // else{
-                //   debug_internals('search_data range paths', paths)
-                //   process.exit(1)
-                // }
-
-
 
                 debug_internals('search_data range %s', host, paths);
 
@@ -920,9 +788,20 @@ module.exports = new Class({
           // debug_internals('scan result', result)
 
           if(!err){
-            if(!self.scan_hosts[host]) self.scan_hosts[host] = {keys: [], timestamp: Date.now()}
+            if(!self.scan_hosts[host]) self.scan_hosts[host] = {keys: [], paths: [], timestamp: Date.now()}
+
+            /**
+            * remove host && timestamp
+            **/
+            let _paths = []
+            Array.each(result[1], function(row, index){
+              _paths.push(row.substring(row.indexOf('.')+1, row.indexOf('@')))
+            })
+
+            debug_internals('scan result', result)
 
             self.scan_hosts[host].keys.combine(result[1])
+            self.scan_hosts[host].paths.combine(_paths)
 
             self.scan_cursor[host] = result[0]
           }
@@ -989,7 +868,7 @@ module.exports = new Class({
       ts = start
     })
 
-    debug_internals('MGET', _keys, start, end)
+    debug_internals('MGET', _paths, _keys, start, end)
     // let data = []
 
     // //remove (set undefined) keys not in range (start - end)
@@ -1690,7 +1569,7 @@ module.exports = new Class({
 	__get_data_range: function(keys, host){
 
     let timestamps = this.__get_timestamps(keys)
-    debug_internals('get_data_range', host, timestamps)
+    debug_internals('__get_data_range', host, timestamps)
 
     if(timestamps.length > 0){
       this.data_range(
