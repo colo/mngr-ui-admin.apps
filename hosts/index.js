@@ -1521,7 +1521,7 @@ module.exports = new Class({
 
                 chart_instance = Object.merge(chart, chart_instance)
 
-                debug_internals('transform default', d, path)
+                // debug_internals('transform default', d, path)
 
                 convert(d, chart_instance, path, function(name, stat){
                   /**
@@ -1585,6 +1585,7 @@ module.exports = new Class({
                 // to_merge[name] = stat
                 // debug_internals('transformed default', type, to_merge)
                 // transformed = Object.merge(transformed, to_merge)
+                debug_internals('transform default', d, path)
 
                 if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
                   cb(transformed)
@@ -1679,6 +1680,8 @@ module.exports = new Class({
   },
   __get_host_range: function(payload){
     let {host, prop, paths, query, range, req_id, socket, cb} = payload
+
+    debug_internals('__get_host_range', payload)
 
     this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
       debug_internals('RANGE', parse_range(range), range)
@@ -1916,7 +1919,7 @@ module.exports = new Class({
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
     // let id = (socket) ? socket.id : req.session.id
-    debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
+    // debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
 
     if(!this.session_store)
       this.session_store = (socket) ? socket.handshake.sessionStore : req.sessionStore
@@ -2063,6 +2066,9 @@ module.exports = new Class({
 
 
     }
+    else if(!id){
+      cb(this.pipeline)
+    }
     else{
         if(this.pipeline.hosts.inputs.length != this.pipeline.connected.length){
           this.__after_connect_inputs(
@@ -2116,6 +2122,8 @@ module.exports = new Class({
   //   this.__resume_pipeline(pipeline, id, cb)
   // },
   __resume_pipeline: function(pipeline, id, cb){
+    debug_internals('__resume_pipeline', pipeline, id, cb)
+
     if(id){
       if(!pipeline.ids.contains(id))
         pipeline.ids.push(id)
@@ -2153,8 +2161,11 @@ module.exports = new Class({
       }
     }
 
-    if(cb && typeof cb == 'function')
+    if(cb)
       cb(pipeline)
+
+    // if(cb && typeof cb == 'function')
+    //   cb(pipeline)
   },
   initialize: function(options){
     this.parent(options)
