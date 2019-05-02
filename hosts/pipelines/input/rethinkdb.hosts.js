@@ -41,6 +41,7 @@ module.exports = new Class({
             //   args: {index: 'host'}
             // })
             let from = req.from || app.FROM
+            from = (from === 'minute' || from === 'hour') ? 'historical' : from
             /**
             * reducing last minute of hosts should be enough, and is way faster than "distinct" from all docs
             **/

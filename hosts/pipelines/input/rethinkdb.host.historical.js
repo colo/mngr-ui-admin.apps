@@ -26,6 +26,9 @@ module.exports = new Class({
   // FOLD_BASE: 300,
   MAX_RANGE_DATA_POINTS: 300,
 
+  DEFAULT_HISTORICAL_TYPE: 'minute',
+
+
   feeds: {},
   close_feeds: {},
   changes_buffer: {},
@@ -65,8 +68,8 @@ module.exports = new Class({
       //             args: 0,
       //             query: app.r.db(app.options.db).table('historical').
       //             between(
-      //               [host, app.historical_type || 'minute', 0],
-      //               [host, app.historical_type || 'minute', ''],
+      //               [host, from, 0],
+      //               [host, from, ''],
       //               {index: 'sort_by_host'}
       //             )
       //           })
@@ -84,8 +87,8 @@ module.exports = new Class({
       //             args: -1,
       //             query: app.r.db(app.options.db).table('historical').
       //             between(
-      //               [host, app.historical_type || 'minute', app.r.now().toEpochTime().mul(1000).sub(60000)], //last 6 secs
-      //               [host, app.historical_type || 'minute', ''],
+      //               [host, from, app.r.now().toEpochTime().mul(1000).sub(60000)], //last 6 secs
+      //               [host, from, ''],
       //               {index: 'sort_by_host'}
       //             )
       //           })
@@ -112,8 +115,8 @@ module.exports = new Class({
       //             query: app.r.db(app.options.db).table('historical').
       //             // getAll(req.host, {index: 'host'}).
       //             between(
-      //               [host, app.historical_type || 'minute', Date.now() - 60000],
-      //               [host, app.historical_type || 'minute', ''],
+      //               [host, from, Date.now() - 60000],
+      //               [host, from, ''],
       //               {index: 'sort_by_host'}
       //             ).
       //             map(function(doc) {
@@ -137,11 +140,14 @@ module.exports = new Class({
         {
 					get_data_range: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'data_range' || !req.prop)){
+              let from = req.from || app.DEFAULT_HISTORICAL_TYPE
+              let sub = (from === 'hour') ? HOUR : MINUTE
               // debug_internals('get_data_range', req.host, req.prop);
 
               //get first
               app.nth({
                 _extras: {
+                  from,
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'start',
@@ -152,8 +158,8 @@ module.exports = new Class({
                 args: 0,
                 query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, app.historical_type || 'minute', 0],
-                  [req.host, app.historical_type || 'minute', ''],
+                  [req.host, from, 0],
+                  [req.host, from, ''],
                   {index: 'sort_by_host'}
                 )
               })
@@ -161,6 +167,7 @@ module.exports = new Class({
               //get last
               app.nth({
                 _extras: {
+                  from,
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'end',
@@ -171,8 +178,8 @@ module.exports = new Class({
                 args: -1,
                 query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, app.historical_type || 'minute', app.r.now().toEpochTime().mul(1000).sub(60000)],//last 5 secs
-                  [req.host, app.historical_type || 'minute', ''],
+                  [req.host, from, app.r.now().toEpochTime().mul(1000).sub(sub)],//last 5 secs
+                  [req.host, from, ''],
                   {index: 'sort_by_host'}
                 )
               })
@@ -185,9 +192,17 @@ module.exports = new Class({
         {
 					search_paths: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
+              let from = req.from || app.DEFAULT_HISTORICAL_TYPE
+              let sub = (from === 'hour') ? HOUR : MINUTE
               // debug_internals('search_paths', req.host, req.prop);
               app.reduce({
-                _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {
+                  from,
+                  id: req.id,
+                  prop: 'paths',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop'
+                },
                 uri: app.options.db+'/historical',
                 args: function(left, right) {
                     return left.merge(right)
@@ -196,8 +211,8 @@ module.exports = new Class({
                 query: app.r.db(app.options.db).table('historical').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, app.historical_type || 'minute', Date.now() - 60000], //60000
-                  [req.host, app.historical_type || 'minute', Date.now()],
+                  [req.host, from, Date.now() - sub], //60000
+                  [req.host, from, Date.now()],
                   {index: 'sort_by_host'}
                 ).
                 map(function(doc) {
@@ -214,9 +229,17 @@ module.exports = new Class({
         {
 					search_data: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'data' || !req.prop)){
+              let from = req.from || app.DEFAULT_HISTORICAL_TYPE
+              let sub = (from === 'hour') ? HOUR : MINUTE
               // debug_internals('search_data', req.host, req.prop);
               app.map({
-                _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+                _extras: {
+                  from,
+                  id: req.id,
+                  prop: 'data',
+                  host: req.host,
+                  type: (!req.prop) ? 'host' : 'prop'
+                },
                 uri: app.options.db+'/historical',
                 args: function(x){ return [x('group'), x('reduction')] },
 
@@ -224,8 +247,8 @@ module.exports = new Class({
                 table('historical').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, app.historical_type || 'minute', Date.now() - 60000], //60000
-                  [req.host, app.historical_type || 'minute', Date.now()],
+                  [req.host, from, Date.now() - sub], //60000
+                  [req.host, from, Date.now()],
                   {index: 'sort_by_host'}
                 ).
                 group(app.r.row('metadata')('path')).
@@ -259,53 +282,53 @@ module.exports = new Class({
         //
 				// 	}
         // },
-        {
-					register: function(req, next, app){
-						if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
-              debug_internals('register', req.host, req.prop, req.id);
-              let {host, prop, id} = req
-
-              app.register(host, prop, id)
-
-              // if(!app.registered[id]) app.registered[id] = {}
-              // if(!app.registered[id][host]) app.registered[id][host] = []
-              //
-              // app.registered[id][host] = app.registered[id][host].combine([prop])
-
-            }
-
-					}
-				},
-        {
-					unregister: function(req, next, app){
-
-						if(req.type == 'unregister'){
-
-              // throw new Error()
-
-              let {host, prop, id} = req
-              app.unregister(host, prop, id)
-
-
-              // if(app.registered[id]){
-              //   if(host && prop && app.registered[id][host])
-              //     app.registered[id][host] = app.registered[id][host].erase(prop)
-              //
-              //   if((host && app.registered[id][host].length == 0) || (host && !prop))
-              //     delete app.registered[id][host]
-              //
-              //
-              //   if(Object.getLength(app.registered[id]) == 0 || !host)
-              //     delete app.registered[id]
-              // }
-              //
-              // debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
-
-
-            }
-
-					}
-				},
+        // {
+				// 	register: function(req, next, app){
+				// 		if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
+        //       debug_internals('register', req.host, req.prop, req.id);
+        //       let {host, prop, id} = req
+        //
+        //       app.register(host, prop, id)
+        //
+        //       // if(!app.registered[id]) app.registered[id] = {}
+        //       // if(!app.registered[id][host]) app.registered[id][host] = []
+        //       //
+        //       // app.registered[id][host] = app.registered[id][host].combine([prop])
+        //
+        //     }
+        //
+				// 	}
+				// },
+        // {
+				// 	unregister: function(req, next, app){
+        //
+				// 		if(req.type == 'unregister'){
+        //
+        //       // throw new Error()
+        //
+        //       let {host, prop, id} = req
+        //       app.unregister(host, prop, id)
+        //
+        //
+        //       // if(app.registered[id]){
+        //       //   if(host && prop && app.registered[id][host])
+        //       //     app.registered[id][host] = app.registered[id][host].erase(prop)
+        //       //
+        //       //   if((host && app.registered[id][host].length == 0) || (host && !prop))
+        //       //     delete app.registered[id][host]
+        //       //
+        //       //
+        //       //   if(Object.getLength(app.registered[id]) == 0 || !host)
+        //       //     delete app.registered[id]
+        //       // }
+        //       //
+        //       // debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
+        //
+        //
+        //     }
+        //
+				// 	}
+				// },
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
@@ -334,6 +357,7 @@ module.exports = new Class({
         {
 					get_data_range: function(req, next, app){
 						if(req.host && (req.prop == 'data_range' || !req.prop)){
+              let from = req.from || app.DEFAULT_HISTORICAL_TYPE
               // debug_internals('get_data_range', req.host, req.prop);
 
               let range = req.opt.range
@@ -345,6 +369,7 @@ module.exports = new Class({
               //get first
               app.nth({
                 _extras: {
+                  from,
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'start',
@@ -358,8 +383,8 @@ module.exports = new Class({
                 args: 0,
                 query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, app.historical_type || 'minute', start],
-                  [req.host, app.historical_type || 'minute', end],
+                  [req.host, from, start],
+                  [req.host, from, end],
                   {index: 'sort_by_host'}
                 )
               })
@@ -367,6 +392,7 @@ module.exports = new Class({
               //get last
               app.nth({
                 _extras: {
+                  from,
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'end',
@@ -380,8 +406,8 @@ module.exports = new Class({
                 args: -1,
                 query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, app.historical_type || 'minute', start],
-                  [req.host, app.historical_type || 'minute', end],
+                  [req.host, from, start],
+                  [req.host, from, end],
                   {index: 'sort_by_host'}
                 )
               })
@@ -394,6 +420,7 @@ module.exports = new Class({
         {
 					search_paths: function(req, next, app){
 						if(req.host && (req.prop == 'paths' || !req.prop)){
+              let from = req.from || app.DEFAULT_HISTORICAL_TYPE
               // debug_internals('search_paths range', req.host, req.prop, req.opt.range)
 
               let range = req.opt.range
@@ -403,6 +430,7 @@ module.exports = new Class({
 
               app.reduce({
                 _extras: {
+                  from,
                   id: req.id,
                   prop: 'paths',
                   host: req.host,
@@ -419,8 +447,8 @@ module.exports = new Class({
                 query: app.r.db(app.options.db).
                 table('historical').
                 between(
-                  [req.host, app.historical_type || 'minute', roundMilliseconds(start)],
-                  [req.host, app.historical_type || 'minute', roundMilliseconds(end)],
+                  [req.host, from, roundMilliseconds(start)],
+                  [req.host, from, roundMilliseconds(end)],
                   {index: 'sort_by_host'}
                 ).
                 map(function(doc) {
@@ -434,6 +462,7 @@ module.exports = new Class({
         {
 					search_data: function(req, next, app){
 						if(req.host && (req.prop == 'data' || !req.prop)){
+              let from = req.from || app.DEFAULT_HISTORICAL_TYPE
               // debug_internals('search_data range %o', req);
 
               let paths = req.paths
@@ -458,8 +487,8 @@ module.exports = new Class({
                     query: app.r.db(app.options.db).
                     table('historical').
                     between(
-                      [path, req.host, app.historical_type || 'minute', roundMilliseconds(start)],
-                      [path, req.host, app.historical_type || 'minute', roundMilliseconds(end)],
+                      [path, req.host, from, roundMilliseconds(start)],
+                      [path, req.host, from, roundMilliseconds(end)],
                       {index: 'sort_by_path'}
                     ).
                     // fold(0, function(acc, row) {
@@ -495,6 +524,7 @@ module.exports = new Class({
                       _path = _path.replace(/_/g, '.')//if path are format=stat, transform
 
                     _get_by_path(_path,{
+                      from,
                       id: req.id,
                       prop: 'data',
                       host: req.host,
@@ -508,6 +538,7 @@ module.exports = new Class({
                 }
                 else{
                   _get_by_path(paths, {
+                    from,
                     id: req.id,
                     prop: 'data',
                     host: req.host,
@@ -522,6 +553,7 @@ module.exports = new Class({
               else{
                 app.map({
                   _extras: {
+                    from,
                     id: req.id,
                     prop: 'data',
                     host: req.host,
@@ -536,8 +568,8 @@ module.exports = new Class({
                   query: app.r.db(app.options.db).
                   table('historical').
                   between(
-                    [req.host, app.historical_type || 'minute', roundMilliseconds(start)],
-                    [req.host, app.historical_type || 'minute', roundMilliseconds(end)],
+                    [req.host, from, roundMilliseconds(start)],
+                    [req.host, from, roundMilliseconds(end)],
                     {index: 'sort_by_host'}
                   ).
                   // fold(0, function(acc, row) {
@@ -1172,13 +1204,13 @@ module.exports = new Class({
   //
   //     if(row.type == 'add'){
   //       // console.log(row.new_val)
-  //       // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: app.historical_type || 'minute', input_type: this, app: null}]);
+  //       // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: from, input_type: this, app: null}]);
   //       this.changes_buffer.push(row.new_val)
   //     }
   //
   //     if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
   //       // console.log('onPeriodicalDoc', this.changes_buffer.length)
-  //       // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: app.historical_type || 'minute', input_type: this, app: null}])
+  //       // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: from, input_type: this, app: null}])
   //       let data = {}
   //       Array.each(this.changes_buffer, function(doc){
   //         let path = doc.metadata.path
@@ -1209,7 +1241,7 @@ module.exports = new Class({
   //   * should be "aligned" with dashboard refreshs?
   //   **/
   //   this.changes({
-  //      _extras: {type: app.historical_type || 'minute'},
+  //      _extras: {type: from},
   //      uri: this.options.db+'/historical',
   //      args: {includeTypes: true, squash: 1.1},
   //      // query: this.r.db(this.options.db).table('historical').getAll(this.options.stat_host, {index:'host'})

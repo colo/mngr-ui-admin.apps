@@ -42,13 +42,53 @@ module.exports = new Class({
   ID: 'ea77ccca-4aa1-448d-a766-b23efef9c12b',
 
   ON_HOSTS_UPDATED: 'onHostsUpdated',
-  ON_HOST_UPDATED: 'onHostUpdated',
-  ON_HOST_RANGE: 'onHostRange',
-  ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
-  ON_HOST_PATHS_UPDATED: 'onHostPathsUpdated',
-  ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
-  ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
+  ON_HOSTS_PERIODICAL_UPDATED: 'onHostsUpdated',
 
+  ON_HOSTS_HISTORICAL_UPDATED: 'onHostsHistoricalUpdated',
+  ON_HOSTS_MINUTE_UPDATED: 'onHostsHistoricalUpdated',
+  ON_HOSTS_HOUR_UPDATED: 'onHostsHistoricalUpdated',
+
+  ON_HOST_UPDATED: 'onHostUpdated',
+  ON_HOST_PERIODICAL_UPDATED: 'onHostUpdated',
+
+  ON_HOST_HISTORICAL_UPDATED: 'onHostHistoricalUpdated',
+  ON_HOST_MINUTE_UPDATED: 'onHostHistoricalUpdated',
+  ON_HOST_HOUR_UPDATED: 'onHostHistoricalUpdated',
+
+  ON_HOST_RANGE: 'onHostRange',
+  ON_HOST_RANGE_PERIODICAL: 'onHostRange',
+
+  ON_HOST_RANGE_HISTORICAL: 'onHostRangeHistorical',
+  ON_HOST_RANGE_MINUTE: 'onHostRangeHistorical',
+  ON_HOST_RANGE_HOUR: 'onHostRangeHistorical',
+
+  ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
+  ON_HOST_INSTANCES_PERIODICAL_UPDATED: 'onHostInstancesUpdated',
+
+  ON_HOST_INSTANCES_HISTORICAL_UPDATED: 'onHostInstancesHistoricalUpdated',
+  ON_HOST_INSTANCES_MINUTE_UPDATED: 'onHostInstancesHistoricalUpdated',
+  ON_HOST_INSTANCES_HOUR_UPDATED: 'onHostInstancesHistoricalUpdated',
+
+  ON_HOST_PATHS_UPDATED: 'onHostPathsUpdated',
+  ON_HOST_PATHS_PERIODICAL_UPDATED: 'onHostPathsUpdated',
+
+  ON_HOST_PATHS_HISTORICAL_UPDATED: 'onHostPathsHistoricalUpdated',
+  ON_HOST_PATHS_MINUTE_UPDATED: 'onHostPathsHistoricalUpdated',
+  ON_HOST_PATHS_HOUR_UPDATED: 'onHostPathsHistoricalUpdated',
+
+  ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
+  ON_HOST_DATA_PERIODICAL_UPDATED: 'onHostDataUpdated',
+
+  ON_HOST_DATA_HISTORICAL_UPDATED: 'onHostDataHistoricalUpdated',
+  ON_HOST_DATA_MINUTE_UPDATED: 'onHostDataHistoricalUpdated',
+  ON_HOST_DATA_HOUR_UPDATED: 'onHostDataHistoricalUpdated',
+
+  ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
+  ON_HOST_DATA_RANGE_PERIODICAL_UPDATED: 'onHostDataRangeUpdated',
+
+  ON_HOST_DATA_RANGE_HISTORICAL_UPDATED: 'onHostDataRangeHistoricalUpdated',
+  ON_HOST_DATA_RANGE_MINUTE_UPDATED: 'onHostDataRangeHistoricalUpdated',
+  ON_HOST_DATA_RANGE_HOUR_UPDATED: 'onHostDataRangeHistoricalUpdated',
 
   CHART_INSTANCE_TTL: 60000,
   SESSIONS_TTL: 60000,
@@ -150,7 +190,12 @@ module.exports = new Class({
             version: '',
           },
           {
-            path: 'historical/:host?/:prop?/:paths?',
+            path: 'minute/:host?/:prop?/:paths?',
+            callbacks: ['hosts'],
+            version: '',
+          },
+          {
+            path: 'hour/:host?/:prop?/:paths?',
             callbacks: ['hosts'],
             version: '',
           },
@@ -964,8 +1009,11 @@ module.exports = new Class({
     let session = this.__process_session(req, socket)
     let from = 'periodical'
 
-    if(req && req.path.indexOf('historical') > -1)
-      from = 'historical'
+    if(req && req.path.indexOf('minute') > -1)
+      from = 'minute'
+
+    if(req && req.path.indexOf('hour') > -1)
+      from = 'hour'
 
     let __query_paths = undefined
 
@@ -1265,23 +1313,25 @@ module.exports = new Class({
     else if(!range){
       // this.__get_host(host, prop, req_id, socket, send_resp[req_id])
       this.__get_host({
-        host: host,
-        prop: prop,
-        query: query,
-        req_id: req_id,
-        socket: socket,
+        from,
+        host,
+        prop,
+        query,
+        req_id,
+        socket,
         cb: send_resp[req_id]
       })
     }
     else
       this.__get_host_range({
-        host: host,
-        prop: prop,
-        query: query,
+        from,
+        host,
+        prop,
+        query,
         paths: __query_paths,
-        range: range,
-        req_id: req_id,
-        socket: socket,
+        range,
+        req_id,
+        socket,
         cb: send_resp[req_id]
       })
 
@@ -1697,7 +1747,8 @@ module.exports = new Class({
     // Array.each()
   },
   __get_host_range: function(payload){
-    let {host, prop, paths, query, range, req_id, socket, cb} = payload
+    let {from, host, prop, paths, query, range, req_id, socket, cb} = payload
+    from = from || 'periodical'
 
     debug_internals('__get_host_range', payload)
 
@@ -1718,7 +1769,7 @@ module.exports = new Class({
           cb(resp)
 
           // if(socket && range_total == resp.range_counter){
-            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            this.removeEvent(this['ON_HOST_RANGE_'+from.toUpperCase()], _get_resp[req_id])
             delete _get_resp[req_id]
           // }
           // else if(!socket) {//http request
@@ -1729,7 +1780,7 @@ module.exports = new Class({
         }
       }.bind(this)
 
-      this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+      this.addEvent(this['ON_HOST_RANGE_'+from.toUpperCase()], _get_resp[req_id])
 
       // let __event_worker = function(payload, done){
       //   pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
@@ -1800,15 +1851,26 @@ module.exports = new Class({
       }
       // else{}
 
-      pipe.hosts.inputs[1].fireEvent('onRange', {
-        host: host,
-        prop: prop,
-        paths: paths,
-        query: query,
-        id: req_id,
-        Range: range
-      })//fire only the 'host' input
-
+      if(from === 'periodical'){
+        pipe.hosts.inputs[1].fireEvent('onRange', {
+          host: host,
+          prop: prop,
+          paths: paths,
+          query: query,
+          id: req_id,
+          Range: range
+        })//fire only the 'host' input
+      }
+      else{
+        pipe.hosts.inputs[3].fireEvent('onRange', {
+          host: host,
+          prop: prop,
+          paths: paths,
+          query: query,
+          id: req_id,
+          Range: range
+        })//fire only the 'host.historical' input
+      }
 
 
     }.bind(this))
@@ -1816,9 +1878,10 @@ module.exports = new Class({
   },
   // __get_host: function(host, prop, req_id, socket, cb){
   __get_host: function(payload){
-    let {host, prop, query, req_id, socket, cb} = payload
+    let {from, host, prop, query, req_id, socket, cb} = payload
+    from = from || 'periodical'
 
-    this.cache.get('host.'+host, function(err, result){
+    this.cache.get('host.'+host+'.'+from, function(err, result){
       // debug_internals('get host %o %o', err, result)
 
       let _get_resp = {}
@@ -1829,12 +1892,12 @@ module.exports = new Class({
           if(result)//cache result
             resp['host'] = Object.merge(result, resp['host'])
 
-          this.cache.set('host.'+host, resp['host'])
+          this.cache.set('host.'+host+'.'+from, resp['host'])
           // send_resp[req_id](resp)
 
           cb(resp)
 
-          this.removeEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+          this.removeEvent(this['ON_HOST_'+from.toUpperCase()+'_UPDATED'], _get_resp[req_id])
           delete _get_resp[req_id]
         }
       }.bind(this)
@@ -1846,13 +1909,16 @@ module.exports = new Class({
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
             // // debug_internals('send_resp', pipe)
 
-            this.addEvent(this.ON_HOST_UPDATED, _get_resp[req_id])
+            this.addEvent(this['ON_HOST_'+from.toUpperCase()+'_UPDATED'], _get_resp[req_id])
 
             // this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
 
-            // pipe.hosts.fireEvent('onOnce')
-            // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, query, id: req_id})//fire only the 'hosts' input
+            if(from === 'periodical'){
+              pipe.hosts.inputs[1].fireEvent('onOnce', {host, prop, query, id: req_id})//fire only the 'host' input
+            }
+            else{
+              pipe.hosts.inputs[3].fireEvent('onOnce', {from, host, prop, query, id: req_id})//fire only the 'host.historical' input
+            }
 
           }.bind(this))
       }
@@ -1869,7 +1935,7 @@ module.exports = new Class({
               _merge_resp[prop] = function(resp){
                 // debug_internals('_merge_resp', resp, prop)
                 props_result = Object.merge(props_result, resp)
-                this.removeEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
+                this.removeEvent(this['ON_HOST_'+from.toUpperCase()+'_UPDATED'], _merge_resp[prop])
 
                 //end of array props? send response
                 if(index == this.options.host.properties.length -1)
@@ -1877,9 +1943,14 @@ module.exports = new Class({
 
               }.bind(this)
 
-              this.addEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
+              this.addEvent(this['ON_HOST_'+from.toUpperCase()+'_UPDATED'], _merge_resp[prop])
 
-              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, query, id: req_id})//fire only the 'hosts' input
+              if(from === 'periodical'){
+                pipe.hosts.inputs[1].fireEvent('onOnce', {host, prop, query, id: req_id})//fire only the 'host' input
+              }
+              else{
+                pipe.hosts.inputs[3].fireEvent('onOnce', {from, host, prop, query, id: req_id})//fire only the 'host.historical' input
+              }
 
             }.bind(this))
           }
@@ -1889,7 +1960,7 @@ module.exports = new Class({
       }
       else{
         // send_resp[req_id]({type: 'hosts', hosts: result})
-        cb({type: 'host', host: result})
+        cb({from: from, type: 'host', host: result})
       }
 
     }.bind(this))
@@ -1916,12 +1987,12 @@ module.exports = new Class({
 
                 cb(resp)
 
-                this.removeEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
+                this.removeEvent(this['ON_HOSTS_'+from.toUpperCase()+'_UPDATED'], _get_resp[req_id])
                 delete _get_resp[req_id]
               }
             }.bind(this)
 
-            this.addEvent(this.ON_HOSTS_UPDATED, _get_resp[req_id])
+            this.addEvent(this['ON_HOSTS_'+from.toUpperCase()+'_UPDATED'], _get_resp[req_id])
 
             // this.addEvent(this.ON_HOSTS_UPDATED, send_resp[req_id])
 
@@ -2010,24 +2081,25 @@ module.exports = new Class({
       }
 
       this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
-        let {type, range} = doc
+        let {from, type, range} = doc
+        from = from || 'periodical'
         // this[type] = {
         //   value: doc[type],
         //   timestamp: Date.now()
         // }
 
-        debug_internals('onSaveDoc %o', type, range)
+        debug_internals('onSaveDoc %o', from, type, range)
 
         if(!range){
           debug_internals('onSaveDoc %o', type, doc)
           if(type == 'data' || type == 'data_range' || type == 'instances' || type == 'paths')
-            this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
+            this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_'+from.toUpperCase()+'_UPDATED'], doc)
             // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
           else
-            this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], doc)
+            this.fireEvent(this['ON_'+type.toUpperCase()+'_'+from.toUpperCase()+'_UPDATED'], doc)
         }
         else{
-          this.fireEvent(this['ON_'+type.toUpperCase()+'_RANGE'], doc)
+          this.fireEvent(this['ON_'+type.toUpperCase()+'_RANGE'+'_'+from.toUpperCase()], doc)
         }
 
         // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
