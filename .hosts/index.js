@@ -150,11 +150,6 @@ module.exports = new Class({
             version: '',
           },
           {
-            path: 'historical/:host?/:prop?/:paths?',
-            callbacks: ['hosts'],
-            version: '',
-          },
-          {
             path: ':host?/:prop?/:paths?',
             callbacks: ['hosts'],
             version: '',
@@ -953,19 +948,12 @@ module.exports = new Class({
   },
   hosts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'paths'])
-
-    if(req) debug_internals('hosts req.path', req.path)
-
     let {host, prop, paths} = params
     let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
     let type = (range) ? 'range' : 'once'
     let id = (socket) ? socket.id : req.session.id
     let session = this.__process_session(req, socket)
-    let from = 'periodical'
-
-    if(req && req.path.indexOf('historical') > -1)
-      from = 'historical'
 
     let __query_paths = undefined
 
@@ -1012,14 +1000,13 @@ module.exports = new Class({
 
       debug_internals('send_resp', data)
 
-      let {from, type, step} = data
+      let {type, step} = data
       let result = data[type]
 
       let send_result = function(data){
         if(prop) type = prop
 
         let result = {
-          from: from || 'periodical',
           type: type,
           range: range,
           host: host
@@ -1231,12 +1218,7 @@ module.exports = new Class({
       })
     }
     else if(!host)
-      this.__get_hosts({
-        from,
-        req_id,
-        socket,
-        cb: send_resp[req_id]
-      })
+      this.__get_hosts(req_id, socket, send_resp[req_id])
 
     // else if(prop === 'instances'){
     //   this.cache.get(host+'.instances', function(err, instances){
@@ -1894,12 +1876,8 @@ module.exports = new Class({
 
     }.bind(this))
   },
-  __get_hosts: function(payload){
-    let {from, req_id, socket, cb} = payload
-    debug_internals('__get_hosts', payload)
-    from = from || 'periodical'
-
-    this.cache.get('hosts.'+from, function(err, result){
+  __get_hosts: function(req_id, socket, cb){
+    this.cache.get('hosts', function(err, result){
       debug_internals('get hosts cache %o %o %s', err, result, req_id)
       if(!result){
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
@@ -1908,10 +1886,10 @@ module.exports = new Class({
             let _get_resp = {}
             _get_resp[req_id] = function(resp){
               debug_internals('_get_resp %s %s', resp.id, req_id)
-
               if(resp.id == req_id){
 
-                this.cache.set('hosts.'+from, resp['hosts'], this.HOSTS_TTL)
+
+                this.cache.set('hosts', resp['hosts'], this.HOSTS_TTL)
                 // send_resp[req_id](resp)
 
                 cb(resp)
@@ -1927,13 +1905,13 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[0].fireEvent('onOnce', {from: from, id: req_id})//fire only the 'hosts' input
+            pipe.hosts.inputs[0].fireEvent('onOnce', {id: req_id})//fire only the 'hosts' input
 
           }.bind(this))
       }
       else{
         // send_resp[req_id]({type: 'hosts', hosts: result})
-        cb({from: from, type: 'hosts', hosts: result})
+        cb({type: 'hosts', hosts: result})
       }
 
     }.bind(this))
@@ -2150,10 +2128,10 @@ module.exports = new Class({
       if(!pipeline.ids.contains(id))
         pipeline.ids.push(id)
 
-      if(this.options.on_demand && pipeline.hosts.inputs[4].conn_pollers[0])
-        pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'].ids = pipeline.ids
+      if(this.options.on_demand && pipeline.hosts.inputs[3].conn_pollers[0])
+        pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'].ids = pipeline.ids
 
-      // debug_internals('__resume_pipeline pipeline.hosts.inputs[4].conn_pollers[0]', pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'])
+      // debug_internals('__resume_pipeline pipeline.hosts.inputs[3].conn_pollers[0]', pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'])
 
       if(pipeline.suspended == true){
         debug_internals('__resume_pipeline this.pipeline.connected', pipeline.connected)
@@ -2277,7 +2255,7 @@ module.exports = new Class({
             },
           })
 
-          this.pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'].ids = this.pipeline.ids
+          this.pipeline.hosts.inputs[3].conn_pollers[0].clients['ui.rest'].ids = this.pipeline.ids
         }
 
         this.pipeline.hosts.inputs[1].fireEvent('onOnce', {

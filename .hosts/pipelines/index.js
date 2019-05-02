@@ -5,7 +5,6 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Hosts'),
 
 const InputPollerRethinkDBHosts = require ( './input/rethinkdb.hosts.js' )
 // const InputPollerRethinkDBHost = require ( './input/rethinkdb.host.js' )
-const InputPollerRethinkDBHostHistorical = require ( './input/rethinkdb.host.historical.js' )
 
 const InputPollerRedisHost = require ( './input/redis.host.js' )
 
@@ -232,32 +231,6 @@ module.exports = function(payload){
       		},
   			},
   		},
-      {
-  			poll: {
-  				suspended: true,//start suspended
-  				id: "input.host.historical",
-  				conn: [
-            Object.merge(
-              Object.clone(conn),
-              {
-                // path_key: 'os',
-                module: InputPollerRethinkDBHostHistorical,
-              }
-            )
-  				],
-  				connect_retry_count: -1,
-  				connect_retry_periodical: 1000,
-  				// requests: {
-  				// 	periodical: 1000,
-  				// },
-  				requests: {
-      			periodical: function(dispatch){
-  						// //////////console.log('host periodical running')
-      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
-      			}
-      		},
-  			},
-  		},
 
   	],
     filters: [
@@ -368,6 +341,6 @@ module.exports = function(payload){
 
   if(ui)
     conf.input.push(ui_conf)
-
+    
   return conf
 }

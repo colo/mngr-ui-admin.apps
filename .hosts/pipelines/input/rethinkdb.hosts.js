@@ -21,12 +21,6 @@ module.exports = new Class({
   // changes_buffer_expire: undefined,
   hosts: [],
 
-  FROM: 'periodical',
-  RANGES: {
-    'periodical': 10000,
-    'historical': 60000,
-
-  },
   options: {
 
 		requests : {
@@ -40,21 +34,21 @@ module.exports = new Class({
             //   uri: app.options.db+'/periodical',
             //   args: {index: 'host'}
             // })
-            let from = req.from || app.FROM
+
             /**
             * reducing last minute of hosts should be enough, and is way faster than "distinct" from all docs
             **/
             app.reduce({
-              _extras: {from: from, type: 'hosts', id: req.id},
-              uri: app.options.db+'/'+from,
+              _extras: {type: 'hosts', id: req.id},
+              uri: app.options.db+'/periodical',
               args: function(left, right) {
                   return left.merge(right)
               },
 
               query: app.r.db(app.options.db).
-                      table(from).
+                      table('periodical').
                       between(
-                        Date.now() - app.RANGES[from], //60000
+                        Date.now() - 10000, //60000
                         Date.now(),
                         {index: 'timestamp'}
                       ).
@@ -70,9 +64,6 @@ module.exports = new Class({
 
       ],
 
-      /**
-      * periodical data always comes from 'periodical' table
-      **/
       periodical: [
         {
 					search_hosts: function(req, next, app){
@@ -82,13 +73,13 @@ module.exports = new Class({
             * reducing last minute of hosts should be enough, and is way faster than "distinct" from all docs
             **/
             app.reduce({
-              _extras: {from: 'periodical', type: 'hosts', id: undefined},
+              _extras: {type: 'hosts', id: undefined},
               uri: app.options.db+'/periodical',
               args: function(left, right) {
                   return left.merge(right)
               },
 
-              query: app.r.db(app.options.db).table('periodical').between(Date.now() - app.RANGES['periodical'], Date.now(), {index: 'timestamp'}).map(function(doc) {
+              query: app.r.db(app.options.db).table('periodical').between(Date.now() - 60000, Date.now(), {index: 'timestamp'}).map(function(doc) {
                 return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
               }.bind(app))
             })

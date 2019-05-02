@@ -14,32 +14,15 @@ const roundMilliseconds = function(timestamp){
   return d.getTime()
 }
 
-const SECOND = 1000
-const MINUTE = SECOND * 60
-const HOUR = MINUTE * 60
-const DAY = HOUR * 24
-
-
 module.exports = new Class({
   Extends: App,
 
-  // FOLD_BASE: 300,
-  MAX_RANGE_DATA_POINTS: 300,
-
-  feeds: {},
-  close_feeds: {},
-  changes_buffer: {},
-  changes_buffer_expire: {},
-
-  // changes_buffer: [],
-  // changes_buffer_expire: undefined,
+  changes_buffer: [],
+  changes_buffer_expire: undefined,
 
   events: {},
-  // feed: undefined,
-  // close_feed: false,
-
-  registered: {},
-  hosts_ranges: {},
+  feed: undefined,
+  close_feed: false,
 
   options: {
 
@@ -47,11 +30,11 @@ module.exports = new Class({
       periodical: [
         {
 					get_data_range: function(req, next, app){
-            // debug_internals('get_data_range', app.data_hosts);
+            debug_internals('get_data_range', app.data_hosts);
 						if(app.data_hosts && app.data_hosts.length > 0){
 
               Array.each(app.data_hosts, function(host){
-                // debug_internals('get_data_range', host)
+                debug_internals('get_data_range', host)
                 //get first
                 app.nth({
                   _extras: {
@@ -61,9 +44,9 @@ module.exports = new Class({
                     host: host,
                     type: 'prop'
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: 0,
-                  query: app.r.db(app.options.db).table('ui').
+                  query: app.r.db(app.options.db).table('periodical').
                   between(
                     [host, 'periodical', 0],
                     [host, 'periodical', ''],
@@ -80,11 +63,11 @@ module.exports = new Class({
                     host: host,
                     type: 'prop'
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: -1,
-                  query: app.r.db(app.options.db).table('ui').
+                  query: app.r.db(app.options.db).table('periodical').
                   between(
-                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(6000)], //last 6 secs
+                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)], //last 5 secs
                     [host, 'periodical', ''],
                     {index: 'sort_by_host'}
                   )
@@ -96,116 +79,13 @@ module.exports = new Class({
 
 					}
 				},
-        {
-					search_paths: function(req, next, app){
-						// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-            if(app.data_hosts && app.data_hosts.length > 0){
-              Array.each(app.data_hosts, function(host){
-              // debug_internals('search_paths', req.host, req.prop);
-                app.reduce({
-                  _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
-                  uri: app.options.db+'/ui',
-                  args: function(left, right) {
-                      return left.merge(right)
-                  },
-
-                  query: app.r.db(app.options.db).table('ui').
-                  // getAll(req.host, {index: 'host'}).
-                  between(
-                    [host, 'periodical', Date.now() - 6000],
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
-                  ).
-                  map(function(doc) {
-                    return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-                  }.bind(app))
-                  // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
-                  //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-                  // }.bind(app))
-                })
-
-              })
-            }
-
-					}
-				},
-        // {
-				// 	get_changes: function(req, next, app){
-        //     if(app.registered){
-        //       let hosts = []
-        //       Object.each(app.registered, function(registered_data, id){
-        //         // debug_internals('get_changes', registered_data)
-        //         Object.each(registered_data, function(props, host){
-        //
-        //           if(props.contains('data'))//if registered for "data"
-        //             hosts = hosts.combine([host])
-        //
-        //         })
-        //       })
-  			// 			//debug_internals('_get_last_stat %o', next);
-        //       // let start = Date.now() - 3999
-        //       // let end = Date.now()
-        //
-  			// 			debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
-        //
-  			// 			// let views = [];
-  			// 			// Object.each(app.hosts, function(value, host){
-  			// 				// debug_internals('_get_last_stat %s', host);
-        //
-        //         Array.each(hosts, function(host){
-        //           // debug_internals('_get_last_stat %s %s', host, path);
-        //           // let _func = function(){
-        //           if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
-        //             app.between({
-        //               _extras: {
-        //                 id: undefined,
-        //                 prop: 'changes',
-        //                 // range_select : 'start',
-        //                 host: host,
-        //                 // type: 'prop'
-        //               },
-        //               uri: app.options.db+'/ui',
-        //               args: [
-        //                 /**
-        //                 * 1001ms time lapse (previous second from "now")
-        //                 **/
-        //                 [host, 'periodical', app.hosts_ranges[host].end - 1999],
-        //                 [host, 'periodical', app.hosts_ranges[host].end],
-        //                 {
-        //                   // index: 'timestamp',
-        //                   index: 'sort_by_host',
-        //                   leftBound: 'open',
-        //                   rightBound: 'open'
-        //                 }
-        //               ],
-        //               // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
-        //               // orderBy: { index: app.r.desc('sort_by_path') }
-        //             })
-        //
-        //         }.bind(app))
-        //
-        //
-    		// 					// views.push(_func);
-        //
-        //         // })
-        //
-  			// 			// });
-        //
-  			// 			// Array.each(views, function(view){
-  			// 			// 	view();
-  			// 			// });
-  			// 			// next(views);
-        //     }
-				// 	}
-				// },
-
 
       ],
       once: [
         {
 					get_data_range: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'data_range' || !req.prop)){
-              // debug_internals('get_data_range', req.host, req.prop);
+              debug_internals('get_data_range', req.host, req.prop);
 
               //get first
               app.nth({
@@ -216,9 +96,9 @@ module.exports = new Class({
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: 0,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', 0],
                   [req.host, 'periodical', ''],
@@ -235,9 +115,9 @@ module.exports = new Class({
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
                   [req.host, 'periodical', ''],
@@ -253,25 +133,25 @@ module.exports = new Class({
         {
 					search_paths: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-              // debug_internals('search_paths', req.host, req.prop);
+              debug_internals('search_paths', req.host, req.prop);
               app.reduce({
                 _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, 'periodical', Date.now() - 10000], //60000
+                  [req.host, 'periodical', Date.now() - 60000],
                   [req.host, 'periodical', Date.now()],
                   {index: 'sort_by_host'}
                 ).
                 map(function(doc) {
                   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
                 }.bind(app))
-                // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+                // query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
                 //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
                 // }.bind(app))
               })
@@ -282,17 +162,17 @@ module.exports = new Class({
         {
 					search_data: function(req, next, app){
 						if(req.host && !req.type && (req.prop == 'data' || !req.prop)){
-              // debug_internals('search_data', req.host, req.prop);
+              debug_internals('search_data', req.host, req.prop);
               app.map({
                 _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: function(x){ return [x('group'), x('reduction')] },
 
                 query: app.r.db(app.options.db).
-                table('ui').
+                table('periodical').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, 'periodical', Date.now() - 10000], //60000
+                  [req.host, 'periodical', Date.now() - 60000],
                   [req.host, 'periodical', Date.now()],
                   {index: 'sort_by_host'}
                 ).
@@ -315,10 +195,10 @@ module.exports = new Class({
         //         // app.events[host]['data'] = true
         //         app.changes({
         //            _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
-        //            uri: app.options.db+'/ui',
+        //            uri: app.options.db+'/periodical',
         //            // args: {includeTypes: true, squash: 1.1},
         //            args: {includeTypes: true, squash: 1},
-        //            query: app.r.db(app.options.db).table('ui').getAll(host, {index:'host'})
+        //            query: app.r.db(app.options.db).table('periodical').getAll(host, {index:'host'})
         //         })
         //       }
         //
@@ -326,54 +206,54 @@ module.exports = new Class({
         //     }
         //
 				// 	}
-        // },
         {
 					register: function(req, next, app){
 						if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
-              debug_internals('register', req.host, req.prop, req.id);
+              // debug_internals('register', req.host, req.prop);
               let {host, prop, id} = req
-
               app.register(host, prop, id)
+              // if(!app.events[host]) app.events[host] = {}
 
-              // if(!app.registered[id]) app.registered[id] = {}
-              // if(!app.registered[id][host]) app.registered[id][host] = []
-              //
-              // app.registered[id][host] = app.registered[id][host].combine([prop])
-
-            }
-
-					}
-				},
-        {
-					unregister: function(req, next, app){
-
-						if(req.type == 'unregister'){
-
-              // throw new Error()
-
-              let {host, prop, id} = req
-              app.unregister(host, prop, id)
-
-
-              // if(app.registered[id]){
-              //   if(host && prop && app.registered[id][host])
-              //     app.registered[id][host] = app.registered[id][host].erase(prop)
-              //
-              //   if((host && app.registered[id][host].length == 0) || (host && !prop))
-              //     delete app.registered[id][host]
-              //
-              //
-              //   if(Object.getLength(app.registered[id]) == 0 || !host)
-              //     delete app.registered[id]
+              // if(prop == 'data' && !app.events[host]['data']){
+              //   // app.events[host]['data'] = true
+              //   app.changes({
+              //      _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
+              //      uri: app.options.db+'/periodical',
+              //      // args: {includeTypes: true, squash: 1.1},
+              //      args: {includeTypes: true, squash: 1},
+              //      query: app.r.db(app.options.db).table('periodical')
+              //   })
               // }
-              //
-              // debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
 
 
             }
 
 					}
 				},
+        // {
+				// 	unregister: function(req, next, app){
+				// 		if(req.host && req.type == 'unregister' && req.prop == 'data' && req.id){
+        //       // debug_internals('unregister', req.host, req.prop);
+        //       let {host, prop, id} = req
+        //       app.unregister(host, prop, id)
+        //       // if(app.events[host] && app.events[host][prop])
+        //
+        //       // app.map({
+        //       //   _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+        //       //   uri: app.options.db+'/periodical',
+        //       //   args: function(x){ return [x('group'), x('reduction')] },
+        //       //
+        //       //   query: app.r.db(app.options.db).
+        //       //   table('periodical').
+        //       //   getAll(req.host, {index: 'host'}).
+        //       //   group(app.r.row('metadata')('path')).
+        //       //   max(app.r.row('metadata')('timestamp')).
+        //       //   ungroup()
+        //       // })
+        //     }
+        //
+				// 	}
+				// },
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
@@ -384,12 +264,12 @@ module.exports = new Class({
 
               // app.reduce({
               //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
+              //   uri: app.options.db+'/periodical',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -402,7 +282,7 @@ module.exports = new Class({
         {
 					get_data_range: function(req, next, app){
 						if(req.host && (req.prop == 'data_range' || !req.prop)){
-              // debug_internals('get_data_range', req.host, req.prop);
+              debug_internals('get_data_range', req.host, req.prop);
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -422,9 +302,9 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: 0,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', start],
                   [req.host, 'periodical', end],
@@ -444,9 +324,9 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('periodical').
                 between(
                   [req.host, 'periodical', start],
                   [req.host, 'periodical', end],
@@ -462,7 +342,7 @@ module.exports = new Class({
         {
 					search_paths: function(req, next, app){
 						if(req.host && (req.prop == 'paths' || !req.prop)){
-              // debug_internals('search_paths range', req.host, req.prop, req.opt.range)
+              debug_internals('search_paths range', req.host, req.prop, req.opt.range)
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -479,13 +359,13 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/periodical',
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
                 query: app.r.db(app.options.db).
-                table('ui').
+                table('periodical').
                 between(
                   [req.host, 'periodical', roundMilliseconds(start)],
                   [req.host, 'periodical', roundMilliseconds(end)],
@@ -502,7 +382,7 @@ module.exports = new Class({
         {
 					search_data: function(req, next, app){
 						if(req.host && (req.prop == 'data' || !req.prop)){
-              // debug_internals('search_data range %o', req);
+              debug_internals('search_data range %o', req);
 
               let paths = req.paths
               let range = req.opt.range
@@ -510,40 +390,28 @@ module.exports = new Class({
               // let start = ((end - CHUNK) < range.start) ? range.start : end - CHUNK
               let start = range.start
 
-              let range_length = Math.ceil((end - start) / SECOND)
-              let fold = Math.ceil((range_length / app.FOLD_BASE))
-
-              // debug_internals('range FOLD', fold)
-
               if(paths){
                 let _get_by_path = function(path, extras){
 
                   app.map({
                     _extras: extras,
-                    uri: app.options.db+'/ui',
+                    uri: app.options.db+'/periodical',
                     args: function(x){ return [x('group'),x('reduction')] },
 
                     query: app.r.db(app.options.db).
-                    table('ui').
+                    table('periodical').
                     between(
                       [path, req.host, 'periodical', roundMilliseconds(start)],
                       [path, req.host, 'periodical', roundMilliseconds(end)],
                       {index: 'sort_by_path'}
                     ).
-                    // fold(0, function(acc, row) {
-                    //   return acc.add(1);
-                    // }, {emit:
-                    //   function (acc, row, new_acc) {
-                    //     return app.r.branch(new_acc.eq(0), [row], new_acc.mod(fold).eq(0), [row], []);
-                    //   }
-                    // }).
                     // orderBy(r.asc.row('metadata')('timestamp')).
                     group(app.r.row('metadata')('path')).
                     ungroup()
                   })
                   // app.between({
                   //   _extras: extras,
-                  //   uri: app.options.db+'/ui',
+                  //   uri: app.options.db+'/periodical',
                   //   args: [
                   //     [path, req.host, "periodical", roundMilliseconds(start)],
                   //     [path, req.host, "periodical",roundMilliseconds(end)],
@@ -559,9 +427,7 @@ module.exports = new Class({
 
                 if(Array.isArray(paths)){
                   Array.each(paths, function(_path, index){
-                    if(!req.query || !req.query.format)
-                      _path = _path.replace(/_/g, '.')//if path are format=stat, transform
-
+                    _path = _path.replace(/_/g, '.')//if path are format=stat, transform
                     _get_by_path(_path,{
                       id: req.id,
                       prop: 'data',
@@ -598,23 +464,16 @@ module.exports = new Class({
                     full_range: req.full_range,
                     range_counter: req.range_counter
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: function(x){ return [x('group'),x('reduction')] },
 
                   query: app.r.db(app.options.db).
-                  table('ui').
+                  table('periodical').
                   between(
                     [req.host, 'periodical', roundMilliseconds(start)],
                     [req.host, 'periodical', roundMilliseconds(end)],
                     {index: 'sort_by_host'}
                   ).
-                  // fold(0, function(acc, row) {
-                  //   return acc.add(1);
-                  // }, {emit:
-                  //   function (acc, row, new_acc) {
-                  //     return app.r.branch(new_acc.eq(0), [row], new_acc.mod(fold).eq(0), [row], []);
-                  //   }
-                  // }).
                   group(app.r.row('metadata')('path')).
                   ungroup()
                 })
@@ -626,19 +485,19 @@ module.exports = new Class({
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
-              // debug_internals('catch_all', req.host, req.prop)
+              debug_internals('catch_all', req.host, req.prop)
               app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
             }
 
 
               // app.reduce({
               //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
+              //   uri: app.options.db+'/periodical',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('periodical').getAll(req.host, {index: 'host'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -690,9 +549,6 @@ module.exports = new Class({
 
   	this.parent(options);//override default options
 
-    this.addEvent('onSuspend', function(){
-      this.registered = {}
-    }.bind(this))
 
     // this.addEvent('onResume', this.register_on_changes.bind(this))
 
@@ -704,7 +560,7 @@ module.exports = new Class({
 		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
   },
   data_range: function(err, resp, params){
-    // debug_internals('data_range', err, resp, params.options)
+    debug_internals('data_range', err, resp, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -747,7 +603,7 @@ module.exports = new Class({
       // // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
       this.hosts[host][prop][range_select] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
 
-      // debug_internals('data_range', this.hosts)
+      debug_internals('data_range', this.hosts)
 
       if(this.hosts[host][prop]['start'] != '' && this.hosts[host][prop]['end'] != '')
         if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
@@ -757,9 +613,7 @@ module.exports = new Class({
               found = true
           })
 
-          // debug_internals('paths firing host...', this.hosts[host], found)
-
-          this.hosts_ranges[host] = this.hosts[host]['data_range']
+          debug_internals('paths firing host...', this.hosts[host], found)
 
           this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
             {input_type: this, app: null},
@@ -775,7 +629,7 @@ module.exports = new Class({
     }
   },
   unknown_property: function(params){
-    // debug_internals('unknown_property', params.options)
+    debug_internals('unknown_property', params.options)
     let extras = params.options._extras
     let host = extras.host
     let prop = extras.prop
@@ -819,137 +673,86 @@ module.exports = new Class({
     let id = extras.id
     let multipath = extras.multipath
 
-    if(resp && prop == 'changes'){
-      resp.toArray(function(err, results) {
-        if (err) throw err;
+    if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-        debug_internals('changes', results.length)
+    // if(resp) debug_internals('data', resp)
 
-        if(results.length > 0)
-          this.__process_changes(results)
+    let data = {}
+    resp.toArray(function(err, arr){
 
-      }.bind(this));
-    }
-    else{
+      // this.hosts[host][prop] = arr
+      this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
 
-      if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+        if(multipath){
+          let index = multipath.index
+          if(!this._multi_response[id]) this._multi_response[id] = []
 
-      // if(resp) debug_internals('data', resp)
+          // debug_internals('multipath %o', id, multipath, this._multi_response[id].length)
 
-      let data = {}
-      resp.toArray(function(err, arr){
+          this._multi_response[id].push( result )
 
-        // debug_internals('data length ', arr.length)
+          if(this._multi_response[id].length == multipath.length){
+            let final_result = {}
+            Array.each(this._multi_response[id], function(resp){
+              final_result = Object.merge(final_result,resp)
+            })
 
-        // this.hosts[host][prop] = arr
-        this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
+            // debug_internals('multipath final %o', final_result)
 
-
-          if(multipath){
-            let index = multipath.index
-            if(!this._multi_response[id]) this._multi_response[id] = []
-
-            // debug_internals('multipath %o', id, multipath, this._multi_response[id].length)
-
-            this._multi_response[id].push( result )
-
-            if(this._multi_response[id].length == multipath.length){
-              let final_result = {data: {}, step: undefined}
-              Array.each(this._multi_response[id], function(resp){
-                final_result.data = Object.merge(final_result.data,resp)
-              })
-
-              debug_internals('multipath final %o', final_result)
-              if(extras.range){
-                final_result = this.__step_on_max_data_points(final_result.data)
-              }
-              // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
-              this.fireEvent('onDoc', [
-                (Object.getLength(final_result.data) > 0) ? final_result : null,
-                Object.merge(
-                  {input_type: this, app: null},
-                  // {host: host, type: 'host', prop: prop, id: id}
-                  extras,
-                  {type: 'host', step: final_result.step}
-                )
-              ])
-              // delete this.hosts[host]
-
-              delete this._multi_response[id]
-            }
-            // }
-
-          }
-          else{
-
-
-
-            if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
-
-            // debug_internals('data firing host...', this.hosts, host)
-
-            this.hosts[host][prop] = result
-
-            debug_internals('data length ', result, this.hosts[host])
-
-            if(Object.getLength(result) == 0 || type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
-              let found = false
-              Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
-                if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
-                  found = true
-              })
-
-              // debug_internals('data firing host...', this.hosts[host].data)
-              debug_internals('data firing host...', host)
-
-              if(extras.range && this.hosts[host].data){
-                this.hosts[host] = Object.merge(this.hosts[host], this.__step_on_max_data_points(this.hosts[host].data))
-              }
-
-              this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+            // this.fireEvent('on'+event+'Doc', [final_result, {id: id, type: type, input_type: this, app: null}]);
+            this.fireEvent('onDoc', [
+              (Object.getLength(final_result) > 0) ? {data: final_result} : null,
+              Object.merge(
                 {input_type: this, app: null},
                 // {host: host, type: 'host', prop: prop, id: id}
                 extras,
-                {type: 'host', step: this.hosts[host].step}
-              )])
-              delete this.hosts[host]
-            }
+                {type: 'host'}
+              )
+            ])
+            // delete this.hosts[host]
+
+            delete this._multi_response[id]
           }
+          // }
 
+        }
+        else{
 
+          if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
-        }.bind(this))
+          // debug_internals('data firing host...', this.hosts, host)
+
+          this.hosts[host][prop] = result
+
+          if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+            let found = false
+            Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+              if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
+                found = true
+            })
+
+            // debug_internals('data firing host...', this.hosts[host])
+
+            this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+              {input_type: this, app: null},
+              // {host: host, type: 'host', prop: prop, id: id}
+              extras,
+              {type: 'host'}
+            )])
+            delete this.hosts[host]
+          }
+        }
 
 
 
       }.bind(this))
 
-    }
 
 
-  },
-  __step_on_max_data_points: function(data){
-    let step = 1
-    Object.each(data, function(result_data, result_path){
-      if(Array.isArray(result_data)){
-        result_data.sort(function(a,b) {
-          return (a.metadata.timestamp > b.metadata.timestamp) ? 1 : ((b.metadata.timestamp > a.metadata.timestamp) ? -1 : 0)
-        })
-
-        step = Math.ceil(result_data.length / this.MAX_RANGE_DATA_POINTS)
-        if(step > 1){
-          Array.each(result_data, function(result_data_values, result_data_index){
-            // if(result_data_index != 0 && (result_data_index % step) != 0)
-            if(result_data_index % step != 0)
-              result_data[result_data_index] = undefined
-          })
-
-          result_data = result_data.clean()
-        }
-      }
     }.bind(this))
 
-    return {data: data, step: step}
+
+
   },
   paths: function(err, resp, params){
     debug_internals('paths', err, params.options)
@@ -980,7 +783,6 @@ module.exports = new Class({
     let type = extras.type
     let id = extras.id
 
-
     if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
 
     // if(resp) debug_internals('paths', Object.keys(resp))
@@ -996,8 +798,6 @@ module.exports = new Class({
           found = true
       })
 
-      // debug_internals('paths firing host...', this.hosts[host])
-
       // debug_internals('paths firing host...', this.hosts[host], Object.merge(
       //   extras,
       //   {type: 'host'}
@@ -1007,8 +807,7 @@ module.exports = new Class({
       this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
         {input_type: this, app: null},
         extras,
-        // {type: 'host'}
-        {type: (id === undefined) ? 'paths' : 'host'}
+        {type: 'host'}
         // {host: host, type: 'host', prop: prop, id: id}
       )])
       delete this.hosts[host]
@@ -1018,153 +817,117 @@ module.exports = new Class({
 
     // }
   },
-  unregister: function(host, prop, id){
-    debug_internals('unregister', host, prop, id)
-
-    if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
-      this.events[host][prop].erase(id)
-      this.events[host][prop] = this.events[host][prop].clean()
-
-      if(this.events[host][prop].length == 0){
-        delete this.events[host][prop]
-      }
-    }
-
-    if(this.events[host] && Object.getLength(this.events[host]) == 0)
-      delete this.events[host]
-
-    if(Object.getLength(this.events) == 0 && this.feeds[host]){
-      debug_internals('unregister closing')
-      this.__close_changes(host)
-      // this.feeds[host].close(function (err) {
-      //   this.close_feed = true
-      //   if (err){
-      //     debug_internals('err closing cursor', err)
-      //   }
-      // }.bind(this))
-      // this.feed = undefined
-    }
-
-    debug_internals('unregister', this.events)
-
-  },
-  __close_changes: function(host){
-    if(this.feeds[host]){
-      this.feeds[host].close(function (err) {
-        this.close_feeds[host] = true
-
-        if (err){
-          debug_internals('err closing cursor onSuspend', err)
-        }
-      }.bind(this))
-
-      this.feeds[host] = undefined
-    }
-
-    // this.removeEvent('onSuspend', this.__close_changes)
-  },
+  // unregister: function(host, prop, id){
+  //   debug_internals('unregister', host, prop, id)
+  //
+  //   if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
+  //     this.events[host][prop].erase(id)
+  //     this.events[host][prop] = this.events[host][prop].clean()
+  //
+  //     if(this.events[host][prop].length == 0){
+  //       delete this.events[host][prop]
+  //     }
+  //   }
+  //
+  //   if(this.events[host] && Object.getLength(this.events[host]) == 0)
+  //     delete this.events[host]
+  //
+  //   if(Object.getLength(this.events) == 0 && this.feed){
+  //     debug_internals('unregister closing')
+  //     this.feed.close(function (err) {
+  //       this.close_feed = true
+  //       if (err){
+  //         debug_internals('err closing cursor', err)
+  //       }
+  //     }.bind(this))
+  //     this.feed = undefined
+  //   }
+  //
+  //   debug_internals('unregister', this.events)
+  //
+  // },
   register: function(host, prop, id){
     // debug_internals('register', host, prop, id)
 
-    if(!this.events[host]) this.events[host] = {}
-    if(!this.events[host][prop]) this.events[host][prop] = []
-    this.events[host][prop].push(id)
+    // if(!this.events[host]) this.events[host] = {}
+    // if(!this.events[host][prop]) this.events[host][prop] = []
+    // this.events[host][prop].push(id)
 
-    if(!this.feeds[host]){
+    if(!this.feed){
 
-      // let _close = function(){
-      //   debug_internals('closing cursor onSuspend')
-      //   if(this.feed){
-      //     this.feed.close(function (err) {
-      //       this.close_feed = true
-      //
-      //       if (err){
-      //         debug_internals('err closing cursor onSuspend', err)
-      //       }
-      //     }.bind(this))
-      //
-      //     this.feed = undefined
-      //   }
-      //
-      //   this.removeEvent('onSuspend', _close)
-      // }.bind(this)
+      let _close = function(){
+        debug_internals('closing cursor onSuspend')
+        if(this.feed){
+          this.feed.close(function (err) {
+            this.close_feed = true
 
-      // this.addEvent('onSuspend', _close)
-      this.addEvent('onSuspend', this.__close_changes.pass(host, this))
+            if (err){
+              debug_internals('err closing cursor onSuspend', err)
+            }
+          }.bind(this))
+
+          this.feed = undefined
+        }
+
+        this.removeEvent('onSuspend', _close)
+      }.bind(this)
+
+      this.addEvent('onSuspend', _close)
 
 
-      if(!this.changes_buffer[host]) this.changes_buffer[host] = []
+      if(!this.changes_buffer_expire)
+        this.changes_buffer_expire = Date.now()
 
-      if(!this.changes_buffer_expire[host]) this.changes_buffer_expire[host] = Date.now()
+      this.r.db(this.options.db).table('periodical').changes({includeTypes: true, squash: 1}).run(this.conn, function(err, cursor) {
 
-      this.r.db(this.options.db).
-        table('ui').
-        getAll(host, {index: 'host'}).
-        changes({includeTypes: true, squash: 1}).
-        run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
+        this.feed = cursor
 
-        this.feeds[host] = cursor
-
-        this.feeds[host].each(function(err, row){
+        this.feed.each(function(err, row){
 
           /**
           * https://www.rethinkdb.com/api/javascript/each/
           * Iteration can be stopped prematurely by returning false from the callback.
           */
-          if(this.close_feeds[host] === true){ this.close_feeds[host] = false; this.feeds[host] = undefined; return false }
+          if(this.close_feed === true){ this.close_feed = false; return false }
 
           // debug_internals('changes %s', new Date())
           if(row && row !== null ){
             if(row.type == 'add'){
               // debug_internals('changes add %s %o', new Date(), row.new_val)
-              // debug_internals("changes add now: %s \n timstamp: %s \n expire: %s \n host: %s \n path: %s",
-              //   new Date(roundMilliseconds(Date.now())),
-              //   new Date(roundMilliseconds(row.new_val.metadata.timestamp)),
-              //   new Date(roundMilliseconds(this.changes_buffer_expire[host])),
-              //   row.new_val.metadata.host,
-              //   row.new_val.metadata.path
-              // )
-
-              this.changes_buffer[host].push(row.new_val)
+              // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+              this.changes_buffer.push(row.new_val)
             }
 
-            if(this.changes_buffer_expire[host] < Date.now() - 900 && this.changes_buffer[host].length > 0){
+            if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
               // console.log('onPeriodicalDoc', this.changes_buffer.length)
+              // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+              let data = {}
+              Array.each(this.changes_buffer, function(doc){
+                let path = doc.metadata.path
+                let host = doc.metadata.host
 
-              this.__process_changes(this.changes_buffer[host])
+                if(!data[host]) data[host] = {}
+                if(!data[host][path]) data[host][path] = []
+                data[host][path].push(doc)
+
+              }.bind(this))
+
+              Object.each(data, function(host_data, host){
+                // debug_internals('changes emiting %o', host, host_data)
+                this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+                  {input_type: this, app: null},
+                  // {host: host, type: 'host', prop: prop, id: id}
+                  {type: prop, host: host}
+                )])
+
+
+              }.bind(this))
+
 
               // debug_internals('changes %s', new Date(), data)
 
-              this.changes_buffer_expire[host] = Date.now()
-              this.changes_buffer[host] = []
-
-              // let data = {}
-              // Array.each(this.changes_buffer, function(doc){
-              //   let path = doc.metadata.path
-              //   let host = doc.metadata.host
-              //
-              //   if(!data[host]) data[host] = {}
-              //   if(!data[host][path]) data[host][path] = []
-              //   data[host][path].push(doc)
-              //
-              // }.bind(this))
-              //
-              // Object.each(data, function(host_data, host){
-              //   // debug_internals('changes emiting %o', host, host_data)
-              //   this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
-              //     {input_type: this, app: null},
-              //     // {host: host, type: 'host', prop: prop, id: id}
-              //     {type: prop, host: host}
-              //   )])
-              //
-              //
-              // }.bind(this))
-              //
-              //
-              // // debug_internals('changes %s', new Date(), data)
-              //
-              // this.changes_buffer_expire = Date.now()
-              // this.changes_buffer = []
+              this.changes_buffer_expire = Date.now()
+              this.changes_buffer = []
             }
 
           }
@@ -1177,35 +940,6 @@ module.exports = new Class({
     }
 
 
-  },
-  __process_changes: function(buffer){
-    let data = {}
-    Array.each(buffer, function(doc){
-      let path = doc.metadata.path
-      let host = doc.metadata.host
-
-      if(!data[host]) data[host] = {}
-      if(!data[host][path]) data[host][path] = []
-      data[host][path].push(doc)
-
-    }.bind(this))
-
-    Object.each(data, function(host_data, host){
-      // debug_internals('changes emiting %o', host, host_data)
-      // let doc = {}
-      // doc[host] = host_data
-      // this.fireEvent('onDoc', [doc, Object.merge(
-      //   {input_type: this, app: null},
-      //   // {host: host, type: 'host', prop: prop, id: id}
-      //   // {type: prop, host: host}
-      // )])
-      this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
-        {input_type: this, app: null},
-        // {host: host, type: 'host', prop: prop, id: id}
-        {type: 'data', host: host}
-      )])
-
-    }.bind(this))
   },
   // changes: function(err, resp, params){
   //   let extras = params.options._extras
@@ -1278,10 +1012,10 @@ module.exports = new Class({
   //   **/
   //   this.changes({
   //      _extras: {type: 'periodical'},
-  //      uri: this.options.db+'/ui',
+  //      uri: this.options.db+'/periodical',
   //      args: {includeTypes: true, squash: 1.1},
-  //      // query: this.r.db(this.options.db).table('ui').getAll(this.options.stat_host, {index:'host'})
-  //      query: this.r.db(this.options.db).table('ui').distinct({index: 'host'})
+  //      // query: this.r.db(this.options.db).table('periodical').getAll(this.options.stat_host, {index:'host'})
+  //      query: this.r.db(this.options.db).table('periodical').distinct({index: 'host'})
   //
   //
   //   })

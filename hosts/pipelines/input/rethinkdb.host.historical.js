@@ -2,8 +2,8 @@
 
 const App = require ( 'node-app-rethinkdb-client/index' )
 
-let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Host:Input'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Host:Input:Internals');
+let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Host.Historical:Input'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Host.Historical:Input:Internals');
 
 
 const roundMilliseconds = function(timestamp){
@@ -44,163 +44,95 @@ module.exports = new Class({
   options: {
 
 		requests : {
-      periodical: [
-        {
-					get_data_range: function(req, next, app){
-            // debug_internals('get_data_range', app.data_hosts);
-						if(app.data_hosts && app.data_hosts.length > 0){
-
-              Array.each(app.data_hosts, function(host){
-                // debug_internals('get_data_range', host)
-                //get first
-                app.nth({
-                  _extras: {
-                    id: undefined,
-                    prop: 'data_range',
-                    range_select : 'start',
-                    host: host,
-                    type: 'prop'
-                  },
-                  uri: app.options.db+'/ui',
-                  args: 0,
-                  query: app.r.db(app.options.db).table('ui').
-                  between(
-                    [host, 'periodical', 0],
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
-                  )
-                })
-
-                //get last
-                app.nth({
-                  _extras: {
-                    id: undefined,
-                    prop: 'data_range',
-                    range_select : 'end',
-                    host: host,
-                    type: 'prop'
-                  },
-                  uri: app.options.db+'/ui',
-                  args: -1,
-                  query: app.r.db(app.options.db).table('ui').
-                  between(
-                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(6000)], //last 6 secs
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
-                  )
-                })
-
-              })
-
-            }
-
-					}
-				},
-        {
-					search_paths: function(req, next, app){
-						// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-            if(app.data_hosts && app.data_hosts.length > 0){
-              Array.each(app.data_hosts, function(host){
-              // debug_internals('search_paths', req.host, req.prop);
-                app.reduce({
-                  _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
-                  uri: app.options.db+'/ui',
-                  args: function(left, right) {
-                      return left.merge(right)
-                  },
-
-                  query: app.r.db(app.options.db).table('ui').
-                  // getAll(req.host, {index: 'host'}).
-                  between(
-                    [host, 'periodical', Date.now() - 6000],
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
-                  ).
-                  map(function(doc) {
-                    return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-                  }.bind(app))
-                  // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
-                  //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-                  // }.bind(app))
-                })
-
-              })
-            }
-
-					}
-				},
-        // {
-				// 	get_changes: function(req, next, app){
-        //     if(app.registered){
-        //       let hosts = []
-        //       Object.each(app.registered, function(registered_data, id){
-        //         // debug_internals('get_changes', registered_data)
-        //         Object.each(registered_data, function(props, host){
-        //
-        //           if(props.contains('data'))//if registered for "data"
-        //             hosts = hosts.combine([host])
-        //
-        //         })
-        //       })
-  			// 			//debug_internals('_get_last_stat %o', next);
-        //       // let start = Date.now() - 3999
-        //       // let end = Date.now()
-        //
-  			// 			debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
-        //
-  			// 			// let views = [];
-  			// 			// Object.each(app.hosts, function(value, host){
-  			// 				// debug_internals('_get_last_stat %s', host);
-        //
-        //         Array.each(hosts, function(host){
-        //           // debug_internals('_get_last_stat %s %s', host, path);
-        //           // let _func = function(){
-        //           if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
-        //             app.between({
-        //               _extras: {
-        //                 id: undefined,
-        //                 prop: 'changes',
-        //                 // range_select : 'start',
-        //                 host: host,
-        //                 // type: 'prop'
-        //               },
-        //               uri: app.options.db+'/ui',
-        //               args: [
-        //                 /**
-        //                 * 1001ms time lapse (previous second from "now")
-        //                 **/
-        //                 [host, 'periodical', app.hosts_ranges[host].end - 1999],
-        //                 [host, 'periodical', app.hosts_ranges[host].end],
-        //                 {
-        //                   // index: 'timestamp',
-        //                   index: 'sort_by_host',
-        //                   leftBound: 'open',
-        //                   rightBound: 'open'
-        //                 }
-        //               ],
-        //               // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
-        //               // orderBy: { index: app.r.desc('sort_by_path') }
-        //             })
-        //
-        //         }.bind(app))
-        //
-        //
-    		// 					// views.push(_func);
-        //
-        //         // })
-        //
-  			// 			// });
-        //
-  			// 			// Array.each(views, function(view){
-  			// 			// 	view();
-  			// 			// });
-  			// 			// next(views);
-        //     }
-				// 	}
-				// },
-
-
-      ],
+      // periodical: [
+      //   {
+			// 		get_data_range: function(req, next, app){
+      //       // debug_internals('get_data_range', app.data_hosts);
+			// 			if(app.data_hosts && app.data_hosts.length > 0){
+      //
+      //         Array.each(app.data_hosts, function(host){
+      //           // debug_internals('get_data_range', host)
+      //           //get first
+      //           app.nth({
+      //             _extras: {
+      //               id: undefined,
+      //               prop: 'data_range',
+      //               range_select : 'start',
+      //               host: host,
+      //               type: 'prop'
+      //             },
+      //             uri: app.options.db+'/historical',
+      //             args: 0,
+      //             query: app.r.db(app.options.db).table('historical').
+      //             between(
+      //               [host, app.historical_type || 'minute', 0],
+      //               [host, app.historical_type || 'minute', ''],
+      //               {index: 'sort_by_host'}
+      //             )
+      //           })
+      //
+      //           //get last
+      //           app.nth({
+      //             _extras: {
+      //               id: undefined,
+      //               prop: 'data_range',
+      //               range_select : 'end',
+      //               host: host,
+      //               type: 'prop'
+      //             },
+      //             uri: app.options.db+'/historical',
+      //             args: -1,
+      //             query: app.r.db(app.options.db).table('historical').
+      //             between(
+      //               [host, app.historical_type || 'minute', app.r.now().toEpochTime().mul(1000).sub(60000)], //last 6 secs
+      //               [host, app.historical_type || 'minute', ''],
+      //               {index: 'sort_by_host'}
+      //             )
+      //           })
+      //
+      //         })
+      //
+      //       }
+      //
+			// 		}
+			// 	},
+      //   {
+			// 		search_paths: function(req, next, app){
+			// 			// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
+      //       if(app.data_hosts && app.data_hosts.length > 0){
+      //         Array.each(app.data_hosts, function(host){
+      //         // debug_internals('search_paths', req.host, req.prop);
+      //           app.reduce({
+      //             _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
+      //             uri: app.options.db+'/historical',
+      //             args: function(left, right) {
+      //                 return left.merge(right)
+      //             },
+      //
+      //             query: app.r.db(app.options.db).table('historical').
+      //             // getAll(req.host, {index: 'host'}).
+      //             between(
+      //               [host, app.historical_type || 'minute', Date.now() - 60000],
+      //               [host, app.historical_type || 'minute', ''],
+      //               {index: 'sort_by_host'}
+      //             ).
+      //             map(function(doc) {
+      //               return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+      //             }.bind(app))
+      //             // query: app.r.db(app.options.db).table('historical').getAll(req.host, {index: 'host'}).map(function(doc) {
+      //             //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+      //             // }.bind(app))
+      //           })
+      //
+      //         })
+      //       }
+      //
+			// 		}
+			// 	},
+      //
+      //
+      //
+      // ],
       once: [
         {
 					get_data_range: function(req, next, app){
@@ -216,12 +148,12 @@ module.exports = new Class({
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: 0,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, 'periodical', 0],
-                  [req.host, 'periodical', ''],
+                  [req.host, app.historical_type || 'minute', 0],
+                  [req.host, app.historical_type || 'minute', ''],
                   {index: 'sort_by_host'}
                 )
               })
@@ -235,12 +167,12 @@ module.exports = new Class({
                   host: req.host,
                   type: (!req.prop) ? 'host' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
-                  [req.host, 'periodical', ''],
+                  [req.host, app.historical_type || 'minute', app.r.now().toEpochTime().mul(1000).sub(60000)],//last 5 secs
+                  [req.host, app.historical_type || 'minute', ''],
                   {index: 'sort_by_host'}
                 )
               })
@@ -256,22 +188,22 @@ module.exports = new Class({
               // debug_internals('search_paths', req.host, req.prop);
               app.reduce({
                 _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('historical').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, 'periodical', Date.now() - 10000], //60000
-                  [req.host, 'periodical', Date.now()],
+                  [req.host, app.historical_type || 'minute', Date.now() - 60000], //60000
+                  [req.host, app.historical_type || 'minute', Date.now()],
                   {index: 'sort_by_host'}
                 ).
                 map(function(doc) {
                   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
                 }.bind(app))
-                // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+                // query: app.r.db(app.options.db).table('historical').getAll(req.host, {index: 'host'}).map(function(doc) {
                 //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
                 // }.bind(app))
               })
@@ -285,15 +217,15 @@ module.exports = new Class({
               // debug_internals('search_data', req.host, req.prop);
               app.map({
                 _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: function(x){ return [x('group'), x('reduction')] },
 
                 query: app.r.db(app.options.db).
-                table('ui').
+                table('historical').
                 // getAll(req.host, {index: 'host'}).
                 between(
-                  [req.host, 'periodical', Date.now() - 10000], //60000
-                  [req.host, 'periodical', Date.now()],
+                  [req.host, app.historical_type || 'minute', Date.now() - 60000], //60000
+                  [req.host, app.historical_type || 'minute', Date.now()],
                   {index: 'sort_by_host'}
                 ).
                 group(app.r.row('metadata')('path')).
@@ -315,10 +247,10 @@ module.exports = new Class({
         //         // app.events[host]['data'] = true
         //         app.changes({
         //            _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
-        //            uri: app.options.db+'/ui',
+        //            uri: app.options.db+'/historical',
         //            // args: {includeTypes: true, squash: 1.1},
         //            args: {includeTypes: true, squash: 1},
-        //            query: app.r.db(app.options.db).table('ui').getAll(host, {index:'host'})
+        //            query: app.r.db(app.options.db).table('historical').getAll(host, {index:'host'})
         //         })
         //       }
         //
@@ -384,12 +316,12 @@ module.exports = new Class({
 
               // app.reduce({
               //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
+              //   uri: app.options.db+'/historical',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('historical').getAll(req.host, {index: 'host'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -422,12 +354,12 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: 0,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, 'periodical', start],
-                  [req.host, 'periodical', end],
+                  [req.host, app.historical_type || 'minute', start],
+                  [req.host, app.historical_type || 'minute', end],
                   {index: 'sort_by_host'}
                 )
               })
@@ -444,12 +376,12 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table('historical').
                 between(
-                  [req.host, 'periodical', start],
-                  [req.host, 'periodical', end],
+                  [req.host, app.historical_type || 'minute', start],
+                  [req.host, app.historical_type || 'minute', end],
                   {index: 'sort_by_host'}
                 )
               })
@@ -479,16 +411,16 @@ module.exports = new Class({
                   full_range: req.full_range,
                   range_counter: req.range_counter
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/historical',
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
                 query: app.r.db(app.options.db).
-                table('ui').
+                table('historical').
                 between(
-                  [req.host, 'periodical', roundMilliseconds(start)],
-                  [req.host, 'periodical', roundMilliseconds(end)],
+                  [req.host, app.historical_type || 'minute', roundMilliseconds(start)],
+                  [req.host, app.historical_type || 'minute', roundMilliseconds(end)],
                   {index: 'sort_by_host'}
                 ).
                 map(function(doc) {
@@ -520,14 +452,14 @@ module.exports = new Class({
 
                   app.map({
                     _extras: extras,
-                    uri: app.options.db+'/ui',
+                    uri: app.options.db+'/historical',
                     args: function(x){ return [x('group'),x('reduction')] },
 
                     query: app.r.db(app.options.db).
-                    table('ui').
+                    table('historical').
                     between(
-                      [path, req.host, 'periodical', roundMilliseconds(start)],
-                      [path, req.host, 'periodical', roundMilliseconds(end)],
+                      [path, req.host, app.historical_type || 'minute', roundMilliseconds(start)],
+                      [path, req.host, app.historical_type || 'minute', roundMilliseconds(end)],
                       {index: 'sort_by_path'}
                     ).
                     // fold(0, function(acc, row) {
@@ -543,7 +475,7 @@ module.exports = new Class({
                   })
                   // app.between({
                   //   _extras: extras,
-                  //   uri: app.options.db+'/ui',
+                  //   uri: app.options.db+'/historical',
                   //   args: [
                   //     [path, req.host, "periodical", roundMilliseconds(start)],
                   //     [path, req.host, "periodical",roundMilliseconds(end)],
@@ -598,14 +530,14 @@ module.exports = new Class({
                     full_range: req.full_range,
                     range_counter: req.range_counter
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/historical',
                   args: function(x){ return [x('group'),x('reduction')] },
 
                   query: app.r.db(app.options.db).
-                  table('ui').
+                  table('historical').
                   between(
-                    [req.host, 'periodical', roundMilliseconds(start)],
-                    [req.host, 'periodical', roundMilliseconds(end)],
+                    [req.host, app.historical_type || 'minute', roundMilliseconds(start)],
+                    [req.host, app.historical_type || 'minute', roundMilliseconds(end)],
                     {index: 'sort_by_host'}
                   ).
                   // fold(0, function(acc, row) {
@@ -633,12 +565,12 @@ module.exports = new Class({
 
               // app.reduce({
               //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
+              //   uri: app.options.db+'/historical',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('historical').getAll(req.host, {index: 'host'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -696,12 +628,12 @@ module.exports = new Class({
 
     // this.addEvent('onResume', this.register_on_changes.bind(this))
 
-		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Host:Input_init');//start profiling
+		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Host.Historical:Input_init');//start profiling
 
 
-		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Host:Input_init');//end profiling
+		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Host.Historical:Input_init');//end profiling
 
-		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host:Input started');
+		this.log('mngr-ui-admin:apps:hosts:Pipeline:Host.Historical:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Host.Historical:Input started');
   },
   data_range: function(err, resp, params){
     // debug_internals('data_range', err, resp, params.options)
@@ -1098,7 +1030,7 @@ module.exports = new Class({
       if(!this.changes_buffer_expire[host]) this.changes_buffer_expire[host] = Date.now()
 
       this.r.db(this.options.db).
-        table('ui').
+        table('historical').
         getAll(host, {index: 'host'}).
         changes({includeTypes: true, squash: 1}).
         run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
@@ -1240,13 +1172,13 @@ module.exports = new Class({
   //
   //     if(row.type == 'add'){
   //       // console.log(row.new_val)
-  //       // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: 'periodical', input_type: this, app: null}]);
+  //       // this.fireEvent('onPeriodicalDoc', [row.new_val, {type: app.historical_type || 'minute', input_type: this, app: null}]);
   //       this.changes_buffer.push(row.new_val)
   //     }
   //
   //     if(this.changes_buffer_expire < Date.now() - 900 && this.changes_buffer.length > 0){
   //       // console.log('onPeriodicalDoc', this.changes_buffer.length)
-  //       // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: 'periodical', input_type: this, app: null}])
+  //       // this.fireEvent('onPeriodicalDoc', [Array.clone(this.changes_buffer), {type: app.historical_type || 'minute', input_type: this, app: null}])
   //       let data = {}
   //       Array.each(this.changes_buffer, function(doc){
   //         let path = doc.metadata.path
@@ -1277,11 +1209,11 @@ module.exports = new Class({
   //   * should be "aligned" with dashboard refreshs?
   //   **/
   //   this.changes({
-  //      _extras: {type: 'periodical'},
-  //      uri: this.options.db+'/ui',
+  //      _extras: {type: app.historical_type || 'minute'},
+  //      uri: this.options.db+'/historical',
   //      args: {includeTypes: true, squash: 1.1},
-  //      // query: this.r.db(this.options.db).table('ui').getAll(this.options.stat_host, {index:'host'})
-  //      query: this.r.db(this.options.db).table('ui').distinct({index: 'host'})
+  //      // query: this.r.db(this.options.db).table('historical').getAll(this.options.stat_host, {index:'host'})
+  //      query: this.r.db(this.options.db).table('historical').distinct({index: 'host'})
   //
   //
   //   })

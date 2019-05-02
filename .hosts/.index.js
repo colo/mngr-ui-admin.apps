@@ -13,11 +13,8 @@ const ETC =  process.env.NODE_ENV === 'production'
 let Pipeline = require('js-pipeline')
 let jscaching = require('js-caching')
 
-// let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
-// let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
-
-let RedisStoreIn = require('js-caching/libs/stores/redis').input
-let RedisStoreOut = require('js-caching/libs/stores/redis').output
+let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
+let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
 
 // let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
 
@@ -32,10 +29,6 @@ let build_range = require('./libs/build_range')
 
 const qrate = require('qrate');
 
-const ui_rest_client_conf = require(ETC+'ui.rest.js')
-const ui_rest = require('./clients/ui.rest')
-
-
 module.exports = new Class({
   Extends: App,
 
@@ -45,7 +38,6 @@ module.exports = new Class({
   ON_HOST_UPDATED: 'onHostUpdated',
   ON_HOST_RANGE: 'onHostRange',
   ON_HOST_INSTANCES_UPDATED: 'onHostInstancesUpdated',
-  ON_HOST_PATHS_UPDATED: 'onHostPathsUpdated',
   ON_HOST_DATA_UPDATED: 'onHostDataUpdated',
   ON_HOST_DATA_RANGE_UPDATED: 'onHostDataRangeUpdated',
 
@@ -63,8 +55,6 @@ module.exports = new Class({
   session_store: undefined,
 
 	options: {
-    ui_rest_client: undefined,
-
     id: 'hosts',
     path: 'hosts',
 
@@ -73,44 +63,21 @@ module.exports = new Class({
     },
 
     cache_store: {
-      NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
-      id: 'ui.cache',
       suspended: false,
       ttl: 1999,
       stores: [
-        // {
-        //   id: 'rethinkdb',
-        //   conn: [
-        //     {
-        //       host: 'elk',
-        //       port: 28015,
-        //       // port: 28016,
-        //       db: 'servers',
-        //       table: 'cache',
-        //       module: RethinkDBStoreIn,
-        //     },
-        //   ],
-        //   module: RethinkDBStoreOut,
-        // }
         {
-          NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
-          id: 'ui.cache',
+          id: 'rethinkdb',
           conn: [
             {
               host: 'elk',
-              // port: 28015,
-              // port: 28016,
-              db: 0,
-              // table: 'cache',
-              module: RedisStoreIn,
+              port: 28015,
+              db: 'servers',
+              table: 'cache',
+              module: RethinkDBStoreIn,
             },
           ],
-          module: RedisStoreOut,
-          buffer:{
-            size: -1,
-            // expire: 0 //ms
-            expire: 999 //ms
-          }
+          module: RethinkDBStoreOut,
         }
       ],
     },
@@ -147,11 +114,6 @@ module.exports = new Class({
           {
             path: ':host/instances/:instances?',
             callbacks: ['host_instances'],
-            version: '',
-          },
-          {
-            path: 'historical/:host?/:prop?/:paths?',
-            callbacks: ['hosts'],
             version: '',
           },
           {
@@ -192,14 +154,6 @@ module.exports = new Class({
   					// path: ':events',
   					// once: true, //socket.once
   					callbacks: ['register'],
-  					// middlewares: [], //socket.use(fn)
-  				}
-        ],
-        'off': [
-          {
-  					// path: ':events',
-  					// once: true, //socket.once
-  					callbacks: ['unregister'],
   					// middlewares: [], //socket.use(fn)
   				}
         ],
@@ -313,7 +267,7 @@ module.exports = new Class({
   },
   __get_session_by_id: function(id, cb){
 
-    if(this.session_store && typeof this.session_store.get == 'function'){
+    if(typeof this.session_store.get == 'function'){
       try{
         this.session_store.get(id, cb)
       }
@@ -321,7 +275,7 @@ module.exports = new Class({
         debug_internals('this.session_store.get error', e)
       }
     }
-    else if(this.session_store && this.session_store.sessions[id]){//MemoryStore
+    else if(this.session_store.sessions[id]){//MemoryStore
       cb(undefined, this.session_store.sessions[id])
     }
     else{
@@ -395,7 +349,7 @@ module.exports = new Class({
   __get_session_id_by_socket: function(socketId, cb){
     debug_internals('__get_session_id_by_socket', socketId)
 
-    if(this.session_store && typeof this.session_store.all == 'function'){
+    if(typeof this.session_store.all == 'function'){
       try{
         this.session_store.all(function(err, sessions){
           if(err) cb(err, sessions)
@@ -418,7 +372,7 @@ module.exports = new Class({
         debug_internals('this.session_store.get error', e)
       }
     }
-    else if(this.session_store && this.session_store.sessions){//MemoryStore
+    else if(this.session_store.sessions){//MemoryStore
       debug_internals('__get_session_id_by_socket this.session_store.sessions', this.session_store.sessions)
       let found = false
       Object.each(this.session_store.sessions, function(session, sid){
@@ -459,8 +413,6 @@ module.exports = new Class({
     if(this.io.connected[socketId] && this.io.connected[socketId].connected){
       let {type, host, prop} = doc
 
-      // debug_internals('__emit_registered_events', type, session.events, doc)
-
       if(session && session.events.contains(type))
         this.io.to(`${socketId}`).emit(type, doc)
 
@@ -468,21 +420,15 @@ module.exports = new Class({
       if(session && session.hosts_events[host]){
         Array.each(session.hosts_events[host], function(event){
 
-          // if(type == 'data')
-          debug_internals('__emit_registered_events', type, event)
+          if(type == 'data')
+            debug_internals('__emit_registered_events', event)
 
           let result = Object.clone(doc)
 
           if(event && event !== null && event.prop == type){
             let {format} = event
 
-            // if(type == 'paths')
-            //   debug_internals('TYPE PATHS', result)
-
-            if(result[type] && result[type][type] || result[type][type] == null)// @bug: ex -> data_range.data_range
-              result[type] = result[type][type]
-
-            if(type == 'paths' && ( format == 'stat' || format == 'tabular') && result['paths']){
+            if(type == 'path' && ( format == 'stat' || format == 'tabular') && result['paths']){
               Array.each(result['paths'], function(path, index){
                 result['paths'][index] = path.replace(/\./g, '_')
               })
@@ -490,30 +436,26 @@ module.exports = new Class({
               this.io.to(`${socketId}`).emit(type, result)
             }
             else if(type == 'data' && format == 'stat' || format == 'tabular'){
-              // if(result.step)
-
-
-              // result.data = result.data.data // @bug: doc.data.data ??
               debug_internals('__emit data', result)
 
-              this.__transform_data('stat', result.data, host, function(value){
+              result.data = result.data.data // @bug: doc.data.data ??
+
+              this.__transform_data('stat', result.data, host, function(stat){
                 // result = stat
-                result.stat = value.stat
-                // delete result.data
+                result.stat = stat
+                delete result.data
 
                 if( format == 'tabular' ){
-                  this.__transform_data('tabular', Object.merge(result.stat, result.data), host, function(value){
+                  this.__transform_data('tabular', result.stat, host, function(tabular){
                     // result = tabular
-                    result.tabular = value.tabular
+                    result.tabular = tabular
                     delete result.stat
-                    delete result.data
                     this.io.to(`${socketId}`).emit(format, result)
 
                   }.bind(this))
 
                 }
                 else{
-                  delete result.data
                   this.io.to(`${socketId}`).emit(format, result)
                 }
 
@@ -528,32 +470,10 @@ module.exports = new Class({
 
               // debug_internals(type, socketId)
               // process.exit(1)
-              debug_internals('emiting...', prop, type)
-              // if(result.step)
-              //   debug_internals('__emit data', type, result)
+              if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
+                result[prop] = result[prop][prop]
 
-              // if(result[prop] && result[prop][prop])// @bug: ex -> data_range.data_range
-              //   result[prop] = result[prop][prop]
-
-
-              // if(type == 'instances')//BUG
-              //   debug_internals('emiting...', result)
-
-              if(type != 'instances' && result[type] && (result[type][type] || result[type][type] == null))// @bug: ex -> data_range.data_range
-                result[type] = result[type][type]
-
-
-
-              if(result[type]){
-                let resp = {
-                  host: host,
-                  type: type,
-                }
-
-                resp[type] = result[type]
-                this.io.to(`${socketId}`).emit(type, resp)
-              }
-
+              this.io.to(`${socketId}`).emit(type, result)
             }
 
           }
@@ -562,155 +482,6 @@ module.exports = new Class({
       }
     }
 
-  },
-  __process_register_unregister: function(payload, cb){
-    let {type, id, events, session} = payload
-
-    if(events && events !== null){
-
-      if(!Array.isArray(events))
-        events = [events]
-
-      Array.each(events, function(event){
-        if(typeof event === 'string'){
-          // if(!this.events[event]) this.events[event] = []
-          // if(!this.events[event].contains(id)) this.events[event].push(id)
-          if(type == 'register') session.events.include(event)
-          else session.events = session.events.erase(event)
-        }
-        else{
-          let {host, prop, format} = event
-          debug_internals(type+' Object', host, prop, format)
-          if(host){
-            // if(!this.hosts_events[host]) this.hosts_events[host] = {}
-            // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
-            // this.hosts_events[host][prop].push({id: id, format: format})
-
-            if(!session.hosts_events[host]) session.hosts_events[host] = []
-
-            if(type == 'register' && session.hosts_events[host].some(function(item){
-              return item.prop == event.prop && item.format == event.format
-            }) !== true)
-              session.hosts_events[host].push(event)
-
-            if(type == 'unregister'){
-              Array.each(session.hosts_events[host], function(item, index){
-                if(item.prop == event.prop && item.format == event.format)
-                  session.hosts_events[host][index] = undefined
-              })
-              session.hosts_events[host] = session.hosts_events[host].clean()
-            }
-
-            if(this.options.on_demand && type == 'unregister'){
-              this.ui_rest_client.api.get({
-                uri: "events/once",
-                qs: {
-                  type: type,
-                  id: id,
-                  hosts: [host],
-                  pipeline_id: 'ui',
-                }
-              })
-
-              let rest_event = (type == 'register') ? 'resume' : 'suspend'
-              this.ui_rest_client.api.get({
-                uri: 'events/'+rest_event,
-                qs: {
-                  pipeline_id: 'ui',
-                },
-              })
-            }
-
-            // if(prop == 'data'){
-            /**
-            * @todo: pipelines should protect you from firing events before being connected
-            **/
-            if(prop == 'data' && this.pipeline.connected[1] == true){
-              if(this.options.on_demand && type == 'register'){
-                this.ui_rest_client.api.get({
-                  uri: "events/once",
-                  qs: {
-                    type: type,
-                    id: id,
-                    hosts: [host],
-                    pipeline_id: 'ui',
-                  }
-                })
-
-                let rest_event = (type == 'register') ? 'resume' : 'suspend'
-                this.ui_rest_client.api.get({
-                  uri: 'events/'+rest_event,
-                  qs: {
-                    pipeline_id: 'ui',
-                  },
-                })
-              }
-
-              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-                host: host,
-                type: type,
-                prop: 'data',
-                query: {format: format},
-                // paths: paths,
-                id: id,
-              })//fire only the 'host' input
-            }
-          }
-        }
-
-
-
-
-      }.bind(this))
-
-      cb(undefined, {code: 200, status: type+' for '+events.join(',')+' events'})
-    }
-    else{
-      cb({code: 500, status: type+'no event specified'}, undefined)
-    }
-  },
-  unregister: function(){
-    let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
-    let {events} = params
-    let id = (socket) ? socket.id : req.session.id
-    let session = this.__process_session(req, socket)
-    session.send_register_resp = session.send_register_resp+1 || 0
-    let req_id = id +'.'+session.send_register_resp
-
-    debug_internals('unregister %o', events)
-
-    let send_resp = {}
-    send_resp[req_id] = function(err, result){
-      // debug_internals('register.send_resp %o', err, result)
-      if(err){
-        if(resp){
-          resp.status(err.code).json(err)
-        }
-        else{
-          socket.emit('off', err)
-        }
-      }
-      else{
-        if(resp){
-          resp.json(result)
-        }
-        else{
-          socket.emit('off', result)
-        }
-      }
-
-      delete send_resp[req_id]
-    }
-
-    this.__process_register_unregister(
-      {
-        type: 'unregister',
-        id: id,
-        events: events,
-        session: session,
-      },
-      send_resp[req_id]
-    )
   },
   register: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['events'])
@@ -745,68 +516,58 @@ module.exports = new Class({
       delete send_resp[req_id]
     }
 
-    this.__process_register_unregister(
-      {
-        type: 'register',
-        id: id,
-        events: events,
-        session: session,
-      },
-      send_resp[req_id]
-    )
+    if(events && events !== null){
 
-    // if(events && events !== null){
-    //
-    //   if(!Array.isArray(events))
-    //     events = [events]
-    //
-    //   Array.each(events, function(event){
-    //     if(typeof event === 'string'){
-    //       // if(!this.events[event]) this.events[event] = []
-    //       // if(!this.events[event].contains(id)) this.events[event].push(id)
-    //       session.events.include(event)
-    //     }
-    //     else{
-    //       let {host, prop, format} = event
-    //       debug_internals('register Object', host, prop, format)
-    //       if(host){
-    //         // if(!this.hosts_events[host]) this.hosts_events[host] = {}
-    //         // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
-    //         // this.hosts_events[host][prop].push({id: id, format: format})
-    //
-    //         if(!session.hosts_events[host]) session.hosts_events[host] = []
-    //
-    //         if(session.hosts_events[host].some(function(item){ return item.prop == event.prop && item.format == event.format }) !== true)
-    //           session.hosts_events[host].push(event)
-    //
-    //
-    //         // if(prop == 'data'){
-    //         /**
-    //         * @todo: pipelines should protect you from firing events before being connected
-    //         **/
-    //         if(prop == 'data' && this.pipeline.connected[1] == true){
-    //           this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-    //             host: host,
-    //             type: 'register',
-    //             prop: 'data',
-    //             query: {format: format},
-    //             // paths: paths,
-    //             id: id,
-    //           })//fire only the 'host' input
-    //         }
-    //       }
-    //     }
-    //
-    //
-    //
-    //
-    //   }.bind(this))
-    //
-    //   send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(',')+' events'})
-    // }
-    // else{
-    //   send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
-    // }
+      if(!Array.isArray(events))
+        events = [events]
+
+      Array.each(events, function(event){
+        if(typeof event === 'string'){
+          // if(!this.events[event]) this.events[event] = []
+          // if(!this.events[event].contains(id)) this.events[event].push(id)
+          session.events.include(event)
+        }
+        else{
+          let {host, prop, format} = event
+          debug_internals('register Object', host, prop, format)
+          if(host){
+            // if(!this.hosts_events[host]) this.hosts_events[host] = {}
+            // if(!this.hosts_events[host][prop]) this.hosts_events[host][prop] = []
+            // this.hosts_events[host][prop].push({id: id, format: format})
+
+            if(!session.hosts_events[host]) session.hosts_events[host] = []
+
+            if(session.hosts_events[host].some(function(item){ return item.prop == event.prop && item.format == event.format }) !== true)
+              session.hosts_events[host].push(event)
+
+
+            // if(prop == 'data'){
+            /**
+            * @todo: pipelines should protect you from firing events before being connected
+            **/
+            if(prop == 'data' && this.pipeline.connected[1] == true){
+              this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
+                host: host,
+                type: 'register',
+                prop: 'data',
+                query: {format: format},
+                // paths: paths,
+                id: id,
+              })//fire only the 'host' input
+            }
+          }
+        }
+
+
+
+
+      }.bind(this))
+
+      send_resp[req_id](undefined, {code: 200, status: 'registered for '+events.join(',')+' events'})
+    }
+    else{
+      send_resp[req_id]({code: 500, status: 'no event specified'}, undefined)
+    }
   },
   host_instances: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'instances'])
@@ -841,11 +602,6 @@ module.exports = new Class({
           resp.json(result)
         }
         else{
-          /**
-          * @bug: result.instances.instances
-          **/
-          // result.instances = result.instances.instances
-
           socket.emit('instances', result)
         }
       }
@@ -930,12 +686,11 @@ module.exports = new Class({
 
   },
   __get_instances: function(instances, host, cb){
-    let result = { instances: {} }
+    let result = {}
     Array.each(instances, function(instance, index){
 
       this.cache.get(host+'.tabular.'+instance, function(err, data){
-        // if(data) result[instance] = JSON.parse(data)
-        if(data) result['instances'][instance] = data
+        if(data) result[instance] = JSON.parse(data)
 
         if(index == instances.length - 1){
           cb(result)
@@ -953,19 +708,12 @@ module.exports = new Class({
   },
   hosts: function(){
     let {req, resp, socket, next, params} = this._arguments(arguments, ['host', 'prop', 'paths'])
-
-    if(req) debug_internals('hosts req.path', req.path)
-
     let {host, prop, paths} = params
     let query = (req) ? req.query : { format: params.format }
     let range = (req) ? req.header('range') : params.range
     let type = (range) ? 'range' : 'once'
     let id = (socket) ? socket.id : req.session.id
     let session = this.__process_session(req, socket)
-    let from = 'periodical'
-
-    if(req && req.path.indexOf('historical') > -1)
-      from = 'historical'
 
     let __query_paths = undefined
 
@@ -1009,24 +757,19 @@ module.exports = new Class({
 
     let send_resp = {}
     send_resp[req_id] = function(data){
-
-      debug_internals('send_resp', data)
-
-      let {from, type, step} = data
+      let {type} = data
       let result = data[type]
 
       let send_result = function(data){
         if(prop) type = prop
 
         let result = {
-          from: from || 'periodical',
           type: type,
           range: range,
           host: host
         }
 
         if(prop == 'data' && query.format) type = query.format
-        if(prop == 'data' && step) result.step = step
 
         result[type] = data
 
@@ -1072,23 +815,19 @@ module.exports = new Class({
         if(prop == 'data' && paths){
 
           if( query.format == 'stat' || query.format == 'tabular'){
-            this.__transform_data('stat', result, host, function(value){
+            this.__transform_data('stat', result, host, function(stat){
               let tmp_result = {}
               Array.each(paths, function(path){
-                tmp_result = Object.merge(tmp_result, this.__find_stat(path, value.stat))
+                tmp_result = Object.merge(tmp_result, this.__find_stat(path, stat))
 
               }.bind(this))
 
               if( query.format == 'tabular'){
                 // debug_internals('to tabular', tmp_result)
-                Array.each(paths, function(path){
-                  tmp_result = Object.merge(tmp_result, this.__find_stat(path, result))
-                }.bind(this))
-
-                this.__transform_data('tabular', tmp_result, host, function(value){
+                this.__transform_data('tabular', tmp_result, host, function(tabular){
                   // result.tabular = tabular
                   // delete result.stat
-                  send_result(value.tabular)
+                  send_result(tabular)
                 })
 
               }
@@ -1112,22 +851,22 @@ module.exports = new Class({
 
         }
         else if(prop == 'data' && ( query.format == 'stat' || query.format == 'tabular') ){
-          this.__transform_data('stat', result, host, function(value){
-            // result.stat = value.stat
+          this.__transform_data('stat', result, host, function(stat){
+            result = stat
             // result.stat = stat
-
+            // delete result.data
 
             if( query.format == 'tabular'){
-              this.__transform_data('tabular', Object.merge(result, value.stat), host, function(value){
-                // result = value.tabular
+              this.__transform_data('tabular', result, host, function(tabular){
+                result = tabular
                 // result.tabular = tabular
                 // delete result.stat
-                send_result(value.tabular)
+                send_result(result)
               }.bind(this))
 
             }
             else{
-              send_result(value.stat)
+              send_result(result)
             }
 
           }.bind(this))
@@ -1137,19 +876,18 @@ module.exports = new Class({
         }
       }
       else if(result && result.data && ( query.format == 'stat' || query.format == 'tabular') ){
-        this.__transform_data('stat', result.data, host, function(value){
-          result.stat = value.stat
-          result.paths = Object.keys(value.stat)
-          // delete result.data
+        this.__transform_data('stat', result.data, host, function(stat){
+          result.stat = stat
+          result.paths = Object.keys(stat)
+          delete result.data
 
           if( query.format == 'tabular'){
             // debug_internals('query.format == tabular', result.stat)
 
-            this.__transform_data('tabular', Object.merge(result.data, result.stat), host, function(value){
+            this.__transform_data('tabular', result.stat, host, function(tabular){
               // debug_internals('query.format == tabular', tabular)
-              result.tabular = value.tabular
+              result.tabular = tabular
               delete result.stat
-              delete result.data
               // send_result(result)
               this.cache.get(host+'.instances', function(err, instances){
                 if(instances){
@@ -1167,8 +905,6 @@ module.exports = new Class({
 
           }
           else{
-            delete result.data
-
             // send_result(result)
             this.cache.get(host+'.instances', function(err, instances){
               // if(instances)
@@ -1200,8 +936,7 @@ module.exports = new Class({
           if(instances){
             // result.instances = instances
             this.__get_instances(instances, host, function(instances){
-              // result.instances = instances
-              result = Object.merge(result, instances)
+              result.instances = instances
               send_result(result)
             })
           }
@@ -1231,12 +966,7 @@ module.exports = new Class({
       })
     }
     else if(!host)
-      this.__get_hosts({
-        from,
-        req_id,
-        socket,
-        cb: send_resp[req_id]
-      })
+      this.__get_hosts(req_id, socket, send_resp[req_id])
 
     // else if(prop === 'instances'){
     //   this.cache.get(host+'.instances', function(err, instances){
@@ -1305,8 +1035,6 @@ module.exports = new Class({
     let convert = (type == 'stat') ? data_to_stat : data_to_tabular
 
     let transformed = {}
-    transformed[type] = {}
-
     let counter = 0 //counter for each path:stat in data
     // let instances = []
     let instances = {}
@@ -1333,25 +1061,22 @@ module.exports = new Class({
 
     Object.each(data, function(d, path){
 
-      // debug_internals('DATA', d, type)
+      debug_internals('DATA', d, type)
 
       if(d && d !== null){
-        if (d[0] && d[0].metadata && d[0].metadata.format && d[0].metadata.format == type){
+        if (d[0] && d[0].metadata && d[0].metadata.format){
 
           // if(!d[0].metadata.format[type]){
-          let formated_data = []
-          Array.each(d, function(_d){ formated_data.push(_d.data) })
-          transformed[type] = this.__merge_transformed(this.__transform_name(path), formated_data, transformed[type])
+            let formated_data = []
+            Array.each(d, function(_d){ formated_data.push(_d.data) })
+            transformed = this.__merge_transformed(this.__transform_name(path), formated_data, transformed)
           // }
 
           if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
             cb(transformed)
 
         }
-        else if (
-          (d[0] && d[0].metadata && !d[0].metadata.format && type == 'stat')
-          || (d[0] && !d[0].metadata && type == 'tabular')
-        ){
+        else if (d[0] && d[0].metadata && (!d[0].metadata.format || (d[0].metadata.format['stat'] && type == 'tabular'))){
           let transform = this.__traverse_path_require(type, path, d) //for each path find a trasnform or use "default"
 
           if(transform){
@@ -1372,15 +1097,14 @@ module.exports = new Class({
                   // debug_internals('transform_result', transform_result)
 
                   this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), function(err, chart_instance){
-                    // chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
-                    chart_instance = (chart_instance) ? chart_instance : chart
+                    chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
                     chart_instance = Object.merge(chart, chart_instance)
 
                     // chart_instance = _transform(chart_instance)
 
                     convert(d[sub_key], chart_instance, path+'.'+path_key, function(name, stat){
-                      transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                      transformed = this.__merge_transformed(name, stat, transformed)
                       // name = name.replace(/\./g, '_')
                       // let to_merge = {}
                       // to_merge[name] = stat
@@ -1395,20 +1119,14 @@ module.exports = new Class({
                       // instances.push(this.__transform_name(path+'.'+path_key))
                       instances[this.__transform_name(path+'.'+path_key)] = chart_instance
 
-                      /**
-                      * race condition between this app && ui?
-                      **/
-                      // this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                      this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path+'.'+path_key), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                       if(
                         transform_result_counter == transform_result_length - 1
                         && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                       ){
-                        /**
-                        * race condition between this app && ui?
-                        **/
-                        // this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
-                        cb(transformed[type])
+                        this.__save_instances(cache_key, instances, cb.pass(transformed))
+                        // cb(transformed)
                       }
 
                       transform_result_counter++
@@ -1420,7 +1138,7 @@ module.exports = new Class({
                 }
                 else{
                   convert(d[sub_key], chart, path+'.'+path_key, function(name, stat){
-                    transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                    transformed = this.__merge_transformed(name, stat, transformed)
                     // name = name.replace(/\./g, '_')
                     // let to_merge = {}
                     // to_merge[name] = stat
@@ -1455,8 +1173,7 @@ module.exports = new Class({
               **/
               if(type == 'tabular'){
                 this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
-                  // chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
-                  chart_instance = (chart_instance) ? chart_instance : transform
+                  chart_instance = (chart_instance) ? JSON.parse(chart_instance) : transform
 
                   chart_instance = Object.merge(chart_instance, transform)
                   // debug_internals('chart_instance NOT FUNC %o', chart_instance)
@@ -1465,7 +1182,7 @@ module.exports = new Class({
 
                   // throw new Error()
                   convert(d, chart_instance, path, function(name, stat){
-                    transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                    transformed = this.__merge_transformed(name, stat, transformed)
                     // name = name.replace(/\./g, '_')
                     // let to_merge = {}
                     // to_merge[name] = stat
@@ -1480,20 +1197,14 @@ module.exports = new Class({
 
 
                     instances[this.__transform_name(path)] = chart_instance
-                    /**
-                    * race condition between this app && ui?
-                    **/
-                    // this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                    this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                     if(
                       transform_result_counter == transform_result_length - 1
                       && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                     ){
-                      /**
-                      * race condition between this app && ui?
-                      **/
-                      // this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
-                      cb(transformed[type])
+                      this.__save_instances(cache_key, instances, cb.pass(transformed))
+                      // cb(transformed)
                     }
 
                     transform_result_counter++
@@ -1506,7 +1217,7 @@ module.exports = new Class({
               }
               else{
                 convert(d, transform, path, function(name, stat){
-                  transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                  transformed = this.__merge_transformed(name, stat, transformed)
 
                   // name = name.replace(/\./g, '_')
                   // let to_merge = {}
@@ -1534,12 +1245,11 @@ module.exports = new Class({
               let chart = Object.clone(require('./libs/'+type)(d, path))
 
               this.cache.get(cache_key+'.'+type+'.'+this.__transform_name(path), function(err, chart_instance){
-                // chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
-                chart_instance = (chart_instance) ? chart_instance : chart
+                chart_instance = (chart_instance) ? JSON.parse(chart_instance) : chart
 
                 chart_instance = Object.merge(chart, chart_instance)
 
-                // debug_internals('transform default', d, path)
+                debug_internals('transform default', d, path)
 
                 convert(d, chart_instance, path, function(name, stat){
                   /**
@@ -1557,7 +1267,7 @@ module.exports = new Class({
                   stat = stat.clean()
 
                   if(stat.length > 0)
-                    transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                    transformed = this.__merge_transformed(name, stat, transformed)
 
                   // name = name.replace(/\./g, '_')
                   // let to_merge = {}
@@ -1572,20 +1282,14 @@ module.exports = new Class({
                   // instances.push(this.__transform_name(path))
                   instances[this.__transform_name(path)] = chart_instance
 
-                  /**
-                  * race condition between this app && ui?
-                  **/
-                  // this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
+                  this.cache.set(cache_key+'.'+type+'.'+this.__transform_name(path), JSON.stringify(chart_instance), this.CHART_INSTANCE_TTL)
 
                   if(
                     transform_result_counter == transform_result_length - 1
                     && (counter >= Object.getLength(data) - 1 && typeof cb == 'function')
                   ){
-                    /**
-                    * race condition between this app && ui?
-                    **/
-                    // this.__save_instances(cache_key, instances, cb.pass(transformed[type]))
-                    cb(transformed[type])
+                    this.__save_instances(cache_key, instances, cb.pass(transformed))
+                    // cb(transformed)
                   }
 
                   transform_result_counter++
@@ -1597,13 +1301,12 @@ module.exports = new Class({
             }
             else{//default trasnform for "stat"
               require('./libs/'+type)(d, path, function(name, stat){
-                transformed[type] = this.__merge_transformed(name, stat, transformed[type])
+                transformed = this.__merge_transformed(name, stat, transformed)
                 // name = name.replace(/\./g, '_')
                 // let to_merge = {}
                 // to_merge[name] = stat
                 // debug_internals('transformed default', type, to_merge)
                 // transformed = Object.merge(transformed, to_merge)
-                debug_internals('transform default', d, path)
 
                 if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
                   cb(transformed)
@@ -1618,14 +1321,12 @@ module.exports = new Class({
           //   cb(transformed)
 
         }
-        else if(counter == Object.getLength(data) - 1 && typeof cb == 'function'){
-            cb(transformed)
-        }
+        // else{
+        //   if(counter == Object.getLength(data) - 1 && typeof cb == 'function')
+        //     cb(transformed)
+        // }
 
       }//end if(d && d !== null)
-      else if(counter == Object.getLength(data) - 1 && typeof cb == 'function'){
-          cb(transformed)
-      }
 
       counter++
     }.bind(this))
@@ -1697,9 +1398,7 @@ module.exports = new Class({
     // Array.each()
   },
   __get_host_range: function(payload){
-    let {host, prop, paths, query, range, req_id, socket, cb} = payload
-
-    debug_internals('__get_host_range', payload)
+    let {host, prop, paths, range, req_id, socket, cb} = payload
 
     this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
       debug_internals('RANGE', parse_range(range), range)
@@ -1717,98 +1416,70 @@ module.exports = new Class({
 
           cb(resp)
 
-          // if(socket && range_total == resp.range_counter){
+          if(socket && range_total == resp.range_counter){
             this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
             delete _get_resp[req_id]
-          // }
-          // else if(!socket) {//http request
-          //   throw new Error('TODO: add a Limit header')
-          //   this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
-          //   delete _get_resp[req_id]
-          // }
+          }
+          else if(!socket) {//http request
+            throw new Error('TODO: add a Limit header')
+            this.removeEvent(this.ON_HOST_RANGE, _get_resp[req_id])
+            delete _get_resp[req_id]
+          }
         }
       }.bind(this)
 
       this.addEvent(this.ON_HOST_RANGE, _get_resp[req_id])
 
-      // let __event_worker = function(payload, done){
-      //   pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
-      //
-      //   if(typeof done == 'function')
-      //     done()
-      // }.bind(this)
-      //
-      // if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
-      //   // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
-      //
-      //   range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
-      //
-      //   let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
-      //
-      //
-      //   do {
-      //     new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
-      //
-      //     debug_internals('firing RANGE', new_range)
-      //
-      //     q.push({
-      //       host: host,
-      //       prop: prop,
-      //       paths: paths,
-      //       query: query,
-      //       id: req_id,
-      //       full_range: range,
-      //       range_counter: range_counter++,
-      //       Range: build_range(new_range)
-      //     })
-      //
-      //     new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
-      //   } while(new_range.end < parsed_range.end);
-      // }
-      // else{
-      //   __event_worker({
-      //     host: host,
-      //     prop: prop,
-      //     paths: paths,
-      //     query: query,
-      //     id: req_id,
-      //     Range: range
-      //   })
-      // }
+      let __event_worker = function(payload, done){
+        pipe.hosts.inputs[1].fireEvent('onRange', payload)//fire only the 'host' input
 
-      /**
-      * if it's "on_demand", fireEvent once range has been processed byt "ui" server
-      **/
+        if(typeof done == 'function')
+          done()
+      }.bind(this)
 
-      if(this.options.on_demand && query.format == 'tabular'){//last one ain't right..check is only to prevent multiple calls for stat|tabular
-        debug_internals('RANGE', prop, query)
-        this.ui_rest_client.api.get({
-          uri: "events/range",
-          qs: {
-            hosts: host,
-            // prop: prop,
-            // paths: paths,
-            // query: query,
+      if(range_seconds_length > this.RANGE_SECONDS_LIMIT){
+        // pipe.hosts.fireEvent('onSuspend')//for debuging only (to not get "flooded" by live data)
+
+        range_total = (range_seconds_length / this.RANGE_SECONDS_LIMIT) - 1
+
+        let q = qrate(__event_worker, this.RANGE_WORKERS_CONCURRENCY, this.RANGE_WORKERS_RATE);
+
+
+        do {
+          new_range.end = new_range.start + (this.RANGE_SECONDS_LIMIT * 1000)
+
+          debug_internals('firing RANGE', new_range)
+
+          q.push({
+            host: host,
+            prop: prop,
+            paths: paths,
             id: req_id,
-            range: range,
-            pipeline_id: 'ui',
-          },
-          headers: {
-            'Range': range
-          }
+            full_range: range,
+            range_counter: range_counter++,
+            Range: build_range(new_range)
+          })
+
+          new_range.start += (this.RANGE_SECONDS_LIMIT * 1000)
+        } while(new_range.end < parsed_range.end);
+      }
+      else{
+        __event_worker({
+          host: host,
+          prop: prop,
+          paths: paths,
+          id: req_id,
+          Range: range
         })
       }
-      // else{}
 
-      pipe.hosts.inputs[1].fireEvent('onRange', {
-        host: host,
-        prop: prop,
-        paths: paths,
-        query: query,
-        id: req_id,
-        Range: range
-      })//fire only the 'host' input
-
+      // pipe.hosts.inputs[1].fireEvent('onRange', {
+      //   host: host,
+      //   prop: prop,
+      //   paths: paths,
+      //   id: req_id,
+      //   Range: range
+      // })//fire only the 'host' input
 
 
     }.bind(this))
@@ -1852,7 +1523,7 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, query, id: req_id})//fire only the 'hosts' input
+            pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
 
           }.bind(this))
       }
@@ -1879,7 +1550,7 @@ module.exports = new Class({
 
               this.addEvent(this.ON_HOST_UPDATED, _merge_resp[prop])
 
-              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, query, id: req_id})//fire only the 'hosts' input
+              pipe.hosts.inputs[1].fireEvent('onOnce', {host: host, prop: prop, id: req_id})//fire only the 'hosts' input
 
             }.bind(this))
           }
@@ -1894,24 +1565,20 @@ module.exports = new Class({
 
     }.bind(this))
   },
-  __get_hosts: function(payload){
-    let {from, req_id, socket, cb} = payload
-    debug_internals('__get_hosts', payload)
-    from = from || 'periodical'
-
-    this.cache.get('hosts.'+from, function(err, result){
+  __get_hosts: function(req_id, socket, cb){
+    this.cache.get('hosts', function(err, result){
       debug_internals('get hosts cache %o %o %s', err, result, req_id)
       if(!result){
         this.__get_pipeline((socket) ? socket.id : undefined, function(pipe){
-            debug_internals('send_resp', pipe)
+            // // debug_internals('send_resp', pipe)
 
             let _get_resp = {}
             _get_resp[req_id] = function(resp){
               debug_internals('_get_resp %s %s', resp.id, req_id)
-
               if(resp.id == req_id){
 
-                this.cache.set('hosts.'+from, resp['hosts'], this.HOSTS_TTL)
+
+                this.cache.set('hosts', resp['hosts'], this.HOSTS_TTL)
                 // send_resp[req_id](resp)
 
                 cb(resp)
@@ -1927,13 +1594,13 @@ module.exports = new Class({
 
             // pipe.hosts.fireEvent('onOnce')
             // pipe.hosts.inputs[0].conn_pollers[0].fireEvent('onOnce')
-            pipe.hosts.inputs[0].fireEvent('onOnce', {from: from, id: req_id})//fire only the 'hosts' input
+            pipe.hosts.inputs[0].fireEvent('onOnce', {id: req_id})//fire only the 'hosts' input
 
           }.bind(this))
       }
       else{
         // send_resp[req_id]({type: 'hosts', hosts: result})
-        cb({from: from, type: 'hosts', hosts: result})
+        cb({type: 'hosts', hosts: result})
       }
 
     }.bind(this))
@@ -1941,7 +1608,7 @@ module.exports = new Class({
   __process_session: function(req, socket, host){
     let session = (socket) ? socket.handshake.session : req.session
     // let id = (socket) ? socket.id : req.session.id
-    // debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
+    debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
 
     if(!this.session_store)
       this.session_store = (socket) ? socket.handshake.sessionStore : req.sessionStore
@@ -1990,15 +1657,8 @@ module.exports = new Class({
     if(!this.pipeline.hosts){
 
       const HostsPipeline = require('./pipelines/index')({
-        conn: require(ETC+'ui.conn.js')(),
-        host: this.options.host,
-        cache: this.options.cache_store,
-        ui: (this.options.on_demand !== true) ? undefined : Object.merge(
-          ui_rest_client_conf,
-          {
-            load: 'apps/hosts/clients'
-          }
-        )
+        conn: require(ETC+'default.conn.js')(),
+        host: this.options.host
       })
 
       let hosts = new Pipeline(HostsPipeline)
@@ -2019,8 +1679,7 @@ module.exports = new Class({
         debug_internals('onSaveDoc %o', type, range)
 
         if(!range){
-          debug_internals('onSaveDoc %o', type, doc)
-          if(type == 'data' || type == 'data_range' || type == 'instances' || type == 'paths')
+          if(type == 'data' || type == 'data_range')
             this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_UPDATED'], doc)
             // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
           else
@@ -2037,12 +1696,10 @@ module.exports = new Class({
       this.addEvent(this.ON_HOSTS_UPDATED, function(doc){//update "hosts" on "host" input
         // debug_internals('ON_HOSTS_UPDATED', this.pipeline.hosts.inputs[1])
         this.pipeline.hosts.inputs[1].conn_pollers[0].data_hosts = doc.hosts
-        this.pipeline.hosts.inputs[2].conn_pollers[0].data_hosts = doc.hosts
       }.bind(this))
 
       this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
-      this.addEvent(this.ON_HOST_PATHS_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_DATA_RANGE_UPDATED, doc => this.__emit(doc))
       this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
 
@@ -2051,7 +1708,7 @@ module.exports = new Class({
       // }.bind(this))
 
       this.__after_connect_inputs(
-        this.__resume_pipeline.pass([this.pipeline, id, cb], this)
+        this.__resume_pipeline.pass([this.pipeline, id, cb])
         // this.__after_connect_pipeline(
         //   this.pipeline,
         //   id,
@@ -2088,13 +1745,10 @@ module.exports = new Class({
 
 
     }
-    else if(!id){
-      cb(this.pipeline)
-    }
     else{
         if(this.pipeline.hosts.inputs.length != this.pipeline.connected.length){
           this.__after_connect_inputs(
-            this.__resume_pipeline.pass([this.pipeline, id, cb], this)
+            this.__resume_pipeline.pass([this.pipeline, id, cb])
             // this.__after_connect_pipeline(
             //   this.pipeline,
             //   id,
@@ -2116,7 +1770,7 @@ module.exports = new Class({
   __after_connect_inputs: function(cb){
 
     let _client_connect = function(index){
-      debug_internals('__after_connect_inputs %d', index)
+      // debug_internals('__get_pipeline %o', index, cb)
 
       // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
       //   this.pipeline,
@@ -2144,16 +1798,9 @@ module.exports = new Class({
   //   this.__resume_pipeline(pipeline, id, cb)
   // },
   __resume_pipeline: function(pipeline, id, cb){
-    debug_internals('__resume_pipeline', pipeline, id, cb)
-
     if(id){
       if(!pipeline.ids.contains(id))
         pipeline.ids.push(id)
-
-      if(this.options.on_demand && pipeline.hosts.inputs[4].conn_pollers[0])
-        pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'].ids = pipeline.ids
-
-      // debug_internals('__resume_pipeline pipeline.hosts.inputs[4].conn_pollers[0]', pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'])
 
       if(pipeline.suspended == true){
         debug_internals('__resume_pipeline this.pipeline.connected', pipeline.connected)
@@ -2183,11 +1830,8 @@ module.exports = new Class({
       }
     }
 
-    if(cb)
+    if(cb && typeof cb == 'function')
       cb(pipeline)
-
-    // if(cb && typeof cb == 'function')
-    //   cb(pipeline)
   },
   initialize: function(options){
     this.parent(options)
@@ -2196,8 +1840,6 @@ module.exports = new Class({
 
     this.cache = new jscaching(this.options.cache_store)
 
-    if(this.options.on_demand)
-      this.ui_rest_client = new ui_rest(ui_rest_client_conf)
 
     // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', function(){
     //   // debug_internals('connected')
@@ -2211,8 +1853,6 @@ module.exports = new Class({
 		this.log('hosts', 'info', 'hosts started');
   },
   socket: function(socket){
-    debug_internals('socket.io connect', socket.id)
-
 		this.parent(socket)
 
     socket.compress(true)
@@ -2256,43 +1896,6 @@ module.exports = new Class({
         this.pipeline.ids.erase(socket.id)
         this.pipeline.ids = this.pipeline.ids.clean()
       }
-
-      if(this.pipeline.hosts){
-        debug_internals('TO UNREGISTER', socket.id)
-        if(this.options.on_demand){
-          ui_rest_client.api.get({
-            uri: "events/once",
-            qs: {
-              type: 'unregister',
-              id: socket.id,
-              // hosts: [host],
-              pipeline_id: 'ui',
-            }
-          })
-
-          ui_rest_client.api.get({
-            uri: 'events/suspend',
-            qs: {
-              pipeline_id: 'ui',
-            },
-          })
-
-          this.pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'].ids = this.pipeline.ids
-        }
-
-        this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-          type: 'unregister',
-          id: socket.id,
-          host: undefined,
-          prop: undefined,
-        })//fire only the 'host' input
-
-
-      }
-
-
-
-
 
       if(this.pipeline.ids.length == 0 && this.pipeline.hosts){ // && this.pipeline.suspended == false
         this.pipeline.suspended = true
