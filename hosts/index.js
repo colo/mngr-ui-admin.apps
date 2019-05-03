@@ -291,6 +291,11 @@ module.exports = new Class({
   // hosts_events: {},
 
   __emit: function(doc){
+    /**
+    * emited docs are always periodical data (at least for now)
+    **/
+    doc.from = 'periodical'
+
     // debug_internals('__emit', this.events, this.hosts_events)
     if(!doc.id && this.session_store){//if doc.id, then this event was fired by a client request...ommit!
       let {type, host, prop} = doc
