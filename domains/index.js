@@ -12,7 +12,7 @@ const ETC =  process.env.NODE_ENV === 'production'
       : path.join(process.cwd(), '/devel/etc/')
 
 let Pipeline = require('js-pipeline')
-let jscaching = require('js-caching')
+
 
 // // let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
 // // let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
@@ -793,59 +793,8 @@ module.exports = new Class({
     }
 
   },
-  /**
-  * desde 'hosts', mover a global
-  **/
-  __process_session: function(req, socket, host){
-    let session = (socket) ? socket.handshake.session : req.session
-    // let id = (socket) ? socket.id : req.session.id
-    // debug_internals('__process_session store', (socket) ? socket.handshake.sessionStore : req.sessionStore)
 
-    if(!this.session_store)
-      this.session_store = (socket) ? socket.handshake.sessionStore : req.sessionStore
 
-    this.__update_sessions({id: session.id, type: (socket) ? 'socket' : 'http'})
-
-    if(!session.events)
-      session.events = []
-
-    if(!session.hosts_events)
-      session.hosts_events= {}
-
-    if(socket){
-      if(!session.sockets) session.sockets = []
-
-      session.sockets.include(socket.id)
-    }
-
-    return session
-  },
-  /**
-  * desde 'hosts', mover a global
-  **/
-  __update_sessions: function(session, remove){
-    remove = remove || false
-    this.cache.get(this.ID+'.sessions', function(err, sessions){
-      if(!sessions || sessions == null) sessions = {}
-
-      session = [session]
-      if(remove === false){
-        Array.each(session, function(_session){
-          if(!sessions[_session.type]) sessions[_session.type] = []
-          sessions[_session.type] = sessions[_session.type].include(_session.id)
-        })
-
-      }
-      else{
-        Array.each(session, function(_session){
-          if(sessions[_session.type])
-            sessions[_session.type] = sessions[_session.type].erase(_session.id)
-        })
-      }
-
-      this.cache.set(this.ID+'.sessions', sessions, this.SESSIONS_TTL)
-    }.bind(this))
-  },
   /**
   * desde 'hosts', mover a global
   **/
@@ -1600,7 +1549,7 @@ module.exports = new Class({
   domains: function(payload){
     debug_internals('domains:', payload.params)
     // let {req, resp, socket, params} = payload
-    payload.next(undefined, ['something'])
+    // payload.next(undefined, ['something'])
     //
     // // let {host, prop, paths} = params
     //
@@ -1670,211 +1619,8 @@ module.exports = new Class({
   },
 
 
-  __get_pipeline: function(id, cb){
 
-    if(!this.pipeline.hosts){
-
-      const HostsPipeline = require('./pipelines/index')({
-        conn: require(ETC+'ui.conn.js')(),
-        host: this.options.host,
-        cache: this.options.cache_store,
-        ui: (this.options.on_demand !== true) ? undefined : Object.merge(
-          ui_rest_client_conf,
-          {
-            load: 'apps/hosts/clients'
-          }
-        )
-      })
-
-      let hosts = new Pipeline(HostsPipeline)
-      this.pipeline = {
-        hosts: hosts,
-        ids: [],
-        connected: [],
-        suspended: hosts.inputs[0].options.suspended
-      }
-
-      this.pipeline.hosts.addEvent('onSaveDoc', function(doc){
-        let {from, type, range} = doc
-        from = from || 'periodical'
-        // this[type] = {
-        //   value: doc[type],
-        //   timestamp: Date.now()
-        // }
-
-        debug_internals('onSaveDoc %o', from, type, range)
-
-        if(!range){
-          debug_internals('onSaveDoc %o', type, doc)
-          if(type == 'data' || type == 'data_range' || type == 'instances' || type == 'paths')
-            this.fireEvent(this['ON_HOST_'+type.toUpperCase()+'_'+from.toUpperCase()+'_UPDATED'], doc)
-            // this.fireEvent(this.ON_HOST_DATA_UPDATED, doc)
-          else
-            this.fireEvent(this['ON_'+type.toUpperCase()+'_'+from.toUpperCase()+'_UPDATED'], doc)
-        }
-        else{
-          this.fireEvent(this['ON_'+type.toUpperCase()+'_RANGE'+'_'+from.toUpperCase()], doc)
-        }
-
-        // this.fireEvent(this['ON_'+type.toUpperCase()+'_UPDATED'], [this[type].value])
-        // this.__emit_stats(host, stats)
-      }.bind(this))
-
-      this.addEvent(this.ON_HOSTS_UPDATED, function(doc){//update "hosts" on "host" input
-        // debug_internals('ON_HOSTS_UPDATED', this.pipeline.hosts.inputs[1])
-        this.pipeline.hosts.inputs[1].conn_pollers[0].data_hosts = doc.hosts
-        this.pipeline.hosts.inputs[2].conn_pollers[0].data_hosts = doc.hosts
-      }.bind(this))
-
-      this.addEvent(this.ON_HOSTS_UPDATED, doc => this.__emit(doc))
-      this.addEvent(this.ON_HOST_DATA_UPDATED, doc => this.__emit(doc))
-      this.addEvent(this.ON_HOST_PATHS_UPDATED, doc => this.__emit(doc))
-      this.addEvent(this.ON_HOST_DATA_RANGE_UPDATED, doc => this.__emit(doc))
-      this.addEvent(this.ON_HOST_INSTANCES_UPDATED, doc => this.__emit(doc))
-
-      // this.pipelines[host].pipeline.addEvent('onSaveDoc', function(stats){
-      //   this.__emit_stats(host, stats)
-      // }.bind(this))
-
-      this.__after_connect_inputs(
-        this.__resume_pipeline.pass([this.pipeline, id, cb], this)
-        // this.__after_connect_pipeline(
-        //   this.pipeline,
-        //   id,
-        //   cb
-        // )
-      )
-
-      // let _client_connect = function(index){
-      //   // debug_internals('__get_pipeline %o', index)
-      //
-      //   // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
-      //   //   this.pipeline,
-      //   //   id,
-      //   //   cb
-      //   // ))
-      //   this.pipeline.connected.push(true)
-      //   if(this.pipeline.hosts.inputs.length == this.pipeline.connected.length){
-      //     this.__after_connect_pipeline(
-      //       this.pipeline,
-      //       id,
-      //       cb
-      //     )
-      //   }
-      //
-      //
-      //   this.pipeline.hosts.inputs[index].removeEvent('onClientConnect',_client_connect)
-      // }.bind(this)
-
-      // Array.each(this.pipeline.hosts.inputs, function(input, index){
-      //   input.addEvent('onClientConnect', _client_connect.pass(index));
-      // }.bind(this))
-      // this.pipeline.hosts.inputs[0].addEvent('onClientConnect', _client_connect);
-
-
-
-    }
-    else if(!id){
-      cb(this.pipeline)
-    }
-    else{
-        if(this.pipeline.hosts.inputs.length != this.pipeline.connected.length){
-          this.__after_connect_inputs(
-            this.__resume_pipeline.pass([this.pipeline, id, cb], this)
-            // this.__after_connect_pipeline(
-            //   this.pipeline,
-            //   id,
-            //   cb
-            // )
-          )
-        // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
-        //   this.pipeline,
-        //   id,
-        //   cb
-        // ))
-      }
-      else{
-        this.__resume_pipeline(this.pipeline, id, cb)
-      }
-    }
-
-  },
-  __after_connect_inputs: function(cb){
-
-    let _client_connect = function(index){
-      debug_internals('__after_connect_inputs %d', index)
-
-      // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', () => this.__after_connect_pipeline(
-      //   this.pipeline,
-      //   id,
-      //   cb
-      // ))
-      this.pipeline.connected.push(true)
-      if(this.pipeline.hosts.inputs.length == this.pipeline.connected.length){
-        cb()
-      }
-
-
-      this.pipeline.hosts.inputs[index].removeEvent('onClientConnect',_client_connect)
-    }.bind(this)
-
-    Array.each(this.pipeline.hosts.inputs, function(input, index){
-      input.addEvent('onClientConnect', _client_connect.pass(index));
-    }.bind(this))
-  },
-  // __after_connect_pipeline: function(pipeline, id, cb){
-  //   // debug_internals('__after_connect_pipeline')
-  //   pipeline.hosts.inputs[0].options.conn[0].module.removeEvents('onConnect')
-  //   // pipeline.connected = true
-  //
-  //   this.__resume_pipeline(pipeline, id, cb)
-  // },
-  __resume_pipeline: function(pipeline, id, cb){
-    debug_internals('__resume_pipeline', pipeline, id, cb)
-
-    if(id){
-      if(!pipeline.ids.contains(id))
-        pipeline.ids.push(id)
-
-      if(this.options.on_demand && pipeline.hosts.inputs[4].conn_pollers[0])
-        pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'].ids = pipeline.ids
-
-      // debug_internals('__resume_pipeline pipeline.hosts.inputs[4].conn_pollers[0]', pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'])
-
-      if(pipeline.suspended == true){
-        debug_internals('__resume_pipeline this.pipeline.connected', pipeline.connected)
-        // let __resume = function(){
-        //
-        // }.bind(this)
-
-        if(pipeline.connected.every(function(item){ return item === true}.bind(this))){
-          pipeline.suspended = false
-          pipeline.hosts.fireEvent('onResume')
-        }
-        else{
-          let __resume = []
-          Array.each(pipeline.hosts.inputs, function(input, index){
-            if(this.pipeline.connected[index] !== true){
-              __resume[index] = function(){
-                __resume_pipeline(pipeline, id)
-                input.conn_pollers[0].removeEvent('onConnect', __resume[index])
-              }.bind(this)
-              input.conn_pollers[0].addEvent('onConnect', () => __resume[index])
-            }
-
-          }.bind(this))
-
-        }
-
-      }
-    }
-
-    if(cb)
-      cb(pipeline)
-
-    // if(cb && typeof cb == 'function')
-    //   cb(pipeline)
-  },
+  
   // initialize: function(options){
   //   this.parent(options)
   //
