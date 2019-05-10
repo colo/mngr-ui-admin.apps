@@ -11,8 +11,6 @@ const ETC =  process.env.NODE_ENV === 'production'
       ? path.join(process.cwd(), '/etc/')
       : path.join(process.cwd(), '/devel/etc/')
 
-let Pipeline = require('js-pipeline')
-
 
 // // let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
 // // let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
@@ -103,6 +101,18 @@ module.exports = new Class({
   // session_store: undefined,
 
 	options: {
+    pipeline: require('./pipelines/index')({
+      conn: require(ETC+'ui.conn.js')(),
+      // host: this.options.host,
+      // cache: this.options.cache_store,
+      // ui: (this.options.on_demand !== true) ? undefined : Object.merge(
+      //   ui_rest_client_conf,
+      //   {
+      //     load: 'apps/hosts/clients'
+      //   }
+      // )
+    }),
+
     // ui_rest_client: undefined,
 
     id: 'domains',
@@ -1616,11 +1626,14 @@ module.exports = new Class({
     // }.bind(this)
     //
 
+    this.get_pipeline(undefined, function(pipeline){
+      debug_internals('domains pipeline', pipeline)
+    })
   },
 
 
 
-  
+
   // initialize: function(options){
   //   this.parent(options)
   //
