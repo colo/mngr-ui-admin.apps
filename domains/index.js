@@ -11,29 +11,8 @@ const ETC =  process.env.NODE_ENV === 'production'
       ? path.join(process.cwd(), '/etc/')
       : path.join(process.cwd(), '/devel/etc/')
 
-
-// // let RethinkDBStoreIn = require('js-caching/libs/stores/rethinkdb').input
-// // let RethinkDBStoreOut = require('js-caching/libs/stores/rethinkdb').output
-//
-let RedisStoreIn = require('js-caching/libs/stores/redis').input
-let RedisStoreOut = require('js-caching/libs/stores/redis').output
-//
-// // let HostsPipeline = require('./pipelines/index')(require(ETC+'default.conn.js')())
-
-
 let debug = require('debug')('mngr-ui-admin:apps:domains'),
     debug_internals = require('debug')('mngr-ui-admin:apps:domains:Internals');
-
-// let data_to_stat = require('node-tabular-data').data_to_stat
-// let data_to_tabular = require('node-tabular-data').data_to_tabular
-// let parse_range = require('./libs/parse_range')
-// let build_range = require('./libs/build_range')
-//
-// const qrate = require('qrate');
-//
-// const ui_rest_client_conf = require(ETC+'ui.rest.js')
-// const ui_rest = require('./clients/ui.rest')
-//
 
 module.exports = new Class({
   Extends: App,
@@ -102,7 +81,10 @@ module.exports = new Class({
 
 	options: {
     pipeline: require('./pipelines/index')({
-      conn: require(ETC+'ui.conn.js')(),
+      conn: Object.merge(
+        require(ETC+'ui.conn.js')(),
+        {db: 'logs'}
+      )
       // host: this.options.host,
       // cache: this.options.cache_store,
       // ui: (this.options.on_demand !== true) ? undefined : Object.merge(
@@ -121,52 +103,6 @@ module.exports = new Class({
     // host: {
     //   properties: ['paths', 'data', 'data_range'],//to send to pipelines.input.*.host.js
     // },
-
-    /**
-    * desde 'hosts', mover a global
-    **/
-    cache_store: {
-      NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
-      id: 'ui.cache',
-      suspended: false,
-      ttl: 1999,
-      stores: [
-        // {
-        //   id: 'rethinkdb',
-        //   conn: [
-        //     {
-        //       host: 'elk',
-        //       port: 28015,
-        //       // port: 28016,
-        //       db: 'servers',
-        //       table: 'cache',
-        //       module: RethinkDBStoreIn,
-        //     },
-        //   ],
-        //   module: RethinkDBStoreOut,
-        // }
-        {
-          NS: 'a22cf722-6ea9-4396-b2b3-9440dd677dd0',
-          id: 'ui.cache',
-          conn: [
-            {
-              host: 'elk',
-              // port: 28015,
-              // port: 28016,
-              db: 0,
-              // table: 'cache',
-              module: RedisStoreIn,
-            },
-          ],
-          module: RedisStoreOut,
-          buffer:{
-            size: -1,
-            // expire: 0 //ms
-            expire: 999 //ms
-          }
-        }
-      ],
-    },
 
     authorization: undefined,
 
@@ -250,7 +186,7 @@ module.exports = new Class({
 		// 	}
 		// },
 
-    expire: 1000,//ms
+    // expire: 1000,//ms
 	},
 
   // pipeline: {
@@ -716,164 +652,8 @@ module.exports = new Class({
   //
   // },
 
-  /**
-  * desde 'hosts', mover a global
-  **/
-  __get_session_by_id: function(id, cb){
-
-    if(this.session_store && typeof this.session_store.get == 'function'){
-      try{
-        this.session_store.get(id, cb)
-      }
-      catch(e){
-        debug_internals('this.session_store.get error', e)
-      }
-    }
-    else if(this.session_store && this.session_store.sessions[id]){//MemoryStore
-      cb(undefined, this.session_store.sessions[id])
-    }
-    else{
-      cb({status: 404, message: 'session not found'}, undefined)
-    }
 
 
-  },
-  /**
-  * desde 'hosts', mover a global
-  **/
-  __get_session_id_by_socket: function(socketId, cb){
-    debug_internals('__get_session_id_by_socket', socketId)
-
-    if(this.session_store && typeof this.session_store.all == 'function'){
-      try{
-        this.session_store.all(function(err, sessions){
-          if(err) cb(err, sessions)
-
-          debug_internals('__get_session_id_by_socket this.session_store.all', sessions)
-
-          let found = false
-          Object.each(sessions, function(session, sid){
-            if(session && session.sockets && session.sockets.contains(socketId)){
-              cb(undefined, sid)
-              found = true
-            }
-          }.bind(this))
-
-          if(found === false) cb({status: 404, message: 'session not found'}, undefined)
-
-        })
-      }
-      catch(e){
-        debug_internals('this.session_store.get error', e)
-      }
-    }
-    else if(this.session_store && this.session_store.sessions){//MemoryStore
-      debug_internals('__get_session_id_by_socket this.session_store.sessions', this.session_store.sessions)
-      let found = false
-      Object.each(this.session_store.sessions, function(session, sid){
-        if(session && session.sockets && session.sockets.contains(socketId)){
-          cb(undefined, sid)
-          found = true
-        }
-      }.bind(this))
-
-      if(found === false) cb({status: 404, message: 'session not found'}, undefined)
-    }
-    else{//last resort, search by IDs using cache
-      // cb({status: 404, message: 'session not found'}, undefined)
-      this.cache.get(this.ID+'.sessions', function(err, sessions){
-
-        if(sessions && sessions['socket'] && sessions['socket'].length > 0){
-          let found = false
-          Array.each(sessions['socket'], function(sid){
-            this.__get_session_by_id(sid, function(err, session){
-              if(session){
-                found = true
-                cb(undefined, sid)
-              }
-            })
-          }.bind(this))
-
-          if(found === false) cb({status: 404, message: 'session not found'}, undefined)
-        }
-        else{
-          cb({status: 404, message: 'session not found'}, undefined)
-        }
-      }.bind(this))
-    }
-
-  },
-
-
-  /**
-  * desde 'hosts', mover a global
-  **/
-  socket: function(socket){
-    debug_internals('socket.io connect', socket.id)
-
-		this.parent(socket)
-
-    socket.compress(true)
-
-		socket.on('disconnect', function () {
-      debug_internals('socket.io disconnect', socket.id)
-
-      this.__get_session_id_by_socket(socket.id, function(err, sid){
-        debug_internals('disconnect __get_session_by_socket', err, sid)
-        if(sid)
-          this.__update_sessions({id: sid, type: 'socket'}, true)//true == remove
-      }.bind(this))
-
-      if(this.pipeline.ids.contains(socket.id)){
-        this.pipeline.ids.erase(socket.id)
-        this.pipeline.ids = this.pipeline.ids.clean()
-      }
-
-      if(this.pipeline.hosts){
-        debug_internals('TO UNREGISTER', socket.id)
-        if(this.options.on_demand){
-          ui_rest_client.api.get({
-            uri: "events/once",
-            qs: {
-              type: 'unregister',
-              id: socket.id,
-              // hosts: [host],
-              pipeline_id: 'ui',
-            }
-          })
-
-          ui_rest_client.api.get({
-            uri: 'events/suspend',
-            qs: {
-              pipeline_id: 'ui',
-            },
-          })
-
-          this.pipeline.hosts.inputs[4].conn_pollers[0].clients['ui.rest'].ids = this.pipeline.ids
-        }
-
-        this.pipeline.hosts.inputs[1].fireEvent('onOnce', {
-          type: 'unregister',
-          id: socket.id,
-          host: undefined,
-          prop: undefined,
-        })//fire only the 'host' input
-
-
-      }
-
-
-
-
-
-      if(this.pipeline.ids.length == 0 && this.pipeline.hosts){ // && this.pipeline.suspended == false
-        this.pipeline.suspended = true
-        this.pipeline.hosts.fireEvent('onSuspend')
-      }
-
-
-		}.bind(this));
-	},
   /**
   * --------------
   **/
@@ -1556,8 +1336,9 @@ module.exports = new Class({
   /**
   * -----------------
   **/
-  domains: function(payload){
-    debug_internals('domains:', payload.params)
+  domains: function(req, resp, next){
+    debug_internals('domains:', req.params)
+    let params = req.params
     // let {req, resp, socket, params} = payload
     // payload.next(undefined, ['something'])
     //
@@ -1626,37 +1407,39 @@ module.exports = new Class({
     // }.bind(this)
     //
 
-    this.get_pipeline(undefined, function(pipeline){
-      debug_internals('domains pipeline', pipeline)
+    let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
+      debug_internals('send_resp', err, result)
+      let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
+      if(err)
+        result = Object.merge(err, result)
+
+      if(resp){
+        resp.status(status).json(result)
+      }
+      else{
+        socket.emit('host', result)
+      }
+    }.bind(this))
+
+    this.get_from_input({
+      response: id,
+      input: (params.domain) ? 'domain' : 'domains',
+      from: 'periodical',
+      next: (id, err, result) => this.response(id, err, result)
+
     })
+    // // let _recive_pipe = function(pipeline){
+    // //   debug_internals('domains pipeline', pipeline)
+    // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
+    // // }
+    // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
+    // // OR
+    // this.get_pipeline(undefined, function(pipeline){
+    //   debug_internals('domains get_pipeline', pipeline)
+    //
+    //   this.response(id, ['some', 'args'])
+    // }.bind(this))
   },
-
-
-
-
-  // initialize: function(options){
-  //   this.parent(options)
-  //
-	// 	this.profile('hosts_init');//start profiling
-  //
-  //   // this.cache = new jscaching(this.options.cache_store)
-  //   //
-  //   // if(this.options.on_demand)
-  //   //   this.ui_rest_client = new ui_rest(ui_rest_client_conf)
-  //   //
-  //   // // this.pipeline.hosts.inputs[0].conn_pollers[0].addEvent('onConnect', function(){
-  //   // //   // debug_internals('connected')
-  //   // //   // this.pipeline.hosts.suspended = false
-  //   // //   // this.pipeline.hosts.fireEvent('onResume')
-  //   // //   this.pipeline.hosts.fireEvent('onOnce')
-  //   // // }.bind(this))
-  //
-  //   this.profile('hosts_init');//end profiling
-  //
-	// 	this.log('hosts', 'info', 'hosts started');
-  // },
-
-
 
 
 });

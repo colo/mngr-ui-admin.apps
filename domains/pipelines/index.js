@@ -1,13 +1,13 @@
 'use strict'
 
-let debug = require('debug')('mngr-ui-admin:apps:domains:Pipeline:Hosts'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:domains:Pipeline:Hosts:Internals');
+let debug = require('debug')('mngr-ui-admin:apps:domains:Pipeline:Domains'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:domains:Pipeline:Domains:Internals');
 
-const InputPollerRethinkDBHosts = require ( './input/rethinkdb.hosts.js' )
-// const InputPollerRethinkDBHost = require ( './input/rethinkdb.host.js' )
-const InputPollerRethinkDBHostHistorical = require ( './input/rethinkdb.host.historical.js' )
+const InputPollerRethinkDBDomains = require ( './input/rethinkdb.domains.js' )
+const InputPollerRethinkDBDomain = require ( './input/rethinkdb.domain.js' )
+const InputPollerRethinkDBDomainHistorical = require ( './input/rethinkdb.domain.historical.js' )
 
-const InputPollerRedisHost = require ( './input/redis.host.js' )
+// const InputPollerRedisDomain = require ( './input/redis.domain.js' )
 
 const InputCache = require ( './input/cache.js' )
 
@@ -20,7 +20,7 @@ let cron = require('node-cron')
 
 module.exports = function(payload){
 	// //console.log('IO', io)
-  let {conn, host, cache, ui} = payload
+  let {conn, domain, cache, ui} = payload
 
   debug_internals('require %o', payload)
 
@@ -29,13 +29,13 @@ module.exports = function(payload){
   		{
   			poll: {
   				suspended: true,//start suspended
-  				id: "input.hosts",
+  				id: "domains",
   				conn: [
             Object.merge(
               Object.clone(conn),
               {
                 // path_key: 'os',
-                module: InputPollerRethinkDBHosts,
+                module: InputPollerRethinkDBDomains,
               }
             )
   				],
@@ -46,23 +46,54 @@ module.exports = function(payload){
   				// },
   				requests: {
       			periodical: function(dispatch){
-  						// //////////console.log('host periodical running')
+  						// //////////console.log('domain periodical running')
+      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      			}
+      		},
+  			},
+  		},
+      {
+  			poll: {
+  				suspended: true,//start suspended
+  				id: "domain",
+  				conn: [
+            Object.merge(
+              Object.clone(conn),
+              {
+                // path_key: 'os',
+                module: InputPollerRethinkDBDomain,
+              }
+            )
+  				],
+  				connect_retry_count: -1,
+  				connect_retry_periodical: 1000,
+  				// requests: {
+  				// 	periodical: 1000,
+  				// },
+  				requests: {
+      			periodical: function(dispatch){
+  						// //////////console.log('domain periodical running')
       				return cron.schedule('* * * * * *', dispatch);//every 5 sec
       			}
       		},
   			},
   		},
 
-
   	],
-    filters: [
-
-  	],
+    // filters: [
+    //   function(doc, one, two, pipeline){
+    //     doc = [doc]
+    //     debug_internals('filter', doc)
+    //     pipeline.output(doc)
+    //   }
+  	// ],
   	// output: [
-    //
+    //   function(doc){
+    //     debug_internals('output', doc)
+    //   }
   	// ]
   }
 
-  
+
   return conf
 }
