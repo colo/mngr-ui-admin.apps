@@ -2,8 +2,8 @@
 
 const App = require ( 'node-app-rethinkdb-client/index' )
 
-let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Domain:Input'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Domain:Input:Internals');
+let debug = require('debug')('mngr-ui-admin:apps:domains:Pipeline:Domain:Input'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:domains:Pipeline:Domain:Input:Internals');
 
 
 const roundMilliseconds = function(timestamp){
@@ -39,7 +39,7 @@ module.exports = new Class({
   // close_feed: false,
 
   registered: {},
-  hosts_ranges: {},
+  domains_ranges: {},
 
   options: {
 
@@ -47,27 +47,27 @@ module.exports = new Class({
       periodical: [
         {
 					get_data_range: function(req, next, app){
-            // debug_internals('get_data_range', app.data_hosts);
-						if(app.data_hosts && app.data_hosts.length > 0){
+            // debug_internals('get_data_range', app.data_domains);
+						if(req.params.domains){
 
-              Array.each(app.data_hosts, function(host){
-                // debug_internals('get_data_range', host)
+              Array.each(app.domains, function(domain){
+                debug_internals('get_data_range', domain)
                 //get first
                 app.nth({
                   _extras: {
                     id: undefined,
                     prop: 'data_range',
                     range_select : 'start',
-                    host: host,
+                    domain: domain,
                     type: 'prop'
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: 0,
-                  query: app.r.db(app.options.db).table('ui').
+                  query: app.r.db(app.options.db).table('periodical').
                   between(
-                    [host, 'periodical', 0],
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
+                    [domain, 'periodical', app.r.minvalue],
+                    [domain, 'periodical', app.r.maxvalue],
+                    {index: 'sort_by_domain'}
                   )
                 })
 
@@ -77,16 +77,17 @@ module.exports = new Class({
                     id: undefined,
                     prop: 'data_range',
                     range_select : 'end',
-                    host: host,
+                    domain: domain,
                     type: 'prop'
                   },
-                  uri: app.options.db+'/ui',
+                  uri: app.options.db+'/periodical',
                   args: -1,
-                  query: app.r.db(app.options.db).table('ui').
+                  query: app.r.db(app.options.db).table('periodical').
                   between(
-                    [host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(6000)], //last 6 secs
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
+                    // [domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(6000)], //last 6 secs
+                    [domain, 'periodical', app.r.minvalue],
+                    [domain, 'periodical', app.r.maxvalue],
+                    {index: 'sort_by_domain'}
                   )
                 })
 
@@ -96,313 +97,359 @@ module.exports = new Class({
 
 					}
 				},
-        {
-					search_paths: function(req, next, app){
-						// if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-            if(app.data_hosts && app.data_hosts.length > 0){
-              Array.each(app.data_hosts, function(host){
-              // debug_internals('search_paths', req.host, req.prop);
-                app.reduce({
-                  _extras: {id: undefined, prop: 'paths', host: host, type: 'prop'},
-                  uri: app.options.db+'/ui',
-                  args: function(left, right) {
-                      return left.merge(right)
-                  },
-
-                  query: app.r.db(app.options.db).table('ui').
-                  // getAll(req.host, {index: 'host'}).
-                  between(
-                    [host, 'periodical', Date.now() - 6000],
-                    [host, 'periodical', ''],
-                    {index: 'sort_by_host'}
-                  ).
-                  map(function(doc) {
-                    return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-                  }.bind(app))
-                  // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
-                  //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-                  // }.bind(app))
-                })
-
-              })
-            }
-
-					}
-				},
         // {
-				// 	get_changes: function(req, next, app){
-        //     if(app.registered){
-        //       let hosts = []
-        //       Object.each(app.registered, function(registered_data, id){
-        //         // debug_internals('get_changes', registered_data)
-        //         Object.each(registered_data, function(props, host){
+				// 	search_paths: function(req, next, app){
+				// 		// if(req.params.domain && !req.type && (req.prop == 'paths' || !req.prop)){
+        //     if(app.data_domains && app.data_domains.length > 0){
+        //       Array.each(app.data_domains, function(domain){
+        //       // debug_internals('search_paths', req.params.domain, req.prop);
+        //         app.reduce({
+        //           _extras: {id: undefined, prop: 'paths', domain: domain, type: 'prop'},
+        //           uri: app.options.db+'/ui',
+        //           args: function(left, right) {
+        //               return left.merge(right)
+        //           },
         //
-        //           if(props.contains('data'))//if registered for "data"
-        //             hosts = hosts.combine([host])
-        //
+        //           query: app.r.db(app.options.db).table('ui').
+        //           // getAll(req.params.domain, {index: 'domain'}).
+        //           between(
+        //             [domain, 'periodical', Date.now() - 6000],
+        //             [domain, 'periodical', ''],
+        //             {index: 'sort_by_domain'}
+        //           ).
+        //           map(function(doc) {
+        //             return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+        //           }.bind(app))
+        //           // query: app.r.db(app.options.db).table('ui').getAll(req.params.domain, {index: 'domain'}).map(function(doc) {
+        //           //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+        //           // }.bind(app))
         //         })
+        //
         //       })
-  			// 			//debug_internals('_get_last_stat %o', next);
-        //       // let start = Date.now() - 3999
-        //       // let end = Date.now()
-        //
-  			// 			debug_internals('get_changes %s', new Date(), app.hosts_ranges, hosts);
-        //
-  			// 			// let views = [];
-  			// 			// Object.each(app.hosts, function(value, host){
-  			// 				// debug_internals('_get_last_stat %s', host);
-        //
-        //         Array.each(hosts, function(host){
-        //           // debug_internals('_get_last_stat %s %s', host, path);
-        //           // let _func = function(){
-        //           if(app.hosts_ranges[host] && app.hosts_ranges[host].end)
-        //             app.between({
-        //               _extras: {
-        //                 id: undefined,
-        //                 prop: 'changes',
-        //                 // range_select : 'start',
-        //                 host: host,
-        //                 // type: 'prop'
-        //               },
-        //               uri: app.options.db+'/ui',
-        //               args: [
-        //                 /**
-        //                 * 1001ms time lapse (previous second from "now")
-        //                 **/
-        //                 [host, 'periodical', app.hosts_ranges[host].end - 1999],
-        //                 [host, 'periodical', app.hosts_ranges[host].end],
-        //                 {
-        //                   // index: 'timestamp',
-        //                   index: 'sort_by_host',
-        //                   leftBound: 'open',
-        //                   rightBound: 'open'
-        //                 }
-        //               ],
-        //               // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
-        //               // orderBy: { index: app.r.desc('sort_by_path') }
-        //             })
-        //
-        //         }.bind(app))
-        //
-        //
-    		// 					// views.push(_func);
-        //
-        //         // })
-        //
-  			// 			// });
-        //
-  			// 			// Array.each(views, function(view){
-  			// 			// 	view();
-  			// 			// });
-  			// 			// next(views);
         //     }
+        //
 				// 	}
 				// },
+        // // {
+				// // 	get_changes: function(req, next, app){
+        // //     if(app.registered){
+        // //       let domains = []
+        // //       Object.each(app.registered, function(registered_data, id){
+        // //         // debug_internals('get_changes', registered_data)
+        // //         Object.each(registered_data, function(props, domain){
+        // //
+        // //           if(props.contains('data'))//if registered for "data"
+        // //             domains = domains.combine([domain])
+        // //
+        // //         })
+        // //       })
+  			// // 			//debug_internals('_get_last_stat %o', next);
+        // //       // let start = Date.now() - 3999
+        // //       // let end = Date.now()
+        // //
+  			// // 			debug_internals('get_changes %s', new Date(), app.domains_ranges, domains);
+        // //
+  			// // 			// let views = [];
+  			// // 			// Object.each(app.domains, function(value, domain){
+  			// // 				// debug_internals('_get_last_stat %s', domain);
+        // //
+        // //         Array.each(domains, function(domain){
+        // //           // debug_internals('_get_last_stat %s %s', domain, path);
+        // //           // let _func = function(){
+        // //           if(app.domains_ranges[domain] && app.domains_ranges[domain].end)
+        // //             app.between({
+        // //               _extras: {
+        // //                 id: undefined,
+        // //                 prop: 'changes',
+        // //                 // range_select : 'start',
+        // //                 domain: domain,
+        // //                 // type: 'prop'
+        // //               },
+        // //               uri: app.options.db+'/ui',
+        // //               args: [
+        // //                 /**
+        // //                 * 1001ms time lapse (previous second from "now")
+        // //                 **/
+        // //                 [domain, 'periodical', app.domains_ranges[domain].end - 1999],
+        // //                 [domain, 'periodical', app.domains_ranges[domain].end],
+        // //                 {
+        // //                   // index: 'timestamp',
+        // //                   index: 'sort_by_domain',
+        // //                   leftBound: 'open',
+        // //                   rightBound: 'open'
+        // //                 }
+        // //               ],
+        // //               // chain: [{orderBy: { index: app.r.desc('sort_by_path') }}, {limit: 1}]
+        // //               // orderBy: { index: app.r.desc('sort_by_path') }
+        // //             })
+        // //
+        // //         }.bind(app))
+        // //
+        // //
+    		// // 					// views.push(_func);
+        // //
+        // //         // })
+        // //
+  			// // 			// });
+        // //
+  			// // 			// Array.each(views, function(view){
+  			// // 			// 	view();
+  			// // 			// });
+  			// // 			// next(views);
+        // //     }
+				// // 	}
+				// // },
 
 
       ],
       once: [
         {
 					get_data_range: function(req, next, app){
-						if(req.host && !req.type && (req.prop == 'data_range' || !req.prop)){
-              // debug_internals('get_data_range', req.host, req.prop);
-
-              //get first
-              app.nth({
-                _extras: {
-                  id: req.id,
-                  prop: 'data_range',
-                  range_select : 'start',
-                  host: req.host,
-                  type: (!req.prop) ? 'host' : 'prop'
-                },
-                uri: app.options.db+'/ui',
-                args: 0,
-                query: app.r.db(app.options.db).table('ui').
-                between(
-                  [req.host, 'periodical', 0],
-                  [req.host, 'periodical', ''],
-                  {index: 'sort_by_host'}
-                )
-              })
+            // debug_internals('get_data_range', req);
+						if(req.params.domain && !req.type && (req.prop == 'data_range' || !req.prop)){
+              debug_internals('get_data_range', req.params.domain, req.prop);
 
               //get last
               app.nth({
                 _extras: {
+                  from: req.from,
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'end',
-                  host: req.host,
-                  type: (!req.prop) ? 'host' : 'prop'
+                  domain: req.params.domain,
+                  type: (!req.prop) ? 'domain' : 'prop'
                 },
-                uri: app.options.db+'/ui',
+                uri: app.options.db+'/'+req.from,
                 args: -1,
-                query: app.r.db(app.options.db).table('ui').
+                query: app.r.db(app.options.db).table(req.from).
                 between(
-                  [req.host, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
-                  [req.host, 'periodical', ''],
-                  {index: 'sort_by_host'}
+                  // [req.params.domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
+                  [req.params.domain, req.from, 0],//last 5 secs
+                  [req.params.domain, req.from, ''],
+                  {index: 'sort_by_domain'}
+                )
+              })
+
+              //get first
+              app.nth({
+                _extras: {
+                  from: req.from,
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'start',
+                  domain: req.params.domain,
+                  type: (!req.prop) ? 'domain' : 'prop'
+                },
+                uri: app.options.db+'/'+req.from,
+                args: 0,
+                query: app.r.db(app.options.db).table(req.from).
+                between(
+                  [req.params.domain, req.from, 0],
+                  [req.params.domain, req.from, ''],
+                  {index: 'sort_by_domain'}
                 )
               })
 
 
+
+
             }
 
 					}
 				},
         {
-					search_paths: function(req, next, app){
-						if(req.host && !req.type && (req.prop == 'paths' || !req.prop)){
-              // debug_internals('search_paths', req.host, req.prop);
+					search_hosts: function(req, next, app){
+						if(req.params.domain && !req.type && (req.prop == 'hosts' || !req.prop)){
+              debug_internals('search_hosts', req);
+              /**
+              * reducing last minute of domains should be enough, and is way faster than "distinct" from all docs
+              **/
               app.reduce({
-                _extras: {id: req.id, prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
+                _extras: {
+                  from: req.from,
+                  id: req.id,
+                  prop: 'hosts',
+                  domain: req.params.domain,
+                  type: (!req.prop) ? 'domain' : 'prop'
+                },
+                uri: app.options.db+'/'+req.from,
                 args: function(left, right) {
                     return left.merge(right)
                 },
 
-                query: app.r.db(app.options.db).table('ui').
-                // getAll(req.host, {index: 'host'}).
-                between(
-                  [req.host, 'periodical', Date.now() - 10000], //60000
-                  [req.host, 'periodical', Date.now()],
-                  {index: 'sort_by_host'}
-                ).
-                map(function(doc) {
-                  return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+                query: app.r.db(app.options.db)
+                .table(req.from)
+                .getAll(req.params.domain, {index: 'domain'}).map(function(doc) {
+                  return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
                 }.bind(app))
-                // query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
-                //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+
+                // query: app.r.db(app.options.db).table(req.from).between(Date.now() - app.RANGES[req.from], Date.now(), {index: 'timestamp'}).map(function(doc) {
+                //   return app.r.object(doc("metadata")("host"), true) // return { <country>: true}
                 // }.bind(app))
               })
             }
+            // app.distinct({
+            //   _extras: {type: 'domains', id: undefined},
+            //   uri: app.options.db+'/periodical',
+            //   args: {index: 'domain'}
+            // })
 
 					}
 				},
-        {
-					search_data: function(req, next, app){
-						if(req.host && !req.type && (req.prop == 'data' || !req.prop)){
-              // debug_internals('search_data', req.host, req.prop);
-              app.map({
-                _extras: {id: req.id, prop: 'data', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-                uri: app.options.db+'/ui',
-                args: function(x){ return [x('group'), x('reduction')] },
 
-                query: app.r.db(app.options.db).
-                table('ui').
-                // getAll(req.host, {index: 'host'}).
-                between(
-                  [req.host, 'periodical', Date.now() - 10000], //60000
-                  [req.host, 'periodical', Date.now()],
-                  {index: 'sort_by_host'}
-                ).
-                group(app.r.row('metadata')('path')).
-                max(app.r.row('metadata')('timestamp')).
-                ungroup()
-              })
-            }
-
-					}
-				},
+        // {
+				// 	search_paths: function(req, next, app){
+				// 		if(req.params.domain && !req.type && (req.prop == 'paths' || !req.prop)){
+        //       // debug_internals('search_paths', req.params.domain, req.prop);
+        //       app.reduce({
+        //         _extras: {id: req.id, prop: 'paths', domain: req.params.domain, type: (!req.prop) ? 'domain' : 'prop'},
+        //         uri: app.options.db+'/ui',
+        //         args: function(left, right) {
+        //             return left.merge(right)
+        //         },
+        //
+        //         query: app.r.db(app.options.db).table('ui').
+        //         // getAll(req.params.domain, {index: 'domain'}).
+        //         between(
+        //           [req.params.domain, 'periodical', Date.now() - 10000], //60000
+        //           [req.params.domain, 'periodical', Date.now()],
+        //           {index: 'sort_by_domain'}
+        //         ).
+        //         map(function(doc) {
+        //           return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+        //         }.bind(app))
+        //         // query: app.r.db(app.options.db).table('ui').getAll(req.params.domain, {index: 'domain'}).map(function(doc) {
+        //         //   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+        //         // }.bind(app))
+        //       })
+        //     }
+        //
+				// 	}
+				// },
+        // {
+				// 	search_data: function(req, next, app){
+				// 		if(req.params.domain && !req.type && (req.prop == 'data' || !req.prop)){
+        //       // debug_internals('search_data', req.params.domain, req.prop);
+        //       app.map({
+        //         _extras: {id: req.id, prop: 'data', domain: req.params.domain, type: (!req.prop) ? 'domain' : 'prop'},
+        //         uri: app.options.db+'/ui',
+        //         args: function(x){ return [x('group'), x('reduction')] },
+        //
+        //         query: app.r.db(app.options.db).
+        //         table('ui').
+        //         // getAll(req.params.domain, {index: 'domain'}).
+        //         between(
+        //           [req.params.domain, 'periodical', Date.now() - 10000], //60000
+        //           [req.params.domain, 'periodical', Date.now()],
+        //           {index: 'sort_by_domain'}
+        //         ).
+        //         group(app.r.row('metadata')('path')).
+        //         max(app.r.row('metadata')('timestamp')).
+        //         ungroup()
+        //       })
+        //     }
+        //
+				// 	}
+				// },
+        // // {
+				// // 	register: function(req, next, app){
+				// // 		if(req.params.domain && req.type == 'register' && req.prop){
+        // //       debug_internals('register', req.params.domain, req.prop);
+        // //       let {domain, prop} = req
+        // //       if(!app.events[domain]) app.events[domain] = {}
+        // //
+        // //       if(prop == 'data' && !app.events[domain]['data']){
+        // //         // app.events[domain]['data'] = true
+        // //         app.changes({
+        // //            _extras: {id: req.id, prop: 'data', domain: req.params.domain, type: req.type},
+        // //            uri: app.options.db+'/ui',
+        // //            // args: {includeTypes: true, squash: 1.1},
+        // //            args: {includeTypes: true, squash: 1},
+        // //            query: app.r.db(app.options.db).table('ui').getAll(domain, {index:'domain'})
+        // //         })
+        // //       }
+        // //
+        // //
+        // //     }
+        // //
+				// // 	}
+        // // },
         // {
 				// 	register: function(req, next, app){
-				// 		if(req.host && req.type == 'register' && req.prop){
-        //       debug_internals('register', req.host, req.prop);
-        //       let {host, prop} = req
-        //       if(!app.events[host]) app.events[host] = {}
+				// 		if(req.params.domain && req.type == 'register' && req.prop == 'data' && req.id){
+        //       debug_internals('register', req.params.domain, req.prop, req.id);
+        //       let {domain, prop, id} = req
         //
-        //       if(prop == 'data' && !app.events[host]['data']){
-        //         // app.events[host]['data'] = true
-        //         app.changes({
-        //            _extras: {id: req.id, prop: 'data', host: req.host, type: req.type},
-        //            uri: app.options.db+'/ui',
-        //            // args: {includeTypes: true, squash: 1.1},
-        //            args: {includeTypes: true, squash: 1},
-        //            query: app.r.db(app.options.db).table('ui').getAll(host, {index:'host'})
-        //         })
-        //       }
+        //       app.register(domain, prop, id)
+        //
+        //       // if(!app.registered[id]) app.registered[id] = {}
+        //       // if(!app.registered[id][domain]) app.registered[id][domain] = []
+        //       //
+        //       // app.registered[id][domain] = app.registered[id][domain].combine([prop])
+        //
+        //     }
+        //
+				// 	}
+				// },
+        // {
+				// 	unregister: function(req, next, app){
+        //
+				// 		if(req.type == 'unregister'){
+        //
+        //       // throw new Error()
+        //
+        //       let {domain, prop, id} = req
+        //       app.unregister(domain, prop, id)
+        //
+        //
+        //       // if(app.registered[id]){
+        //       //   if(domain && prop && app.registered[id][domain])
+        //       //     app.registered[id][domain] = app.registered[id][domain].erase(prop)
+        //       //
+        //       //   if((domain && app.registered[id][domain].length == 0) || (domain && !prop))
+        //       //     delete app.registered[id][domain]
+        //       //
+        //       //
+        //       //   if(Object.getLength(app.registered[id]) == 0 || !domain)
+        //       //     delete app.registered[id]
+        //       // }
+        //       //
+        //       // debug_internals('unregister', req.type, req.params.domain, req.prop, req.id, app.registered);
         //
         //
         //     }
         //
 				// 	}
-        // },
-        {
-					register: function(req, next, app){
-						if(req.host && req.type == 'register' && req.prop == 'data' && req.id){
-              debug_internals('register', req.host, req.prop, req.id);
-              let {host, prop, id} = req
-
-              app.register(host, prop, id)
-
-              // if(!app.registered[id]) app.registered[id] = {}
-              // if(!app.registered[id][host]) app.registered[id][host] = []
-              //
-              // app.registered[id][host] = app.registered[id][host].combine([prop])
-
-            }
-
-					}
-				},
-        {
-					unregister: function(req, next, app){
-
-						if(req.type == 'unregister'){
-
-              // throw new Error()
-
-              let {host, prop, id} = req
-              app.unregister(host, prop, id)
-
-
-              // if(app.registered[id]){
-              //   if(host && prop && app.registered[id][host])
-              //     app.registered[id][host] = app.registered[id][host].erase(prop)
-              //
-              //   if((host && app.registered[id][host].length == 0) || (host && !prop))
-              //     delete app.registered[id][host]
-              //
-              //
-              //   if(Object.getLength(app.registered[id]) == 0 || !host)
-              //     delete app.registered[id]
-              // }
-              //
-              // debug_internals('unregister', req.type, req.host, req.prop, req.id, app.registered);
-
-
-            }
-
-					}
-				},
-        {
-					catch_all: function(req, next, app){
-						if(req.prop && !app.options.properties.contains(req.prop)){
-              debug_internals('catch_all', req)
-              app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
-            }
-
-
-              // app.reduce({
-              //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
-              //   uri: app.options.db+'/ui',
-              //   args: function(left, right) {
-              //       return left.merge(right)
-              //   },
-              //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
-              //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
-              //   }.bind(app))
-              // })
-
-					}
-				},
+				// },
+        // {
+				// 	catch_all: function(req, next, app){
+				// 		if(req.prop && !app.options.properties.contains(req.prop)){
+        //       debug_internals('catch_all', req)
+        //       app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, domain: req.params.domain, type: 'prop'}}})
+        //     }
+        //
+        //
+        //       // app.reduce({
+        //       //   _extras: {prop: 'paths', domain: req.params.domain, type: (!req.prop) ? 'domain' : 'prop'},
+        //       //   uri: app.options.db+'/ui',
+        //       //   args: function(left, right) {
+        //       //       return left.merge(right)
+        //       //   },
+        //       //
+        //       //   query: app.r.db(app.options.db).table('ui').getAll(req.params.domain, {index: 'domain'}).map(function(doc) {
+        //       //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
+        //       //   }.bind(app))
+        //       // })
+        //
+				// 	}
+				// },
       ],
 
       range: [
         {
 					get_data_range: function(req, next, app){
-						if(req.host && (req.prop == 'data_range' || !req.prop)){
-              // debug_internals('get_data_range', req.host, req.prop);
+						if(req.params.domain && (req.prop == 'data_range' || !req.prop)){
+              // debug_internals('get_data_range', req.params.domain, req.prop);
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -416,8 +463,8 @@ module.exports = new Class({
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'start',
-                  host: req.host,
-                  type: (!req.prop) ? 'host' : 'prop',
+                  domain: req.params.domain,
+                  type: (!req.prop) ? 'domain' : 'prop',
                   range: req.opt.range,
                   full_range: req.full_range,
                   range_counter: req.range_counter
@@ -426,9 +473,9 @@ module.exports = new Class({
                 args: 0,
                 query: app.r.db(app.options.db).table('ui').
                 between(
-                  [req.host, 'periodical', start],
-                  [req.host, 'periodical', end],
-                  {index: 'sort_by_host'}
+                  [req.params.domain, 'periodical', start],
+                  [req.params.domain, 'periodical', end],
+                  {index: 'sort_by_domain'}
                 )
               })
 
@@ -438,8 +485,8 @@ module.exports = new Class({
                   id: req.id,
                   prop: 'data_range',
                   range_select : 'end',
-                  host: req.host,
-                  type: (!req.prop) ? 'host' : 'prop',
+                  domain: req.params.domain,
+                  type: (!req.prop) ? 'domain' : 'prop',
                   range: req.opt.range,
                   full_range: req.full_range,
                   range_counter: req.range_counter
@@ -448,9 +495,9 @@ module.exports = new Class({
                 args: -1,
                 query: app.r.db(app.options.db).table('ui').
                 between(
-                  [req.host, 'periodical', start],
-                  [req.host, 'periodical', end],
-                  {index: 'sort_by_host'}
+                  [req.params.domain, 'periodical', start],
+                  [req.params.domain, 'periodical', end],
+                  {index: 'sort_by_domain'}
                 )
               })
 
@@ -461,8 +508,8 @@ module.exports = new Class({
 				},
         {
 					search_paths: function(req, next, app){
-						if(req.host && (req.prop == 'paths' || !req.prop)){
-              // debug_internals('search_paths range', req.host, req.prop, req.opt.range)
+						if(req.params.domain && (req.prop == 'paths' || !req.prop)){
+              // debug_internals('search_paths range', req.params.domain, req.prop, req.opt.range)
 
               let range = req.opt.range
               let end = (range.end != null) ?  range.end : Date.now()
@@ -473,8 +520,8 @@ module.exports = new Class({
                 _extras: {
                   id: req.id,
                   prop: 'paths',
-                  host: req.host,
-                  type: (!req.prop) ? 'host' : 'prop',
+                  domain: req.params.domain,
+                  type: (!req.prop) ? 'domain' : 'prop',
                   range: req.opt.range,
                   full_range: req.full_range,
                   range_counter: req.range_counter
@@ -487,9 +534,9 @@ module.exports = new Class({
                 query: app.r.db(app.options.db).
                 table('ui').
                 between(
-                  [req.host, 'periodical', roundMilliseconds(start)],
-                  [req.host, 'periodical', roundMilliseconds(end)],
-                  {index: 'sort_by_host'}
+                  [req.params.domain, 'periodical', roundMilliseconds(start)],
+                  [req.params.domain, 'periodical', roundMilliseconds(end)],
+                  {index: 'sort_by_domain'}
                 ).
                 map(function(doc) {
                   return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
@@ -501,7 +548,7 @@ module.exports = new Class({
 				},
         {
 					search_data: function(req, next, app){
-						if(req.host && (req.prop == 'data' || !req.prop)){
+						if(req.params.domain && (req.prop == 'data' || !req.prop)){
               // debug_internals('search_data range %o', req);
 
               let paths = req.paths
@@ -526,8 +573,8 @@ module.exports = new Class({
                     query: app.r.db(app.options.db).
                     table('ui').
                     between(
-                      [path, req.host, 'periodical', roundMilliseconds(start)],
-                      [path, req.host, 'periodical', roundMilliseconds(end)],
+                      [path, req.params.domain, 'periodical', roundMilliseconds(start)],
+                      [path, req.params.domain, 'periodical', roundMilliseconds(end)],
                       {index: 'sort_by_path'}
                     ).
                     // fold(0, function(acc, row) {
@@ -545,8 +592,8 @@ module.exports = new Class({
                   //   _extras: extras,
                   //   uri: app.options.db+'/ui',
                   //   args: [
-                  //     [path, req.host, "periodical", roundMilliseconds(start)],
-                  //     [path, req.host, "periodical",roundMilliseconds(end)],
+                  //     [path, req.params.domain, "periodical", roundMilliseconds(start)],
+                  //     [path, req.params.domain, "periodical",roundMilliseconds(end)],
                   //     {
                   //       index: 'sort_by_path',
                   //       leftBound: 'open',
@@ -565,8 +612,8 @@ module.exports = new Class({
                     _get_by_path(_path,{
                       id: req.id,
                       prop: 'data',
-                      host: req.host,
-                      type: (!req.prop) ? 'host' : 'prop',
+                      domain: req.params.domain,
+                      type: (!req.prop) ? 'domain' : 'prop',
                       range: req.opt.range,
                       full_range: req.full_range,
                       range_counter: req.range_counter,
@@ -578,8 +625,8 @@ module.exports = new Class({
                   _get_by_path(paths, {
                     id: req.id,
                     prop: 'data',
-                    host: req.host,
-                    type: (!req.prop) ? 'host' : 'prop',
+                    domain: req.params.domain,
+                    type: (!req.prop) ? 'domain' : 'prop',
                     range: req.opt.range,
                     full_range: req.full_range,
                     range_counter: req.range_counter
@@ -592,8 +639,8 @@ module.exports = new Class({
                   _extras: {
                     id: req.id,
                     prop: 'data',
-                    host: req.host,
-                    type: (!req.prop) ? 'host' : 'prop',
+                    domain: req.params.domain,
+                    type: (!req.prop) ? 'domain' : 'prop',
                     range: req.opt.range,
                     full_range: req.full_range,
                     range_counter: req.range_counter
@@ -604,9 +651,9 @@ module.exports = new Class({
                   query: app.r.db(app.options.db).
                   table('ui').
                   between(
-                    [req.host, 'periodical', roundMilliseconds(start)],
-                    [req.host, 'periodical', roundMilliseconds(end)],
-                    {index: 'sort_by_host'}
+                    [req.params.domain, 'periodical', roundMilliseconds(start)],
+                    [req.params.domain, 'periodical', roundMilliseconds(end)],
+                    {index: 'sort_by_domain'}
                   ).
                   // fold(0, function(acc, row) {
                   //   return acc.add(1);
@@ -626,19 +673,19 @@ module.exports = new Class({
         {
 					catch_all: function(req, next, app){
 						if(req.prop && !app.options.properties.contains(req.prop)){
-              // debug_internals('catch_all', req.host, req.prop)
-              app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, host: req.host, type: 'prop'}}})
+              // debug_internals('catch_all', req.params.domain, req.prop)
+              app.unknown_property({options: {_extras: {id: req.id, prop: req.prop, domain: req.params.domain, type: 'prop'}}})
             }
 
 
               // app.reduce({
-              //   _extras: {prop: 'paths', host: req.host, type: (!req.prop) ? 'host' : 'prop'},
+              //   _extras: {prop: 'paths', domain: req.params.domain, type: (!req.prop) ? 'domain' : 'prop'},
               //   uri: app.options.db+'/ui',
               //   args: function(left, right) {
               //       return left.merge(right)
               //   },
               //
-              //   query: app.r.db(app.options.db).table('ui').getAll(req.host, {index: 'host'}).map(function(doc) {
+              //   query: app.r.db(app.options.db).table('ui').getAll(req.params.domain, {index: 'domain'}).map(function(doc) {
               //     return app.r.object(doc("metadata")("path"), true) // return { <country>: true}
               //   }.bind(app))
               // })
@@ -680,10 +727,11 @@ module.exports = new Class({
 
   },
 
-  properties: ['paths', 'data', 'data_range'],
+  // properties: ['paths', 'data', 'data_range'],
+  properties: ['hosts', 'data_range'],
   // properties: [],
 
-  hosts: {},
+  domains: {},
   _multi_response: {},
 
   initialize: function(options){
@@ -696,15 +744,38 @@ module.exports = new Class({
 
     // this.addEvent('onResume', this.register_on_changes.bind(this))
 
-		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Domain:Input_init');//start profiling
+		this.profile('mngr-ui-admin:apps:domains:Pipeline:Domain:Input_init');//start profiling
 
 
-		this.profile('mngr-ui-admin:apps:hosts:Pipeline:Domain:Input_init');//end profiling
+		this.profile('mngr-ui-admin:apps:domains:Pipeline:Domain:Input_init');//end profiling
 
-		this.log('mngr-ui-admin:apps:hosts:Pipeline:Domain:Input', 'info', 'mngr-ui-admin:apps:hosts:Pipeline:Domain:Input started');
+		this.log('mngr-ui-admin:apps:domains:Pipeline:Domain:Input', 'info', 'mngr-ui-admin:apps:domains:Pipeline:Domain:Input started');
   },
   data_range: function(err, resp, params){
-    // debug_internals('data_range', err, resp, params.options)
+    debug_internals('data_range', err, resp, params.options)
+    let extras = params.options._extras
+
+    let domain = extras.domain
+    let prop = extras.prop
+    let range_select = extras.range_select //start | end
+    let type = extras.type
+    let id = extras.id
+
+    if(!this.domains[domain]) this.domains[domain] = {}
+    if(!this.domains[domain][prop]) this.domains[domain][prop] = {start: undefined, end: undefined}
+
+    delete extras.range_select
+
+    this.domains[domain][prop][range_select] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
+
+    debug_internals('data_range', this.domains)
+
+    extras.type = (id === undefined) ? 'data_range' : 'domain'
+    if(extras.type === 'domain')
+      delete extras.prop
+
+
+    extras[extras.type] = this.domains[domain]
 
     if(err){
       // debug_internals('reduce err', err)
@@ -716,7 +787,8 @@ module.exports = new Class({
 				this.fireEvent('onGetError', err);
 			}
 
-			this.fireEvent(this.ON_DOC_ERROR, err);
+			if(this.domains[domain][prop]['start'] !== undefined && this.domains[domain][prop]['end'] !== undefined )
+        this.fireEvent(this.ON_DOC_ERROR, [err, extras])
 
 			this.fireEvent(
 				this[
@@ -726,48 +798,33 @@ module.exports = new Class({
 			);
     }
     else{
-      let extras = params.options._extras
-      let host = extras.host
-      let prop = extras.prop
-      let range_select = extras.range_select //start | end
-      let type = extras.type
-      let id = extras.id
-
-      if(!this.hosts[host]) this.hosts[host] = {}
-      if(!this.hosts[host][prop]) this.hosts[host][prop] = {start: '', end: ''}
 
 
-
-      // if(extras.range == 'end')
-      //   process.exit(1)
-
-      // // if(resp) debug_internals('paths', Object.keys(resp))
-      //
-      // // let result = {}
-      // // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
-      this.hosts[host][prop][range_select] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
-
-      // debug_internals('data_range', this.hosts)
-
-      if(this.hosts[host][prop]['start'] != '' && this.hosts[host][prop]['end'] != '')
-        if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+      if(this.domains[domain][prop]['start'] !== undefined && this.domains[domain][prop]['end'] !== undefined )
+        if(type == 'prop' || (Object.keys(this.domains[domain]).length == this.properties.length)){
           let found = false
-          Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+          Object.each(this.domains[domain], function(data, property){//if at least a property has data, domain exist
             if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
               found = true
           })
 
-          // debug_internals('paths firing host...', this.hosts[host], found)
+          // debug_internals('paths firing domain...', this.domains[domain], found)
 
-          this.hosts_ranges[host] = this.hosts[host]['data_range']
+          this.domains_ranges[domain] = this.domains[domain]['data_range']
 
-          this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
-            {input_type: this, app: null},
-            extras,
-            {type: (id === undefined) ? 'data_range' : 'host'}
-            // {host: host, type: 'host', prop: prop, id: id}
-          )])
-          delete this.hosts[host]
+          if(!found){
+            let err = {}
+            err['status'] = 404
+            err['message'] = 'not found'
+            this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+          }
+          else{
+
+            this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
+          }
+
+
+          delete this.domains[domain]
         }
 
 
@@ -777,16 +834,16 @@ module.exports = new Class({
   unknown_property: function(params){
     // debug_internals('unknown_property', params.options)
     let extras = params.options._extras
-    let host = extras.host
+    let domain = extras.domain
     let prop = extras.prop
     let type = extras.type
     let id = extras.id
 
     this.fireEvent('onDoc', [null, Object.merge(
       {input_type: this, app: null},
-      // {host: host, type: 'host', prop: prop, id: id}
+      // {domain: domain, type: 'domain', prop: prop, id: id}
       extras,
-      {type: 'host'}
+      {type: 'domain'}
     )])
   },
   data: function(err, resp, params){
@@ -813,7 +870,7 @@ module.exports = new Class({
     }
     // else{
     let extras = params.options._extras
-    let host = extras.host
+    let domain = extras.domain
     let prop = extras.prop
     let type = extras.type
     let id = extras.id
@@ -832,7 +889,7 @@ module.exports = new Class({
     }
     else{
 
-      if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+      if(!this.domains[domain] || type == 'prop') this.domains[domain] = {}
 
       // if(resp) debug_internals('data', resp)
 
@@ -841,7 +898,7 @@ module.exports = new Class({
 
         // debug_internals('data length ', arr.length)
 
-        // this.hosts[host][prop] = arr
+        // this.domains[domain][prop] = arr
         this.r.expr(arr).coerceTo('object').run(this.conn, function(err, result){
 
 
@@ -868,12 +925,12 @@ module.exports = new Class({
                 (Object.getLength(final_result.data) > 0) ? final_result : null,
                 Object.merge(
                   {input_type: this, app: null},
-                  // {host: host, type: 'host', prop: prop, id: id}
+                  // {domain: domain, type: 'domain', prop: prop, id: id}
                   extras,
-                  {type: 'host', step: final_result.step}
+                  {type: 'domain', step: final_result.step}
                 )
               ])
-              // delete this.hosts[host]
+              // delete this.domains[domain]
 
               delete this._multi_response[id]
             }
@@ -884,35 +941,35 @@ module.exports = new Class({
 
 
 
-            if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+            if(!this.domains[domain] || type == 'prop') this.domains[domain] = {}
 
-            // debug_internals('data firing host...', this.hosts, host)
+            // debug_internals('data firing domain...', this.domains, domain)
 
-            this.hosts[host][prop] = result
+            this.domains[domain][prop] = result
 
-            debug_internals('data length ', result, this.hosts[host])
+            debug_internals('data length ', result, this.domains[domain])
 
-            if(Object.getLength(result) == 0 || type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+            if(Object.getLength(result) == 0 || type == 'prop' || (Object.keys(this.domains[domain]).length == this.properties.length)){
               let found = false
-              Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+              Object.each(this.domains[domain], function(data, property){//if at least a property has data, domain exist
                 if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
                   found = true
               })
 
-              // debug_internals('data firing host...', this.hosts[host].data)
-              debug_internals('data firing host...', host)
+              // debug_internals('data firing domain...', this.domains[domain].data)
+              debug_internals('data firing domain...', domain)
 
-              if(extras.range && this.hosts[host].data){
-                this.hosts[host] = Object.merge(this.hosts[host], this.__step_on_max_data_points(this.hosts[host].data))
+              if(extras.range && this.domains[domain].data){
+                this.domains[domain] = Object.merge(this.domains[domain], this.__step_on_max_data_points(this.domains[domain].data))
               }
 
-              this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+              this.fireEvent('onDoc', [(found) ? this.domains[domain] : null, Object.merge(
                 {input_type: this, app: null},
-                // {host: host, type: 'host', prop: prop, id: id}
+                // {domain: domain, type: 'domain', prop: prop, id: id}
                 extras,
-                {type: 'host', step: this.hosts[host].step}
+                {type: 'domain', step: this.domains[domain].step}
               )])
-              delete this.hosts[host]
+              delete this.domains[domain]
             }
           }
 
@@ -952,7 +1009,7 @@ module.exports = new Class({
     return {data: data, step: step}
   },
   paths: function(err, resp, params){
-    debug_internals('paths', err, params.options)
+    debug_internals('paths', err, resp, params.options)
 
     if(err){
       // debug_internals('reduce err', err)
@@ -975,68 +1032,68 @@ module.exports = new Class({
     }
     // else{
     let extras = params.options._extras
-    let host = extras.host
+    let domain = extras.domain
     let prop = extras.prop
     let type = extras.type
     let id = extras.id
 
 
-    if(!this.hosts[host] || type == 'prop') this.hosts[host] = {}
+    if(!this.domains[domain] || type == 'prop') this.domains[domain] = {}
 
     // if(resp) debug_internals('paths', Object.keys(resp))
 
     // let result = {}
-    // this.hosts[host][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
-    this.hosts[host][prop] = (resp) ? Object.keys(resp) : null
+    // this.domains[domain][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
+    this.domains[domain][prop] = (resp) ? Object.keys(resp) : null
 
-    if(type == 'prop' || (Object.keys(this.hosts[host]).length == this.properties.length)){
+    if(type == 'prop' || (Object.keys(this.domains[domain]).length == this.properties.length)){
       let found = false
-      Object.each(this.hosts[host], function(data, property){//if at least a property has data, host exist
+      Object.each(this.domains[domain], function(data, property){//if at least a property has data, domain exist
         if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
           found = true
       })
 
-      // debug_internals('paths firing host...', this.hosts[host])
+      // debug_internals('paths firing domain...', this.domains[domain])
 
-      // debug_internals('paths firing host...', this.hosts[host], Object.merge(
+      // debug_internals('paths firing domain...', this.domains[domain], Object.merge(
       //   extras,
-      //   {type: 'host'}
-      //   // {host: host, type: 'host', prop: prop, id: id}
+      //   {type: 'domain'}
+      //   // {domain: domain, type: 'domain', prop: prop, id: id}
       // ))
 
-      this.fireEvent('onDoc', [(found) ? this.hosts[host] : null, Object.merge(
+      this.fireEvent('onDoc', [(found) ? this.domains[domain] : null, Object.merge(
         {input_type: this, app: null},
         extras,
-        // {type: 'host'}
-        {type: (id === undefined) ? 'paths' : 'host'}
-        // {host: host, type: 'host', prop: prop, id: id}
+        // {type: 'domain'}
+        {type: (id === undefined) ? 'paths' : 'domain'}
+        // {domain: domain, type: 'domain', prop: prop, id: id}
       )])
-      delete this.hosts[host]
+      delete this.domains[domain]
     }
 
 
 
     // }
   },
-  unregister: function(host, prop, id){
-    debug_internals('unregister', host, prop, id)
+  unregister: function(domain, prop, id){
+    debug_internals('unregister', domain, prop, id)
 
-    if(this.events[host] && this.events[host][prop] && this.events[host][prop].contains(id)){
-      this.events[host][prop].erase(id)
-      this.events[host][prop] = this.events[host][prop].clean()
+    if(this.events[domain] && this.events[domain][prop] && this.events[domain][prop].contains(id)){
+      this.events[domain][prop].erase(id)
+      this.events[domain][prop] = this.events[domain][prop].clean()
 
-      if(this.events[host][prop].length == 0){
-        delete this.events[host][prop]
+      if(this.events[domain][prop].length == 0){
+        delete this.events[domain][prop]
       }
     }
 
-    if(this.events[host] && Object.getLength(this.events[host]) == 0)
-      delete this.events[host]
+    if(this.events[domain] && Object.getLength(this.events[domain]) == 0)
+      delete this.events[domain]
 
-    if(Object.getLength(this.events) == 0 && this.feeds[host]){
+    if(Object.getLength(this.events) == 0 && this.feeds[domain]){
       debug_internals('unregister closing')
-      this.__close_changes(host)
-      // this.feeds[host].close(function (err) {
+      this.__close_changes(domain)
+      // this.feeds[domain].close(function (err) {
       //   this.close_feed = true
       //   if (err){
       //     debug_internals('err closing cursor', err)
@@ -1048,29 +1105,29 @@ module.exports = new Class({
     debug_internals('unregister', this.events)
 
   },
-  __close_changes: function(host){
-    if(this.feeds[host]){
-      this.feeds[host].close(function (err) {
-        this.close_feeds[host] = true
+  __close_changes: function(domain){
+    if(this.feeds[domain]){
+      this.feeds[domain].close(function (err) {
+        this.close_feeds[domain] = true
 
         if (err){
           debug_internals('err closing cursor onSuspend', err)
         }
       }.bind(this))
 
-      this.feeds[host] = undefined
+      this.feeds[domain] = undefined
     }
 
     // this.removeEvent('onSuspend', this.__close_changes)
   },
-  register: function(host, prop, id){
-    // debug_internals('register', host, prop, id)
+  register: function(domain, prop, id){
+    // debug_internals('register', domain, prop, id)
 
-    if(!this.events[host]) this.events[host] = {}
-    if(!this.events[host][prop]) this.events[host][prop] = []
-    this.events[host][prop].push(id)
+    if(!this.events[domain]) this.events[domain] = {}
+    if(!this.events[domain][prop]) this.events[domain][prop] = []
+    this.events[domain][prop].push(id)
 
-    if(!this.feeds[host]){
+    if(!this.feeds[domain]){
 
       // let _close = function(){
       //   debug_internals('closing cursor onSuspend')
@@ -1090,71 +1147,71 @@ module.exports = new Class({
       // }.bind(this)
 
       // this.addEvent('onSuspend', _close)
-      this.addEvent('onSuspend', this.__close_changes.pass(host, this))
+      this.addEvent('onSuspend', this.__close_changes.pass(domain, this))
 
 
-      if(!this.changes_buffer[host]) this.changes_buffer[host] = []
+      if(!this.changes_buffer[domain]) this.changes_buffer[domain] = []
 
-      if(!this.changes_buffer_expire[host]) this.changes_buffer_expire[host] = Date.now()
+      if(!this.changes_buffer_expire[domain]) this.changes_buffer_expire[domain] = Date.now()
 
       this.r.db(this.options.db).
         table('ui').
-        getAll(host, {index: 'host'}).
+        getAll(domain, {index: 'domain'}).
         changes({includeTypes: true, squash: 1}).
         run(this.conn, {maxBatchSeconds: 1}, function(err, cursor) {
 
-        this.feeds[host] = cursor
+        this.feeds[domain] = cursor
 
-        this.feeds[host].each(function(err, row){
+        this.feeds[domain].each(function(err, row){
 
           /**
           * https://www.rethinkdb.com/api/javascript/each/
           * Iteration can be stopped prematurely by returning false from the callback.
           */
-          if(this.close_feeds[host] === true){ this.close_feeds[host] = false; this.feeds[host] = undefined; return false }
+          if(this.close_feeds[domain] === true){ this.close_feeds[domain] = false; this.feeds[domain] = undefined; return false }
 
           // debug_internals('changes %s', new Date())
           if(row && row !== null ){
             if(row.type == 'add'){
               // debug_internals('changes add %s %o', new Date(), row.new_val)
-              // debug_internals("changes add now: %s \n timstamp: %s \n expire: %s \n host: %s \n path: %s",
+              // debug_internals("changes add now: %s \n timstamp: %s \n expire: %s \n domain: %s \n path: %s",
               //   new Date(roundMilliseconds(Date.now())),
               //   new Date(roundMilliseconds(row.new_val.metadata.timestamp)),
-              //   new Date(roundMilliseconds(this.changes_buffer_expire[host])),
-              //   row.new_val.metadata.host,
+              //   new Date(roundMilliseconds(this.changes_buffer_expire[domain])),
+              //   row.new_val.metadata.domain,
               //   row.new_val.metadata.path
               // )
 
-              this.changes_buffer[host].push(row.new_val)
+              this.changes_buffer[domain].push(row.new_val)
             }
 
-            if(this.changes_buffer_expire[host] < Date.now() - 900 && this.changes_buffer[host].length > 0){
+            if(this.changes_buffer_expire[domain] < Date.now() - 900 && this.changes_buffer[domain].length > 0){
               // console.log('onPeriodicalDoc', this.changes_buffer.length)
 
-              this.__process_changes(this.changes_buffer[host])
+              this.__process_changes(this.changes_buffer[domain])
 
               // debug_internals('changes %s', new Date(), data)
 
-              this.changes_buffer_expire[host] = Date.now()
-              this.changes_buffer[host] = []
+              this.changes_buffer_expire[domain] = Date.now()
+              this.changes_buffer[domain] = []
 
               // let data = {}
               // Array.each(this.changes_buffer, function(doc){
               //   let path = doc.metadata.path
-              //   let host = doc.metadata.host
+              //   let domain = doc.metadata.domain
               //
-              //   if(!data[host]) data[host] = {}
-              //   if(!data[host][path]) data[host][path] = []
-              //   data[host][path].push(doc)
+              //   if(!data[domain]) data[domain] = {}
+              //   if(!data[domain][path]) data[domain][path] = []
+              //   data[domain][path].push(doc)
               //
               // }.bind(this))
               //
-              // Object.each(data, function(host_data, host){
-              //   // debug_internals('changes emiting %o', host, host_data)
-              //   this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+              // Object.each(data, function(domain_data, domain){
+              //   // debug_internals('changes emiting %o', domain, domain_data)
+              //   this.fireEvent('onDoc', [{ data : domain_data }, Object.merge(
               //     {input_type: this, app: null},
-              //     // {host: host, type: 'host', prop: prop, id: id}
-              //     {type: prop, host: host}
+              //     // {domain: domain, type: 'domain', prop: prop, id: id}
+              //     {type: prop, domain: domain}
               //   )])
               //
               //
@@ -1182,61 +1239,61 @@ module.exports = new Class({
     let data = {}
     Array.each(buffer, function(doc){
       let path = doc.metadata.path
-      let host = doc.metadata.host
+      let domain = doc.metadata.domain
 
-      if(!data[host]) data[host] = {}
-      if(!data[host][path]) data[host][path] = []
-      data[host][path].push(doc)
+      if(!data[domain]) data[domain] = {}
+      if(!data[domain][path]) data[domain][path] = []
+      data[domain][path].push(doc)
 
     }.bind(this))
 
-    Object.each(data, function(host_data, host){
-      // debug_internals('changes emiting %o', host, host_data)
+    Object.each(data, function(domain_data, domain){
+      // debug_internals('changes emiting %o', domain, domain_data)
       // let doc = {}
-      // doc[host] = host_data
+      // doc[domain] = domain_data
       // this.fireEvent('onDoc', [doc, Object.merge(
       //   {input_type: this, app: null},
-      //   // {host: host, type: 'host', prop: prop, id: id}
-      //   // {type: prop, host: host}
+      //   // {domain: domain, type: 'domain', prop: prop, id: id}
+      //   // {type: prop, domain: domain}
       // )])
-      this.fireEvent('onDoc', [{ data : host_data }, Object.merge(
+      this.fireEvent('onDoc', [{ data : domain_data }, Object.merge(
         {input_type: this, app: null},
-        // {host: host, type: 'host', prop: prop, id: id}
-        {type: 'data', host: host}
+        // {domain: domain, type: 'domain', prop: prop, id: id}
+        {type: 'data', domain: domain}
       )])
 
     }.bind(this))
   },
   // changes: function(err, resp, params){
   //   let extras = params.options._extras
-  //   let {id, host, prop, type} = extras
+  //   let {id, domain, prop, type} = extras
   //
-  //   if(!this.events[host][prop]) this.events[host][prop] = {ids: [], feed: resp}
+  //   if(!this.events[domain][prop]) this.events[domain][prop] = {ids: [], feed: resp}
   //
-  //   if(!this.events[host][prop].ids.contains(id))
-  //     this.events[host][prop].ids.push(id)
+  //   if(!this.events[domain][prop].ids.contains(id))
+  //     this.events[domain][prop].ids.push(id)
   //
-  //   // this.events[host][prop] = resp
+  //   // this.events[domain][prop] = resp
   //
   //   let _close = {}
-  //   _close[host] = {}
-  //   _close[host][prop] = function(){
-  //     if(this.events && this.events[host] && this.events[host][prop] && this.events[host][prop].feed)
-  //       this.events[host][prop].feed.close()
+  //   _close[domain] = {}
+  //   _close[domain][prop] = function(){
+  //     if(this.events && this.events[domain] && this.events[domain][prop] && this.events[domain][prop].feed)
+  //       this.events[domain][prop].feed.close()
   //
   //     this.removeEvent('onSuspend', _close)
-  //     delete this.events[host][prop]
+  //     delete this.events[domain][prop]
   //   }.bind(this)
   //
-  //   this.addEvent('onSuspend', _close[host][prop])
+  //   this.addEvent('onSuspend', _close[domain][prop])
   //
   //   debug_internals('changes %o %o %o %s', err, resp, params, new Date())
   //
   //   if(!this.changes_buffer_expire)
   //     this.changes_buffer_expire = Date.now()
   //
-  //   this.events[host][prop].feed.each(function(err, row){
-  //     // debug_internals('changes %s', new Date(), host, prop, row)
+  //   this.events[domain][prop].feed.each(function(err, row){
+  //     // debug_internals('changes %s', new Date(), domain, prop, row)
   //
   //     if(row.type == 'add'){
   //       // console.log(row.new_val)
@@ -1257,8 +1314,8 @@ module.exports = new Class({
   //
   //       this.fireEvent('onDoc', [{ data : data }, Object.merge(
   //         {input_type: this, app: null},
-  //         // {host: host, type: 'host', prop: prop, id: id}
-  //         {type: prop, host: host}
+  //         // {domain: domain, type: 'domain', prop: prop, id: id}
+  //         {type: prop, domain: domain}
   //       )])
   //
   //       // debug_internals('changes %s', new Date(), data)
@@ -1280,8 +1337,8 @@ module.exports = new Class({
   //      _extras: {type: 'periodical'},
   //      uri: this.options.db+'/ui',
   //      args: {includeTypes: true, squash: 1.1},
-  //      // query: this.r.db(this.options.db).table('ui').getAll(this.options.stat_host, {index:'host'})
-  //      query: this.r.db(this.options.db).table('ui').distinct({index: 'host'})
+  //      // query: this.r.db(this.options.db).table('ui').getAll(this.options.stat_domain, {index:'domain'})
+  //      query: this.r.db(this.options.db).table('ui').distinct({index: 'domain'})
   //
   //
   //   })

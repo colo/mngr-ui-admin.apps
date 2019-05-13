@@ -1425,6 +1425,7 @@ module.exports = new Class({
       response: id,
       input: (params.domain) ? 'domain' : 'domains',
       from: 'periodical',
+      params: params,
       next: (id, err, result) => this.response(id, err, result)
 
     })
