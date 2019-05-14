@@ -699,7 +699,7 @@ module.exports = new Class({
 		routes: {
       reduce: [{
         path: ':database/:table',
-        callbacks: ['paths']
+        callbacks: ['hosts']
       }],
       map: [{
         path: ':database/:table',
@@ -750,6 +750,87 @@ module.exports = new Class({
 		this.profile('mngr-ui-admin:apps:domains:Pipeline:Domain:Input_init');//end profiling
 
 		this.log('mngr-ui-admin:apps:domains:Pipeline:Domain:Input', 'info', 'mngr-ui-admin:apps:domains:Pipeline:Domain:Input started');
+  },
+  hosts: function(err, resp, params){
+    debug_internals('hosts', err, resp, params.options)
+
+    let extras = params.options._extras
+    let domain = extras.domain
+    let prop = extras.prop
+    let type = extras.type
+    let id = extras.id
+
+    extras.type = (id === undefined) ? 'hosts' : 'domain'
+    if(extras.type === 'domain')
+      delete extras.prop
+
+    extras[extras.type] = this.domains[domain]
+
+    if(!this.domains[domain] || type == 'prop') this.domains[domain] = {}
+
+    this.domains[domain][prop] = (resp) ? Object.keys(resp) : null
+
+
+
+
+    if(err){
+      // debug_internals('reduce err', err)
+
+			if(params.uri != ''){
+				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
+			}
+			else{
+				this.fireEvent('onGetError', err);
+			}
+
+      this.fireEvent(this.ON_DOC_ERROR, [err, extras])
+
+			this.fireEvent(
+				this[
+					'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
+				],
+				err
+			);
+    }
+    // else{
+
+
+    // if(resp) debug_internals('hosts', Object.keys(resp))
+
+    // let result = {}
+    // this.domains[domain][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
+
+    if(type == 'prop' || (Object.keys(this.domains[domain]).length == this.properties.length)){
+      let found = false
+      Object.each(this.domains[domain], function(data, property){//if at least a property has data, domain exist
+        if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
+          found = true
+      })
+
+      if(!found){
+        let err = {}
+        err['status'] = 404
+        err['message'] = 'not found'
+        this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+      }
+      else{
+
+        this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
+      }
+
+      // this.fireEvent('onDoc', [(found) ? this.domains[domain] : null, Object.merge(
+      //   {input_type: this, app: null},
+      //   extras,
+      //   // {type: 'domain'}
+      //   {type: (id === undefined) ? 'paths' : 'domain'}
+      //   // {domain: domain, type: 'domain', prop: prop, id: id}
+      // )])
+      delete this.domains[domain]
+    }
+
+
+
+    // }
   },
   data_range: function(err, resp, params){
     debug_internals('data_range', err, resp, params.options)
@@ -1008,73 +1089,7 @@ module.exports = new Class({
 
     return {data: data, step: step}
   },
-  paths: function(err, resp, params){
-    debug_internals('paths', err, resp, params.options)
 
-    if(err){
-      // debug_internals('reduce err', err)
-
-			if(params.uri != ''){
-				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
-			}
-			else{
-				this.fireEvent('onGetError', err);
-			}
-
-			this.fireEvent(this.ON_DOC_ERROR, err);
-
-			this.fireEvent(
-				this[
-					'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
-				],
-				err
-			);
-    }
-    // else{
-    let extras = params.options._extras
-    let domain = extras.domain
-    let prop = extras.prop
-    let type = extras.type
-    let id = extras.id
-
-
-    if(!this.domains[domain] || type == 'prop') this.domains[domain] = {}
-
-    // if(resp) debug_internals('paths', Object.keys(resp))
-
-    // let result = {}
-    // this.domains[domain][prop] = (resp) ? Object.keys(resp).map(function(item){ return item.replace(/\./g, '_') }) : null
-    this.domains[domain][prop] = (resp) ? Object.keys(resp) : null
-
-    if(type == 'prop' || (Object.keys(this.domains[domain]).length == this.properties.length)){
-      let found = false
-      Object.each(this.domains[domain], function(data, property){//if at least a property has data, domain exist
-        if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
-          found = true
-      })
-
-      // debug_internals('paths firing domain...', this.domains[domain])
-
-      // debug_internals('paths firing domain...', this.domains[domain], Object.merge(
-      //   extras,
-      //   {type: 'domain'}
-      //   // {domain: domain, type: 'domain', prop: prop, id: id}
-      // ))
-
-      this.fireEvent('onDoc', [(found) ? this.domains[domain] : null, Object.merge(
-        {input_type: this, app: null},
-        extras,
-        // {type: 'domain'}
-        {type: (id === undefined) ? 'paths' : 'domain'}
-        // {domain: domain, type: 'domain', prop: prop, id: id}
-      )])
-      delete this.domains[domain]
-    }
-
-
-
-    // }
-  },
   unregister: function(domain, prop, id){
     debug_internals('unregister', domain, prop, id)
 
