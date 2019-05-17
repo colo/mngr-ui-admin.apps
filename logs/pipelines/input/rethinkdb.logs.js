@@ -14,6 +14,8 @@ const roundMilliseconds = function(timestamp){
   return d.getTime()
 }
 
+const pluralize = require('pluralize')
+
 module.exports = new Class({
   Extends: App,
 
@@ -32,8 +34,12 @@ module.exports = new Class({
 		requests : {
       once: [
         {
-					search_tags: function(req, next, app){
-						debug_internals('search_tags', req.id);
+					distinct_index: function(req, next, app){
+						debug_internals('property', req.id);
+            let distinct_indexes = req.prop || app.distinct_indexes
+            if(!Array.isArray(distinct_indexes))
+              distinct_indexes = [distinct_indexes]
+
 
             // app.distinct({
             //   _extras: {type: 'logs', id: req.id},
@@ -64,16 +70,24 @@ module.exports = new Class({
             //           }.bind(app))
             // })
 
-            app.distinct({
-              _extras: {from: from, type: 'logs', id: req.id},
-              uri: app.options.db+'/periodical',
-              args: {index: 'tags'}
-            })
+            Array.each(distinct_indexes, function(index){
+              app.distinct({
+                _extras: {
+                  from: from,
+                  type: (req.prop) ? req.prop : 'logs',
+                  id: req.id,
+                  prop: pluralize(index)},
+                uri: app.options.db+'/periodical',
+                args: {index: index}
+              })
+            }.bind(app))
+
 
 
 
 					}
 				},
+
 
       ],
 
@@ -81,33 +95,33 @@ module.exports = new Class({
       * periodical data always comes from 'periodical' table
       **/
       periodical: [
-        {
-					search_tags: function(req, next, app){
-						debug_internals('search_tags');
-
-            /**
-            * reducing last minute of tags should be enough, and is way faster than "distinct" from all docs
-            **/
-            // app.reduce({
-            //   _extras: {from: 'periodical', type: 'tags', id: undefined},
-            //   uri: app.options.db+'/periodical',
-            //   args: function(left, right) {
-            //       return left.merge(right)
-            //   },
-            //
-            //   query: app.r.db(app.options.db).table('periodical').between(Date.now() - app.RANGES['periodical'], Date.now(), {index: 'timestamp'}).map(function(doc) {
-            //     return app.r.object(doc("metadata")("tag"), true) // return { <country>: true}
-            //   }.bind(app))
-            // })
-
-            app.distinct({
-              _extras: {from: from, type: 'logs', id: undefined},
-              uri: app.options.db+'/periodical',
-              args: {index: 'tags'}
-            })
-
-					}
-				},
+      //   {
+			// 		tags: function(req, next, app){
+			// 			debug_internals('tags');
+      //
+      //       /**
+      //       * reducing last minute of tags should be enough, and is way faster than "distinct" from all docs
+      //       **/
+      //       // app.reduce({
+      //       //   _extras: {from: 'periodical', type: 'tags', id: undefined},
+      //       //   uri: app.options.db+'/periodical',
+      //       //   args: function(left, right) {
+      //       //       return left.merge(right)
+      //       //   },
+      //       //
+      //       //   query: app.r.db(app.options.db).table('periodical').between(Date.now() - app.RANGES['periodical'], Date.now(), {index: 'timestamp'}).map(function(doc) {
+      //       //     return app.r.object(doc("metadata")("tag"), true) // return { <country>: true}
+      //       //   }.bind(app))
+      //       // })
+      //
+      //       app.distinct({
+      //         _extras: {from: from, type: 'logs', id: undefined},
+      //         uri: app.options.db+'/periodical',
+      //         args: {index: 'tags'}
+      //       })
+      //
+			// 		}
+			// 	},
 
       ],
 
@@ -121,7 +135,7 @@ module.exports = new Class({
       // }],
       distinct: [{
         path: ':database/:table',
-        callbacks: ['tags']
+        callbacks: ['distinct']
       }],
       // changes: [{
       //   // path: ':database/:table',
@@ -133,6 +147,9 @@ module.exports = new Class({
 
 
   },
+
+  distinct_indexes: ['tag', 'type', 'host', 'domain',],
+  logs_props: {},
 
   initialize: function(options){
     // let paths = []
@@ -157,9 +174,25 @@ module.exports = new Class({
 		this.log('mngr-ui-admin:apps:logs:Pipeline:Logs:Input', 'info', 'mngr-ui-admin:apps:logs:Pipeline:Logs:Input started');
   },
 
-  tags: function(err, resp, params){
-    debug_internals('tags', err, resp)
+  distinct: function(err, resp, params){
+    debug_internals('distinct', err, resp)
+
+
     let extras = params.options._extras
+    let domain = extras.domain
+    let prop = extras.prop
+    let type = extras.type
+    let id = extras.id
+
+    extras.type = (id === undefined) ? 'prop' : 'logs'
+
+    // extras[extras.type] = this.logs_props
+
+    // if(!this.domains[domain] || type == 'prop') this.domains[domain] = {}
+
+    // this.domains[domain][prop] = (resp) ? Object.keys(resp) : null
+
+
 
     if(err){
       debug_internals('distinct err', err)
@@ -187,25 +220,68 @@ module.exports = new Class({
       // let arr = (resp) ? Object.keys(resp) : null
       resp.toArray(function(err, arr){
         // resp.toArray(function(err, arr){
-        debug_internals('distinct count', arr)
-        extras[extras.type] = arr
 
-        // this.fireEvent(this.ON_DOC_ERROR, [{message: 'some error'}, extras]);
-        if(err){
-          // let err = {}
-          // err['status'] = 404
-          // err['message'] = 'not found'
-          this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+        debug_internals('distinct count', arr)
+        this.logs_props[extras.prop] = arr
+        extras[extras.type] = this.logs_props
+
+        if(extras.type === 'logs')
+          delete extras.prop
+
+        let properties = this.distinct_indexes
+        if(type == 'prop' || (Object.keys(this.logs_props).length == properties.length)){
+          let found = false
+          Object.each(this.logs_props, function(data, property){//if at least a property has data, domain exist
+            if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
+              found = true
+          })
+
+          if(err){
+            // let err = {}
+            // err['status'] = 404
+            // err['message'] = 'not found'
+            this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+          }
+          else if(!found){
+            let err = {}
+            err['status'] = 404
+            err['message'] = 'not found'
+            this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+          }
+          else{
+
+            this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
+          }
+
+          // this.fireEvent('onDoc', [(found) ? this.domains[domain] : null, Object.merge(
+          //   {input_type: this, app: null},
+          //   extras,
+          //   // {type: 'domain'}
+          //   {type: (id === undefined) ? 'paths' : 'domain'}
+          //   // {domain: domain, type: 'domain', prop: prop, id: id}
+          // )])
+          this.logs_props = {}
         }
-        else if(arr.length == 0){
-          let err = {}
-          err['status'] = 404
-          err['message'] = 'not found'
-          this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
-        }
-        else{
-          this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
-        }
+
+
+
+      // }
+
+        // if(err){
+        //   // let err = {}
+        //   // err['status'] = 404
+        //   // err['message'] = 'not found'
+        //   this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+        // }
+        // else if(arr.length == 0){
+        //   let err = {}
+        //   err['status'] = 404
+        //   err['message'] = 'not found'
+        //   this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+        // }
+        // else{
+        //   this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
+        // }
       }.bind(this))
 
 
