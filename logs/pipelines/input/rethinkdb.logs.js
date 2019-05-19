@@ -36,7 +36,8 @@ module.exports = new Class({
         {
 					distinct_index: function(req, next, app){
 						debug_internals('property', req.id);
-            let distinct_indexes = req.prop || app.distinct_indexes
+
+            let distinct_indexes = (req.params && req.params.prop ) ? pluralize(req.params.prop, 1) : app.distinct_indexes
             if(!Array.isArray(distinct_indexes))
               distinct_indexes = [distinct_indexes]
 
@@ -71,15 +72,18 @@ module.exports = new Class({
             // })
 
             Array.each(distinct_indexes, function(index){
-              app.distinct({
-                _extras: {
+              if((!req.type || (req.params && req.params.prop)) && app.distinct_indexes.indexOf(index) > -1){
+                app.distinct({
+                  _extras: {
                   from: from,
-                  type: (req.prop) ? req.prop : 'logs',
+                  type: (req.params && req.params.prop) ? 'prop' : 'logs',
                   id: req.id,
                   prop: pluralize(index)},
-                uri: app.options.db+'/periodical',
-                args: {index: index}
-              })
+                  uri: app.options.db+'/periodical',
+                  args: {index: index}
+                })
+              }
+
             }.bind(app))
 
 
@@ -87,7 +91,127 @@ module.exports = new Class({
 
 					}
 				},
+        {
+					range: function(req, next, app){
+            // debug_internals('get_data_range', req);
+						if(!req.type || (req.params && req.params.prop == 'range')){
+              debug_internals('range', req);
+              let from = req.from || app.FROM
+              from = (from === 'minute' || from === 'hour') ? 'historical' : from
 
+              //get last
+              app.nth({
+                _extras: {
+                  from: from,
+                  id: req.id,
+                  prop: 'range',
+                  range_select : 'end',
+                  // domain: req.params.domain,
+                  type: (req.params && req.params.prop) ? 'prop' : 'logs',
+                },
+                uri: app.options.db+'/'+from,
+                args: -1,
+                query: app.r.db(app.options.db).table(req.from)
+                .orderBy({index: 'timestamp'})
+                .pluck({'metadata': ['timestamp']})
+                // between(
+                //   // [req.params.domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
+                //   [req.params.domain, req.from, 0],//last 5 secs
+                //   [req.params.domain, req.from, ''],
+                //   {index: 'timestamp'}
+                // )
+              })
+
+              //get first
+              app.nth({
+                _extras: {
+                  from: from,
+                  id: req.id,
+                  prop: 'range',
+                  range_select : 'start',
+                  // domain: req.params.domain,
+                  type: (req.params && req.params.prop) ? 'prop' : 'logs',
+                },
+                uri: app.options.db+'/'+req.from,
+                args: 0,
+                query: app.r.db(app.options.db).table(req.from)
+                .orderBy({index: 'timestamp'})
+                .pluck({'metadata': ['timestamp']})
+                // between(
+                //   [req.params.domain, req.from, 0],
+                //   [req.params.domain, req.from, ''],
+                //   {index: 'sort_by_domain'}
+                // )
+              })
+
+
+
+
+            }
+
+					}
+				},
+
+        {
+					data_range: function(req, next, app){
+            // debug_internals('get_data_range', req);
+						if(!req.type || (req.params && req.params.prop == 'data_range')){
+              debug_internals('data_range', req);
+              let from = req.from || app.FROM
+              from = (from === 'minute' || from === 'hour') ? 'historical' : from
+
+              //get last
+              app.nth({
+                _extras: {
+                  from: from,
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'end',
+                  // domain: req.params.domain,
+                  type: (req.params && req.params.prop) ? 'prop' : 'logs',
+                },
+                uri: app.options.db+'/'+from,
+                args: -1,
+                query: app.r.db(app.options.db).table(req.from)
+                .orderBy({index: 'logs_by_data.timestamp'})
+                .pluck({'data': ['timestamp']})
+                // between(
+                //   // [req.params.domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
+                //   [req.params.domain, req.from, 0],//last 5 secs
+                //   [req.params.domain, req.from, ''],
+                //   {index: 'timestamp'}
+                // )
+              })
+
+              //get first
+              app.nth({
+                _extras: {
+                  from: from,
+                  id: req.id,
+                  prop: 'data_range',
+                  range_select : 'start',
+                  // domain: req.params.domain,
+                  type: (req.params && req.params.prop) ? 'prop' : 'logs',
+                },
+                uri: app.options.db+'/'+req.from,
+                args: 0,
+                query: app.r.db(app.options.db).table(req.from)
+                .orderBy({index: 'logs_by_data.timestamp'})
+                .pluck({'data': ['timestamp']})
+                // between(
+                //   [req.params.domain, req.from, 0],
+                //   [req.params.domain, req.from, ''],
+                //   {index: 'sort_by_domain'}
+                // )
+              })
+
+
+
+
+            }
+
+					}
+				},
 
       ],
 
@@ -137,6 +261,10 @@ module.exports = new Class({
         path: ':database/:table',
         callbacks: ['distinct']
       }],
+      nth: [{
+        path: ':database/:table',
+        callbacks: ['range']
+      }],
       // changes: [{
       //   // path: ':database/:table',
       //   path: '',
@@ -148,6 +276,7 @@ module.exports = new Class({
 
   },
 
+  custom: ['range', 'data_range'],
   distinct_indexes: ['tag', 'type', 'host', 'domain',],
   logs_props: {},
 
@@ -221,14 +350,15 @@ module.exports = new Class({
       resp.toArray(function(err, arr){
         // resp.toArray(function(err, arr){
 
-        debug_internals('distinct count', arr)
+        debug_internals('distinct count', arr, type)
         this.logs_props[extras.prop] = arr
         extras[extras.type] = this.logs_props
 
         if(extras.type === 'logs')
           delete extras.prop
 
-        let properties = this.distinct_indexes
+        let properties = [].combine(this.distinct_indexes).combine(this.custom)
+
         if(type == 'prop' || (Object.keys(this.logs_props).length == properties.length)){
           let found = false
           Object.each(this.logs_props, function(data, property){//if at least a property has data, domain exist
@@ -253,62 +383,92 @@ module.exports = new Class({
             this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
           }
 
-          // this.fireEvent('onDoc', [(found) ? this.domains[domain] : null, Object.merge(
-          //   {input_type: this, app: null},
-          //   extras,
-          //   // {type: 'domain'}
-          //   {type: (id === undefined) ? 'paths' : 'domain'}
-          //   // {domain: domain, type: 'domain', prop: prop, id: id}
-          // )])
           this.logs_props = {}
         }
 
 
-
-      // }
-
-        // if(err){
-        //   // let err = {}
-        //   // err['status'] = 404
-        //   // err['message'] = 'not found'
-        //   this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
-        // }
-        // else if(arr.length == 0){
-        //   let err = {}
-        //   err['status'] = 404
-        //   err['message'] = 'not found'
-        //   this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
-        // }
-        // else{
-        //   this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
-        // }
       }.bind(this))
 
 
-        // if(arr.length == 0){
-				// 	debug_internals('No tags yet');
-				// }
-				// else{
-        //   let equal = false
-        //
-				// 	if(extras.id == undefined && this.tags.length > 0 && this.tags.length == arr.length){
-        //     debug_internals('check equality %s', extras.id)
-        //     equal = arr.every(function(item, index){
-        //       return this.tags.contains(item)
-        //     }.bind(this))
-        //   }
-        //
-        //   // if(equal == false){
-        //     debug_internals('HOSTs %o', arr)
-        //     this.tags = arr
-        //     this.fireEvent('onDoc', [Array.clone(arr), Object.merge({input_type: this, app: null}, Object.clone(extras))]);
-        //   // }
-        //
-				// }
-        // }
 
-      // }.bind(this))
+    }
+  },
+  range: function(err, resp, params){
+    debug_internals('range', err, resp, params.options)
 
+    let extras = params.options._extras
+    let range_select = extras.range_select //start | end
+    // let domain = extras.domain
+    let prop = extras.prop
+    let type = extras.type
+    let id = extras.id
+
+    extras.type = (id === undefined) ? 'prop' : 'logs'
+
+    if(!this.logs_props[extras.prop]) this.logs_props[extras.prop] = {start: undefined, end: undefined}
+
+    delete extras.range_select
+
+    if(prop === 'data_range'){
+      this.logs_props[extras.prop][range_select] = (resp && resp.data && resp.data.timestamp) ? resp.data.timestamp : null
+    }
+    else{
+      this.logs_props[extras.prop][range_select] = (resp && resp.metadata && resp.metadata.timestamp) ? resp.metadata.timestamp : null
+    }
+
+
+    if(err){
+      // debug_internals('reduce err', err)
+
+			if(params.uri != ''){
+				this.fireEvent('on'+params.uri.charAt(0).toUpperCase() + params.uri.slice(1)+'Error', err);//capitalize first letter
+			}
+			else{
+				this.fireEvent('onGetError', err);
+			}
+
+			if(
+        this.logs_props[extras.prop]['start'] !== undefined
+        && this.logs_props[extras.prop]['end'] !== undefined
+      )
+        this.fireEvent(this.ON_DOC_ERROR, [err, extras])
+
+			this.fireEvent(
+				this[
+					'ON_'+this.options.requests.current.type.toUpperCase()+'_DOC_ERROR'
+				],
+				err
+			);
+    }
+    else{
+
+      if(this.logs_props[prop]['start'] !== undefined && this.logs_props[prop]['end'] !== undefined ){
+        if(extras.type === 'logs')
+          delete extras.prop
+
+        let properties = [].combine(this.distinct_indexes).combine(this.custom)
+
+        if(type == 'prop' || (Object.keys(this.logs_props).length == properties.length)){
+          let found = false
+          Object.each(this.logs_props, function(data, property){//if at least a property has data, domain exist
+            if(data !== null && ((Array.isArray(data) || data.length > 0) || Object.getLength(data) > 0))
+              found = true
+          })
+
+          if(!found){
+            let err = {}
+            err['status'] = 404
+            err['message'] = 'not found'
+            this.fireEvent(this.ON_DOC_ERROR, [err, extras]);
+          }
+          else{
+
+            this.fireEvent(this.ON_DOC, [extras, Object.merge({input_type: this, app: null})]);
+          }
+
+          this.logs_props = {}
+        }
+      }
 
     }
   },

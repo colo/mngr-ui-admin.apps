@@ -135,16 +135,16 @@ module.exports = new Class({
           // },
           {
             // path: ':host?/:prop?/:paths?',
-            path: '',
+            path: ':prop?',
             callbacks: ['logs'],
             version: '',
           },
-          {
-            // path: ':host?/:prop?/:paths?',
-            path: 'domains/:domain?',
-            callbacks: ['domains'],
-            version: '',
-          }
+          // {
+          //   // path: ':host?/:prop?/:paths?',
+          //   path: 'domains/:domain?',
+          //   callbacks: ['domains'],
+          //   version: '',
+          // }
 				],
 
         // all: [{
