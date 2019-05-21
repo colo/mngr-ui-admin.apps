@@ -35,12 +35,13 @@ module.exports = new Class({
       once: [
         {
 					distinct_index: function(req, next, app){
-						debug_internals('property', req.id);
+						debug_internals('property', req);
 
             let distinct_indexes = (req.params && req.params.prop ) ? pluralize(req.params.prop, 1) : app.distinct_indexes
             if(!Array.isArray(distinct_indexes))
               distinct_indexes = [distinct_indexes]
 
+            debug_internals('property', distinct_indexes);
 
             // app.distinct({
             //   _extras: {type: 'logs', id: req.id},
@@ -72,7 +73,8 @@ module.exports = new Class({
             // })
 
             Array.each(distinct_indexes, function(index){
-              if((!req.type || (req.params && req.params.prop)) && app.distinct_indexes.indexOf(index) > -1){
+              // if((!req.params || (req.params && req.params.prop)) && app.distinct_indexes.indexOf(index) > -1){
+              if(app.distinct_indexes.indexOf(index) > -1){
                 app.distinct({
                   _extras: {
                   from: from,
@@ -94,7 +96,8 @@ module.exports = new Class({
         {
 					range: function(req, next, app){
             // debug_internals('get_data_range', req);
-						if(!req.type || (req.params && req.params.prop == 'range')){
+						// if(!req.type || (req.params && req.params.prop == 'range')){
+            if(!req.params || !req.params.prop || req.params.prop == 'range'){
               debug_internals('range', req);
               let from = req.from || app.FROM
               from = (from === 'minute' || from === 'hour') ? 'historical' : from
@@ -155,7 +158,8 @@ module.exports = new Class({
         {
 					data_range: function(req, next, app){
             // debug_internals('get_data_range', req);
-						if(!req.type || (req.params && req.params.prop == 'data_range')){
+						// if(!req.type || (req.params && req.params.prop == 'data_range')){
+            if(!req.params || !req.params.prop || req.params.prop == 'data_range'){
               debug_internals('data_range', req);
               let from = req.from || app.FROM
               from = (from === 'minute' || from === 'hour') ? 'historical' : from
@@ -304,7 +308,7 @@ module.exports = new Class({
   },
 
   distinct: function(err, resp, params){
-    debug_internals('distinct', err, resp)
+    // debug_internals('distinct', err, resp)
 
 
     let extras = params.options._extras
@@ -313,7 +317,8 @@ module.exports = new Class({
     let type = extras.type
     let id = extras.id
 
-    extras.type = (id === undefined) ? 'prop' : 'logs'
+    // extras.type = (id === undefined) ? 'prop' : 'logs'
+    extras.type = (extras.type === 'logs') ? extras.type : extras.prop
 
     // extras[extras.type] = this.logs_props
 
@@ -352,10 +357,10 @@ module.exports = new Class({
 
         debug_internals('distinct count', arr, type)
         this.logs_props[extras.prop] = arr
-        extras[extras.type] = this.logs_props
+        extras[extras.type] = (extras.type === 'logs') ? this.logs_props : this.logs_props[extras.prop]
 
-        if(extras.type === 'logs')
-          delete extras.prop
+        // if(extras.type === 'logs')
+        delete extras.prop
 
         let properties = [].combine(this.distinct_indexes).combine(this.custom)
 

@@ -53,58 +53,58 @@ module.exports = function(payload){
       		},
   			},
   		},
-  		{
-  			poll: {
-  				suspended: true,//start suspended
-  				id: "domains",
-  				conn: [
-            Object.merge(
-              Object.clone(conn),
-              {
-                // path_key: 'os',
-                module: InputPollerRethinkDBDomains,
-              }
-            )
-  				],
-  				connect_retry_count: -1,
-  				connect_retry_periodical: 1000,
-  				// requests: {
-  				// 	periodical: 1000,
-  				// },
-  				requests: {
-      			periodical: function(dispatch){
-  						// //////////console.log('domain periodical running')
-      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
-      			}
-      		},
-  			},
-  		},
-      {
-  			poll: {
-  				suspended: true,//start suspended
-  				id: "domain",
-  				conn: [
-            Object.merge(
-              Object.clone(conn),
-              {
-                // path_key: 'os',
-                module: InputPollerRethinkDBDomain,
-              }
-            )
-  				],
-  				connect_retry_count: -1,
-  				connect_retry_periodical: 1000,
-  				// requests: {
-  				// 	periodical: 1000,
-  				// },
-  				requests: {
-      			periodical: function(dispatch){
-  						// //////////console.log('domain periodical running')
-      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
-      			}
-      		},
-  			},
-  		},
+  		// {
+  		// 	poll: {
+  		// 		suspended: true,//start suspended
+  		// 		id: "domains",
+  		// 		conn: [
+      //       Object.merge(
+      //         Object.clone(conn),
+      //         {
+      //           // path_key: 'os',
+      //           module: InputPollerRethinkDBDomains,
+      //         }
+      //       )
+  		// 		],
+  		// 		connect_retry_count: -1,
+  		// 		connect_retry_periodical: 1000,
+  		// 		// requests: {
+  		// 		// 	periodical: 1000,
+  		// 		// },
+  		// 		requests: {
+      // 			periodical: function(dispatch){
+  		// 				// //////////console.log('domain periodical running')
+      // 				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      // 			}
+      // 		},
+  		// 	},
+  		// },
+      // {
+  		// 	poll: {
+  		// 		suspended: true,//start suspended
+  		// 		id: "domain",
+  		// 		conn: [
+      //       Object.merge(
+      //         Object.clone(conn),
+      //         {
+      //           // path_key: 'os',
+      //           module: InputPollerRethinkDBDomain,
+      //         }
+      //       )
+  		// 		],
+  		// 		connect_retry_count: -1,
+  		// 		connect_retry_periodical: 1000,
+  		// 		// requests: {
+  		// 		// 	periodical: 1000,
+  		// 		// },
+  		// 		requests: {
+      // 			periodical: function(dispatch){
+  		// 				// //////////console.log('domain periodical running')
+      // 				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      // 			}
+      // 		},
+  		// 	},
+  		// },
 
   	],
     // filters: [

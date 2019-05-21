@@ -1468,7 +1468,8 @@ module.exports = new Class({
 
     this.get_from_input({
       response: id,
-      input: (params.log) ? 'log' : 'logs',
+      // input: (params.prop) ? 'log' : 'logs',
+      input: 'logs',
       from: 'periodical',
       params: params,
       next: (id, err, result) => this.response(id, err, result)
