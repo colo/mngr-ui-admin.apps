@@ -2,8 +2,8 @@
 
 const App = require ( 'node-app-rethinkdb-client/index' )
 
-let debug = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Domain:Input'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Domain:Input:Internals');
+let debug = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs:Domain:Input'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs:Domain:Input:Internals');
 
 
 const roundMilliseconds = function(timestamp){
@@ -744,12 +744,12 @@ module.exports = new Class({
 
     // this.addEvent('onResume', this.register_on_changes.bind(this))
 
-		this.profile('mngr-ui-admin:apps:logs:Pipeline:Domain:Input_init');//start profiling
+		this.profile('mngr-ui-admin:apps:logs:Pipeline:Logs:Domain:Input_init');//start profiling
 
 
-		this.profile('mngr-ui-admin:apps:logs:Pipeline:Domain:Input_init');//end profiling
+		this.profile('mngr-ui-admin:apps:logs:Pipeline:Logs:Domain:Input_init');//end profiling
 
-		this.log('mngr-ui-admin:apps:logs:Pipeline:Domain:Input', 'info', 'mngr-ui-admin:apps:logs:Pipeline:Domain:Input started');
+		this.log('mngr-ui-admin:apps:logs:Pipeline:Logs:Domain:Input', 'info', 'mngr-ui-admin:apps:logs:Pipeline:Logs:Domain:Input started');
   },
   hosts: function(err, resp, params){
 
@@ -784,7 +784,7 @@ module.exports = new Class({
 			}
 
       debug_internals('hosts', err, resp, params.options)
-      
+
       this.fireEvent(this.ON_DOC_ERROR, [err, extras])
 
 			this.fireEvent(

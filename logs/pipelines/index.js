@@ -4,8 +4,8 @@ let debug = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs'),
     debug_internals = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs:Internals');
 
 const InputPollerRethinkDBLogs = require ( './input/rethinkdb.logs.js' )
-const InputPollerRethinkDBDomains = require ( './input/rethinkdb.domains.js' )
-const InputPollerRethinkDBDomain = require ( './input/rethinkdb.domain.js' )
+// const InputPollerRethinkDBDomains = require ( './input/rethinkdb.domains.js' )
+const InputPollerRethinkDBLogsDomain = require ( './input/rethinkdb.logs.domain.js' )
 const InputPollerRethinkDBDomainHistorical = require ( './input/rethinkdb.domain.historical.js' )
 
 // const InputPollerRedisDomain = require ( './input/redis.log.js' )
@@ -21,7 +21,8 @@ let cron = require('node-cron')
 
 module.exports = function(payload){
 	// //console.log('IO', io)
-  let {conn, domain, cache, ui} = payload
+  // let {conn, domain, cache, ui} = payload
+  let {conn} = payload
 
   debug_internals('require %o', payload)
 
@@ -79,32 +80,32 @@ module.exports = function(payload){
       // 		},
   		// 	},
   		// },
-      // {
-  		// 	poll: {
-  		// 		suspended: true,//start suspended
-  		// 		id: "domain",
-  		// 		conn: [
-      //       Object.merge(
-      //         Object.clone(conn),
-      //         {
-      //           // path_key: 'os',
-      //           module: InputPollerRethinkDBDomain,
-      //         }
-      //       )
-  		// 		],
-  		// 		connect_retry_count: -1,
-  		// 		connect_retry_periodical: 1000,
-  		// 		// requests: {
-  		// 		// 	periodical: 1000,
-  		// 		// },
-  		// 		requests: {
-      // 			periodical: function(dispatch){
-  		// 				// //////////console.log('domain periodical running')
-      // 				return cron.schedule('* * * * * *', dispatch);//every 5 sec
-      // 			}
-      // 		},
-  		// 	},
-  		// },
+      {
+  			poll: {
+  				suspended: true,//start suspended
+  				id: "logs.domain",
+  				conn: [
+            Object.merge(
+              Object.clone(conn),
+              {
+                // path_key: 'os',
+                module: InputPollerRethinkDBLogsDomain,
+              }
+            )
+  				],
+  				connect_retry_count: -1,
+  				connect_retry_periodical: 1000,
+  				// requests: {
+  				// 	periodical: 1000,
+  				// },
+  				requests: {
+      			periodical: function(dispatch){
+  						// //////////console.log('domain periodical running')
+      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      			}
+      		},
+  			},
+  		},
 
   	],
     // filters: [

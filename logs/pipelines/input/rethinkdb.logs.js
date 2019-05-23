@@ -317,8 +317,10 @@ module.exports = new Class({
     let type = extras.type
     let id = extras.id
 
+    delete extras.type
+
     // extras.type = (id === undefined) ? 'prop' : 'logs'
-    extras.type = (extras.type === 'logs') ? extras.type : extras.prop
+    // extras.type = (extras.type === 'logs') ? extras.type : extras.prop
 
     // extras[extras.type] = this.logs_props
 
@@ -357,10 +359,19 @@ module.exports = new Class({
 
         debug_internals('distinct count', arr, type)
         this.logs_props[extras.prop] = arr
-        extras[extras.type] = (extras.type === 'logs') ? this.logs_props : this.logs_props[extras.prop]
+        // extras[type] = (type === 'logs') ? this.logs_props : this.logs_props[extras.prop]
+        if(type === 'logs'){
+          extras.logs = this.logs_props
+        }
+        else{
+          extras.logs = {}
+          extras.logs[extras.prop]
+          extras.logs[extras.prop] = this.logs_props[extras.prop]
+        }
 
         // if(extras.type === 'logs')
         delete extras.prop
+        delete extras.type
 
         let properties = [].combine(this.distinct_indexes).combine(this.custom)
 
@@ -408,11 +419,12 @@ module.exports = new Class({
     let type = extras.type
     let id = extras.id
 
-    extras.type = (id === undefined) ? 'prop' : 'logs'
+    // extras.type = (id === undefined) ? 'prop' : 'logs'
 
     if(!this.logs_props[extras.prop]) this.logs_props[extras.prop] = {start: undefined, end: undefined}
 
     delete extras.range_select
+    delete extras.type
 
     if(prop === 'data_range'){
       this.logs_props[extras.prop][range_select] = (resp && resp.data && resp.data.timestamp) ? resp.data.timestamp : null
@@ -448,10 +460,19 @@ module.exports = new Class({
     else{
 
       if(this.logs_props[prop]['start'] !== undefined && this.logs_props[prop]['end'] !== undefined ){
-        if(extras.type === 'logs')
+        if(type === 'logs')
           delete extras.prop
 
         let properties = [].combine(this.distinct_indexes).combine(this.custom)
+
+        if(type === 'logs'){
+          extras.logs = this.logs_props
+        }
+        else{
+          extras.logs = {}
+          extras.logs[extras.prop]
+          extras.logs[extras.prop] = this.logs_props[extras.prop]
+        }
 
         if(type == 'prop' || (Object.keys(this.logs_props).length == properties.length)){
           let found = false

@@ -135,16 +135,17 @@ module.exports = new Class({
           // },
           {
             // path: ':host?/:prop?/:paths?',
+            path: 'domains/:domain',
+            callbacks: ['domain'],
+            version: '',
+          },
+          {
+            // path: ':host?/:prop?/:paths?',
             path: ':prop?',
             callbacks: ['logs'],
             version: '',
           },
-          // {
-          //   // path: ':host?/:prop?/:paths?',
-          //   path: 'domains/:domain?',
-          //   callbacks: ['domains'],
-          //   version: '',
-          // }
+
 				],
 
         // all: [{
@@ -1342,76 +1343,10 @@ module.exports = new Class({
   /**
   * -----------------
   **/
-  domains: function(req, resp, next){
-    debug_internals('domains:', req.params)
+  domain: function(req, resp, next){
+    debug_internals('domain:', req.params)
     let params = req.params
-    // let {req, resp, socket, params} = payload
-    // payload.next(undefined, ['something'])
-    //
-    // // let {host, prop, paths} = params
-    //
-    // // let query = (req) ? req.query : { format: params.format }
-    // // let range = (req) ? req.header('range') : params.range
-    // // let type = (range) ? 'range' : 'once'
-    //
-    // let id = (socket) ? socket.id : req.session.id
-    // let session = this.__process_session(req, socket)
-    //
-    // // let from = 'periodical'
-    // //
-    // // if(req && req.path.indexOf('minute') > -1)
-    // //   from = 'minute'
-    // //
-    // // if(req && req.path.indexOf('hour') > -1)
-    // //   from = 'hour'
-    // //
-    // // let __query_paths = undefined
-    //
-    // // if(paths){
-    // //   __query_paths = []
-    // //
-    // //   try{
-    // //     let _parsed = JSON.parse(paths)
-    // //     // debug_internals('data: paths _parsed %o ', _parsed)
-    // //
-    // //     paths = []
-    // //     if(Array.isArray(_parsed))
-    // //       Array.each(_parsed, function(_path){
-    // //         let __query_path = (query.format && _path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')) : _path
-    // //         // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
-    // //         //avoid duplicates (with push, you may get duplicates)
-    // //         __query_paths.combine([__query_path])
-    // //         paths.combine([_path])
-    // //       }.bind(this))
-    // //
-    // //
-    // //   }
-    // //   catch(e){
-    // //     // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
-    // //   }
-    // //
-    // //   if(!Array.isArray(paths)){
-    // //     __query_paths = (query.format && paths.indexOf('.') > -1) ? [paths.substring(0, paths.indexOf('.'))]: [paths]
-    // //     paths = [paths]
-    // //   }
-    // //
-    // // }
-    //
-    //
-    // session.send_resp = session.send_resp+1 || 0
-    //
-    // let req_id = id +'.'+session.send_resp
-    //
-    // let send_resp = {}
-    // send_resp[req_id] = function(data){
-    //
-    //   debug_internals('send_resp', data)
-    //
-    //
-    //   delete send_resp[req_id]
-    //
-    // }.bind(this)
-    //
+
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
       debug_internals('send_resp', err, result)
@@ -1423,30 +1358,127 @@ module.exports = new Class({
         resp.status(status).json(result)
       }
       else{
-        socket.emit('host', result)
+        socket.emit('domain', result)
       }
     }.bind(this))
 
     this.get_from_input({
       response: id,
-      input: (params.domain) ? 'domain' : 'domains',
+      // input: (params.prop) ? 'log' : 'logs',
+      key: req.params.domain,
+      input: 'logs.domain',
       from: 'periodical',
       params: params,
       next: (id, err, result) => this.response(id, err, result)
 
     })
-    // // let _recive_pipe = function(pipeline){
-    // //   debug_internals('domains pipeline', pipeline)
-    // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
-    // // }
-    // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
-    // // OR
-    // this.get_pipeline(undefined, function(pipeline){
-    //   debug_internals('domains get_pipeline', pipeline)
-    //
-    //   this.response(id, ['some', 'args'])
-    // }.bind(this))
+
   },
+  // domains: function(req, resp, next){
+  //   debug_internals('domains:', req.params)
+  //   let params = req.params
+  //   // let {req, resp, socket, params} = payload
+  //   // payload.next(undefined, ['something'])
+  //   //
+  //   // // let {host, prop, paths} = params
+  //   //
+  //   // // let query = (req) ? req.query : { format: params.format }
+  //   // // let range = (req) ? req.header('range') : params.range
+  //   // // let type = (range) ? 'range' : 'once'
+  //   //
+  //   // let id = (socket) ? socket.id : req.session.id
+  //   // let session = this.__process_session(req, socket)
+  //   //
+  //   // // let from = 'periodical'
+  //   // //
+  //   // // if(req && req.path.indexOf('minute') > -1)
+  //   // //   from = 'minute'
+  //   // //
+  //   // // if(req && req.path.indexOf('hour') > -1)
+  //   // //   from = 'hour'
+  //   // //
+  //   // // let __query_paths = undefined
+  //   //
+  //   // // if(paths){
+  //   // //   __query_paths = []
+  //   // //
+  //   // //   try{
+  //   // //     let _parsed = JSON.parse(paths)
+  //   // //     // debug_internals('data: paths _parsed %o ', _parsed)
+  //   // //
+  //   // //     paths = []
+  //   // //     if(Array.isArray(_parsed))
+  //   // //       Array.each(_parsed, function(_path){
+  //   // //         let __query_path = (query.format && _path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')) : _path
+  //   // //         // let arr_path = [(_path.indexOf('.') > -1) ? _path.substring(0, _path.indexOf('.')).replace(/_/g, '.') : _path.replace(/_/g, '.')]
+  //   // //         //avoid duplicates (with push, you may get duplicates)
+  //   // //         __query_paths.combine([__query_path])
+  //   // //         paths.combine([_path])
+  //   // //       }.bind(this))
+  //   // //
+  //   // //
+  //   // //   }
+  //   // //   catch(e){
+  //   // //     // path = (stat.indexOf('.') > -1) ? stat.substring(0, stat.indexOf('.')).replace(/_/g, '.') : stat.replace(/_/g, '.')
+  //   // //   }
+  //   // //
+  //   // //   if(!Array.isArray(paths)){
+  //   // //     __query_paths = (query.format && paths.indexOf('.') > -1) ? [paths.substring(0, paths.indexOf('.'))]: [paths]
+  //   // //     paths = [paths]
+  //   // //   }
+  //   // //
+  //   // // }
+  //   //
+  //   //
+  //   // session.send_resp = session.send_resp+1 || 0
+  //   //
+  //   // let req_id = id +'.'+session.send_resp
+  //   //
+  //   // let send_resp = {}
+  //   // send_resp[req_id] = function(data){
+  //   //
+  //   //   debug_internals('send_resp', data)
+  //   //
+  //   //
+  //   //   delete send_resp[req_id]
+  //   //
+  //   // }.bind(this)
+  //   //
+  //
+  //   let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
+  //     debug_internals('send_resp', err, result)
+  //     let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
+  //     if(err)
+  //       result = Object.merge(err, result)
+  //
+  //     if(resp){
+  //       resp.status(status).json(result)
+  //     }
+  //     else{
+  //       socket.emit('host', result)
+  //     }
+  //   }.bind(this))
+  //
+  //   this.get_from_input({
+  //     response: id,
+  //     input: (params.domain) ? 'domain' : 'domains',
+  //     from: 'periodical',
+  //     params: params,
+  //     next: (id, err, result) => this.response(id, err, result)
+  //
+  //   })
+  //   // // let _recive_pipe = function(pipeline){
+  //   // //   debug_internals('domains pipeline', pipeline)
+  //   // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
+  //   // // }
+  //   // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
+  //   // // OR
+  //   // this.get_pipeline(undefined, function(pipeline){
+  //   //   debug_internals('domains get_pipeline', pipeline)
+  //   //
+  //   //   this.response(id, ['some', 'args'])
+  //   // }.bind(this))
+  // },
   logs: function(req, resp, next){
     debug_internals('logs:', req.params)
     let params = req.params
@@ -1462,7 +1494,7 @@ module.exports = new Class({
         resp.status(status).json(result)
       }
       else{
-        socket.emit('host', result)
+        socket.emit('logs', result)
       }
     }.bind(this))
 
