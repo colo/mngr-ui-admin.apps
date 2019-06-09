@@ -1,6 +1,6 @@
 'use strict'
 
-const	path = require('path')
+var	path = require('path')
 
 const App = require(path.join(process.cwd(), '/libs/App'))
 // const App =  process.env.NODE_ENV === 'production'
