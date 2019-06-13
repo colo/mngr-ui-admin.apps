@@ -26,8 +26,8 @@ module.exports = new Class({
 
   },
 
-  custom: ['range', 'data_range'],
-  distinct_indexes: ['tag', 'type', 'host', 'domain'],
+  // custom: ['range', 'data_range'],
+  // distinct_indexes: ['tag', 'type', 'host', 'domain'],
 
   initialize: function(options){
     // let paths = []
@@ -40,7 +40,7 @@ module.exports = new Class({
 
   	this.parent(options);//override default options
 
-    this.options.requests.once.push({data_range: this.data_range})
+    // this.options.requests.once.push({data_range: this.data_range})
 
     // this.addEvent('onConnect', this.register_on_changes.bind(this))
     // this.register_on_changes.bind(this)
@@ -52,61 +52,88 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:logs:Pipeline:Logs:Input', 'info', 'mngr-ui-admin:apps:logs:Pipeline:Logs:Input started');
   },
-  data_range: function(req, next, app){
+  build_default_result: function(doc){
+    let self = this
 
-    if(!req.params || !req.params.prop || req.params.prop == 'data_range'){
-      debug_internals('data_range', req);
-      let from = req.from || app.FROM
-      from = (from === 'minute' || from === 'hour') ? 'historical' : from
+    let result = self.parent(doc)
 
-      //get last
-      app.nth({
-        _extras: {
-          from: from,
-          id: req.id,
-          prop: 'data_range',
-          range_select : 'end',
-          // domain: req.params.domain,
-          type: (req.params && req.params.prop) ? 'prop' : 'logs',
-        },
-        uri: app.options.db+'/'+from,
-        args: -1,
-        query: app.r.db(app.options.db).table(req.from)
-        .orderBy({index: 'logs_by_data.timestamp'})
-        .pluck({'data': ['timestamp']})
-        // between(
-        //   // [req.params.domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
-        //   [req.params.domain, req.from, 0],//last 5 secs
-        //   [req.params.domain, req.from, ''],
-        //   {index: 'timestamp'}
-        // )
-      })
+    result.domains = doc('reduction').filter(function (doc) {
+      return doc('metadata').hasFields('domain');
+    }).map(function(doc) {
+      return self.r.object(doc('metadata')('domain'), true) // return { <country>: true}
+    }).reduce(function(left, right) {
+        return left.merge(right)
+    }).default({}).keys()
 
-      //get first
-      app.nth({
-        _extras: {
-          from: from,
-          id: req.id,
-          prop: 'data_range',
-          range_select : 'start',
-          // domain: req.params.domain,
-          type: (req.params && req.params.prop) ? 'prop' : 'logs',
-        },
-        uri: app.options.db+'/'+req.from,
-        args: 0,
-        query: app.r.db(app.options.db).table(req.from)
-        .orderBy({index: 'logs_by_data.timestamp'})
-        .pluck({'data': ['timestamp']})
-        // between(
-        //   [req.params.domain, req.from, 0],
-        //   [req.params.domain, req.from, ''],
-        //   {index: 'sort_by_domain'}
-        // )
-      })
-
-    }
-
-  }
+    result.data_range = [
+      doc('reduction').min(
+        function (set) {
+            return set('data')('timestamp')
+        }
+      )('data')('timestamp'),
+      doc('reduction').max(
+        function (set) {
+            return set('data')('timestamp')
+        }
+      )('data')('timestamp'),
+    ]
+    return result
+  },
+  // data_range: function(req, next, app){
+  //
+  //   if(!req.params || !req.params.prop || req.params.prop == 'data_range'){
+  //     debug_internals('data_range', req);
+  //     let from = req.from || app.FROM
+  //     from = (from === 'minute' || from === 'hour') ? 'historical' : from
+  //
+  //     //get last
+  //     app.nth({
+  //       _extras: {
+  //         from: from,
+  //         id: req.id,
+  //         prop: 'data_range',
+  //         range_select : 'end',
+  //         // domain: req.params.domain,
+  //         type: (req.params && req.params.prop) ? 'prop' : 'logs',
+  //       },
+  //       uri: app.options.db+'/'+from,
+  //       args: -1,
+  //       query: app.r.db(app.options.db).table(req.from)
+  //       .orderBy({index: 'logs_by_data.timestamp'})
+  //       .pluck({'data': ['timestamp']})
+  //       // between(
+  //       //   // [req.params.domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
+  //       //   [req.params.domain, req.from, 0],//last 5 secs
+  //       //   [req.params.domain, req.from, ''],
+  //       //   {index: 'timestamp'}
+  //       // )
+  //     })
+  //
+  //     //get first
+  //     app.nth({
+  //       _extras: {
+  //         from: from,
+  //         id: req.id,
+  //         prop: 'data_range',
+  //         range_select : 'start',
+  //         // domain: req.params.domain,
+  //         type: (req.params && req.params.prop) ? 'prop' : 'logs',
+  //       },
+  //       uri: app.options.db+'/'+req.from,
+  //       args: 0,
+  //       query: app.r.db(app.options.db).table(req.from)
+  //       .orderBy({index: 'logs_by_data.timestamp'})
+  //       .pluck({'data': ['timestamp']})
+  //       // between(
+  //       //   [req.params.domain, req.from, 0],
+  //       //   [req.params.domain, req.from, ''],
+  //       //   {index: 'sort_by_domain'}
+  //       // )
+  //     })
+  //
+  //   }
+  //
+  // }
 
 
 

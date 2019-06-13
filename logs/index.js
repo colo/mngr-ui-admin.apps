@@ -133,12 +133,12 @@ module.exports = new Class({
           //   callbacks: ['hosts'],
           //   version: '',
           // },
-          {
-            // path: ':host?/:prop?/:paths?',
-            path: 'domains/:domain',
-            callbacks: ['domain'],
-            version: '',
-          },
+          // {
+          //   // path: ':host?/:prop?/:paths?',
+          //   path: 'domains/:domain',
+          //   callbacks: ['domain'],
+          //   version: '',
+          // },
           {
             // path: ':host?/:prop?/:paths?',
             path: ':prop?',
