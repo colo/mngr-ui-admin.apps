@@ -141,7 +141,13 @@ module.exports = new Class({
           // },
           {
             // path: ':host?/:prop?/:paths?',
-            path: ':prop?',
+            path: ':path/:prop?',
+            callbacks: ['all'],
+            version: '',
+          },
+          {
+            // path: ':host?/:prop?/:paths?',
+            path: ':path?',
             callbacks: ['all'],
             version: '',
           },
@@ -1501,7 +1507,7 @@ module.exports = new Class({
     this.get_from_input({
       response: id,
       // input: (params.prop) ? 'log' : 'logs',
-      input: 'all',
+      input: (params.path) ? params.path : 'all',
       from: 'periodical',
       params: params,
       next: (id, err, result) => this.response(id, err, result)

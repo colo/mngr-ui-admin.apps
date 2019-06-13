@@ -4,7 +4,7 @@ let debug = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs'),
     debug_internals = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs:Internals');
 
 const	path = require('path')
-const InputPollerRethinkDBLogs = require(path.join(process.cwd(), '/libs/pipeline/inputs/rethinkdb'))
+const InputPollerRethinkDB = require(path.join(process.cwd(), '/libs/pipeline/inputs/rethinkdb'))
 
 // const InputPollerRethinkDBLogs = require ( './input/rethinkdb.logs.js' )
 // const InputPollerRethinkDBDomains = require ( './input/rethinkdb.domains.js' )
@@ -40,8 +40,35 @@ module.exports = function(payload){
               Object.clone(conn),
               {
                 // path_key: 'os',
-                module: InputPollerRethinkDBLogs,
+                module: InputPollerRethinkDB,
                 type: 'all'
+              }
+            )
+  				],
+  				connect_retry_count: -1,
+  				connect_retry_periodical: 1000,
+  				// requests: {
+  				// 	periodical: 1000,
+  				// },
+  				requests: {
+      			periodical: function(dispatch){
+  						// //////////console.log('domain periodical running')
+      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      			}
+      		},
+  			},
+  		},
+      {
+  			poll: {
+  				suspended: true,//start suspended
+  				id: "logs",
+  				conn: [
+            Object.merge(
+              Object.clone(conn),
+              {
+                // path_key: 'os',
+                module: InputPollerRethinkDB,
+                type: 'logs'
               }
             )
   				],
