@@ -79,6 +79,8 @@ module.exports = new Class({
   //
   // session_store: undefined,
 
+  LOGS_TTL: 10000,
+
 	options: {
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
@@ -1482,6 +1484,7 @@ module.exports = new Class({
   logs: function(req, resp, next){
     debug_internals('logs:', req.params)
     let params = req.params
+    let range = req.header('range')
 
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
@@ -1504,6 +1507,7 @@ module.exports = new Class({
       input: 'logs',
       from: 'periodical',
       params: params,
+      range,
       next: (id, err, result) => this.response(id, err, result)
 
     })
