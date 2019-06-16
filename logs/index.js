@@ -143,6 +143,12 @@ module.exports = new Class({
           // },
           {
             // path: ':host?/:prop?/:paths?',
+            path: ':prop/:value?',
+            callbacks: ['logs'],
+            version: '',
+          },
+          {
+            // path: ':host?/:prop?/:paths?',
             path: ':prop?',
             callbacks: ['logs'],
             version: '',
