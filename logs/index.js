@@ -79,7 +79,7 @@ module.exports = new Class({
   //
   // session_store: undefined,
 
-  LOGS_TTL: 10000,
+  LOGS_TTL: 60000,
 
 	options: {
     pipeline: require('./pipelines/index')({
@@ -747,7 +747,7 @@ module.exports = new Class({
           (d[0] && d[0].metadata && !d[0].metadata.format && type == 'stat')
           || (d[0] && !d[0].metadata && type == 'tabular')
         ){
-          let transform = this.__traverse_path_require(type, path, d) //for each path find a trasnform or use "default"
+          let transform = this.__traverse_path_require(type, path, d) //for each path find a transform or use "default"
 
           if(transform){
 
@@ -922,7 +922,7 @@ module.exports = new Class({
 
           }
           else{//default
-            if(type == 'tabular'){ //default trasnform for "tabular"
+            if(type == 'tabular'){ //default transform for "tabular"
 
               // debug_internals('transform default', path)
 
@@ -990,7 +990,7 @@ module.exports = new Class({
 
               }.bind(this))
             }
-            else{//default trasnform for "stat"
+            else{//default transform for "stat"
               require('./libs/'+type)(d, path, function(name, stat){
                 transformed[type] = this.__merge_transformed(name, stat, transformed[type])
                 // name = name.replace(/\./g, '_')
@@ -1488,13 +1488,22 @@ module.exports = new Class({
   //   // }.bind(this))
   // },
   logs: function(req, resp, next){
-    debug_internals('logs:', req.params)
+    debug_internals('logs: %o %o %o', req.params, req.query, req.body)
     let params = req.params
     let range = req.header('range')
+    let query = req.query
 
+    if(req.body && req.body.q && req.query)
+      req.query.q = req.body.q
+      
+    if(req.body && req.body.fields && req.query)
+      req.query.fields = req.body.fields
+
+    if(req.body && req.body.transformation && req.query)
+      req.query.transformation = req.body.transformation
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      debug_internals('send_resp', err, result)
+      // debug_internals('send_resp', err, result)
       let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
       if(err)
         result = Object.merge(err, result)
@@ -1512,8 +1521,9 @@ module.exports = new Class({
       // input: (params.prop) ? 'log' : 'logs',
       input: 'logs',
       from: 'periodical',
-      params: params,
+      params,
       range,
+      query,
       next: (id, err, result) => this.response(id, err, result)
 
     })

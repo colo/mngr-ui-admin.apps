@@ -79,61 +79,7 @@ module.exports = new Class({
     ]
     return result
   },
-  // data_range: function(req, next, app){
-  //
-  //   if(!req.params || !req.params.prop || req.params.prop == 'data_range'){
-  //     debug_internals('data_range', req);
-  //     let from = req.from || app.FROM
-  //     from = (from === 'minute' || from === 'hour') ? 'historical' : from
-  //
-  //     //get last
-  //     app.nth({
-  //       _extras: {
-  //         from: from,
-  //         id: req.id,
-  //         prop: 'data_range',
-  //         range_select : 'end',
-  //         // domain: req.params.domain,
-  //         type: (req.params && req.params.prop) ? 'prop' : 'logs',
-  //       },
-  //       uri: app.options.db+'/'+from,
-  //       args: -1,
-  //       query: app.r.db(app.options.db).table(req.from)
-  //       .orderBy({index: 'logs_by_data.timestamp'})
-  //       .pluck({'data': ['timestamp']})
-  //       // between(
-  //       //   // [req.params.domain, 'periodical', app.r.now().toEpochTime().mul(1000).sub(5000)],//last 5 secs
-  //       //   [req.params.domain, req.from, 0],//last 5 secs
-  //       //   [req.params.domain, req.from, ''],
-  //       //   {index: 'timestamp'}
-  //       // )
-  //     })
-  //
-  //     //get first
-  //     app.nth({
-  //       _extras: {
-  //         from: from,
-  //         id: req.id,
-  //         prop: 'data_range',
-  //         range_select : 'start',
-  //         // domain: req.params.domain,
-  //         type: (req.params && req.params.prop) ? 'prop' : 'logs',
-  //       },
-  //       uri: app.options.db+'/'+req.from,
-  //       args: 0,
-  //       query: app.r.db(app.options.db).table(req.from)
-  //       .orderBy({index: 'logs_by_data.timestamp'})
-  //       .pluck({'data': ['timestamp']})
-  //       // between(
-  //       //   [req.params.domain, req.from, 0],
-  //       //   [req.params.domain, req.from, ''],
-  //       //   {index: 'sort_by_domain'}
-  //       // )
-  //     })
-  //
-  //   }
-  //
-  // }
+  
 
 
 

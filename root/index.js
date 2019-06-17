@@ -78,7 +78,7 @@ module.exports = new Class({
   // cache: undefined,
   //
   // session_store: undefined,
-  ALL_TTL: 10000,
+  ALL_TTL: 60000,
 
 	options: {
     pipeline: require('./pipelines/index')({
@@ -214,9 +214,19 @@ module.exports = new Class({
 	},
 
   all: function(req, resp, next){
-    debug_internals('all:', req.params)
+    debug_internals('root: %o %o %o', req.params, req.query, req.body)
     let params = req.params
     let range = req.header('range')
+    let query = req.query
+
+    if(req.body && req.body.q && req.query)
+      req.query.q = req.body.q
+
+    if(req.body && req.body.fields && req.query)
+      req.query.fields = req.body.fields
+
+    if(req.body && req.body.transformation && req.query)
+      req.query.transformation = req.body.transformation
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
       debug_internals('send_resp', err, result)
@@ -237,8 +247,9 @@ module.exports = new Class({
       // input: (params.prop) ? 'log' : 'logs',
       input: (params.path) ? params.path : 'all',
       from: 'periodical',
-      params: params,
+      params,
       range,
+      query,
       next: (id, err, result) => this.response(id, err, result)
 
     })
