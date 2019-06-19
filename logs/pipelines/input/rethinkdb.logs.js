@@ -52,34 +52,34 @@ module.exports = new Class({
 
 		this.log('mngr-ui-admin:apps:logs:Pipeline:Logs:Input', 'info', 'mngr-ui-admin:apps:logs:Pipeline:Logs:Input started');
   },
-  build_default_result: function(doc){
-    let self = this
+  // build_default_result: function(doc){
+  //   let self = this
+  //
+  //   let result = self.parent(doc)
+  //
+  //   result.domains = doc('reduction').filter(function (doc) {
+  //     return doc('metadata').hasFields('domain');
+  //   }).map(function(doc) {
+  //     return self.r.object(doc('metadata')('domain'), true) // return { <country>: true}
+  //   }).reduce(function(left, right) {
+  //       return left.merge(right)
+  //   }).default({}).keys()
+  //
+  //   result.data_range = [
+  //     doc('reduction').min(
+  //       function (set) {
+  //           return set('data')('timestamp')
+  //       }
+  //     )('data')('timestamp'),
+  //     doc('reduction').max(
+  //       function (set) {
+  //           return set('data')('timestamp')
+  //       }
+  //     )('data')('timestamp'),
+  //   ]
+  //   return result
+  // },
 
-    let result = self.parent(doc)
-
-    result.domains = doc('reduction').filter(function (doc) {
-      return doc('metadata').hasFields('domain');
-    }).map(function(doc) {
-      return self.r.object(doc('metadata')('domain'), true) // return { <country>: true}
-    }).reduce(function(left, right) {
-        return left.merge(right)
-    }).default({}).keys()
-
-    result.data_range = [
-      doc('reduction').min(
-        function (set) {
-            return set('data')('timestamp')
-        }
-      )('data')('timestamp'),
-      doc('reduction').max(
-        function (set) {
-            return set('data')('timestamp')
-        }
-      )('data')('timestamp'),
-    ]
-    return result
-  },
-  
 
 
 

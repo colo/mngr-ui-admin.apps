@@ -228,18 +228,80 @@ module.exports = new Class({
     if(req.body && req.body.transformation && req.query)
       req.query.transformation = req.body.transformation
 
+    /**
+    * "format" is for formating data and need at least metadata: [timestamp, path],
+    * so add it if not found on query
+    **/
+    if(req.query && req.query.format){
+      if(!req.query.q) req.query.q = []
+      let metadata = ['timestamp', 'path']
+
+      if(!req.query.q.contains('metadata') && !req.query.q.some(function(item){ return item.metadata }))
+        req.query.q.push({metadata: metadata})
+
+      Object.each(req.query.q, function(item){
+        if(item.metadata){
+          item.metadata.combine(metadata)
+        }
+      })
+
+      if(!req.query.q.contains('data') && !req.query.q.some(function(item){ return item.data }))
+        req.query.q.push('data')
+    }
+
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      debug_internals('send_resp', err, result)
+      debug_internals('all: send_resp', err, result) //result
+
       let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
       if(err)
         result = Object.merge(err, result)
 
-      if(resp){
-        resp.status(status).json(result)
+      else if(req.query.format){
+        this.__transform_data('stat', Object.clone({ all: result.all }) , 'someid', function(value){
+          debug_internals('all: __transform_data stat %O', value) //result
+
+          result.all = value.stat.all
+
+          if( req.query.format == 'tabular' ){
+            this.__transform_data('tabular', value.stat.all, 'someid', function(value){
+              debug_internals('all: __transform_data tabular %O', value) //result
+
+              result.all = value
+
+              if(resp){
+                resp.status(status).json(result)
+              }
+              else{
+                socket.emit('all', result)
+              }
+
+            }.bind(this))
+
+          }
+          else{
+            if(resp){
+              resp.status(status).json(result)
+            }
+            else{
+              socket.emit('all', result)
+            }
+          }
+
+        }.bind(this))
       }
       else{
-        socket.emit('all', result)
+        if(resp){
+          resp.status(status).json(result)
+        }
+        else{
+          socket.emit('all', result)
+        }
       }
+
+
+
+
+
     }.bind(this))
 
     this.get_from_input({

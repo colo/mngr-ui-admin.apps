@@ -79,7 +79,7 @@ module.exports = new Class({
   //
   // session_store: undefined,
 
-  LOGS_TTL: 60000,
+  LOGS_TTL: 10000,
 
 	options: {
     pipeline: require('./pipelines/index')({
@@ -1240,43 +1240,80 @@ module.exports = new Class({
     if(req.body && req.body.transformation && req.query)
       req.query.transformation = req.body.transformation
 
-    let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      debug_internals('logs: send_resp', err, result.logs) //result
-      this.__transform_data('stat', Object.clone({ logs: result.logs }) , 'someid', function(value){
-        debug_internals('logs: __transform_data stat %O', value.stat.logs) //result
-        // // result = stat
-        // result.stat = value.stat
-        // // delete result.data
-        //
-        // if( format == 'tabular' ){
-          this.__transform_data('tabular', value.stat.logs, 'someid', function(value){
-            debug_internals('logs: __transform_data tabular %O', value) //result
-        //     // result = tabular
-        //     result.tabular = value.tabular
-        //     delete result.stat
-        //     delete result.data
-        //     this.io.to(`${socketId}`).emit(format, result)
-        //
-          }.bind(this))
-        //
-        // }
-        // else{
-        //   delete result.data
-        //   this.io.to(`${socketId}`).emit(format, result)
-        // }
+    /**
+    * "format" is for formating data and need at least metadata: [timestamp, path],
+    * so add it if not found on query
+    **/
+    if(req.query && req.query.format){
+      if(!req.query.q) req.query.q = []
+      let metadata = ['timestamp', 'path']
 
-      }.bind(this))
+      if(!req.query.q.contains('metadata') && !req.query.q.some(function(item){ return item.metadata }))
+        req.query.q.push({metadata: metadata})
+
+      Object.each(req.query.q, function(item){
+        if(item.metadata){
+          item.metadata.combine(metadata)
+        }
+      })
+
+      if(!req.query.q.contains('data') && !req.query.q.some(function(item){ return item.data }))
+        req.query.q.push('data')
+    }
+
+    let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
+      // debug_internals('logs: send_resp', err, result.logs) //result
 
       let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
       if(err)
         result = Object.merge(err, result)
 
-      if(resp){
-        resp.status(status).json(result)
+      else if(req.query.format){
+        this.__transform_data('stat', Object.clone({ logs: result.logs }) , 'someid', function(value){
+          debug_internals('logs: __transform_data stat %O', value.stat.logs) //result
+
+          result.logs = value.stat.logs
+
+          if( req.query.format == 'tabular' ){
+            this.__transform_data('tabular', value.stat.logs, 'someid', function(value){
+              debug_internals('logs: __transform_data tabular %O', value) //result
+
+              result.logs = value
+
+              if(resp){
+                resp.status(status).json(result)
+              }
+              else{
+                socket.emit('logs', result)
+              }
+
+            }.bind(this))
+
+          }
+          else{
+            if(resp){
+              resp.status(status).json(result)
+            }
+            else{
+              socket.emit('logs', result)
+            }
+          }
+
+        }.bind(this))
       }
       else{
-        socket.emit('logs', result)
+        if(resp){
+          resp.status(status).json(result)
+        }
+        else{
+          socket.emit('logs', result)
+        }
       }
+
+
+
+
+
     }.bind(this))
 
     this.get_from_input({
