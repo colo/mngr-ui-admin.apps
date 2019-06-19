@@ -106,7 +106,7 @@ module.exports = new Class({
     ui_rest_client: undefined,
 
     id: 'hosts',
-    path: 'hosts',
+    path: '/hosts',
 
     host: {
       properties: ['paths', 'data', 'data_range'],//to send to pipelines.input.*.host.js
