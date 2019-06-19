@@ -1262,58 +1262,8 @@ module.exports = new Class({
     }
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      // debug_internals('logs: send_resp', err, result.logs) //result
-
-      let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
-      if(err)
-        result = Object.merge(err, result)
-
-      else if(req.query.format){
-        this.__transform_data('stat', Object.clone({ logs: result.logs }) , 'someid', function(value){
-          debug_internals('logs: __transform_data stat %O', value.stat.logs) //result
-
-          result.logs = value.stat.logs
-
-          if( req.query.format == 'tabular' ){
-            this.__transform_data('tabular', value.stat.logs, 'someid', function(value){
-              debug_internals('logs: __transform_data tabular %O', value) //result
-
-              result.logs = value
-
-              if(resp){
-                resp.status(status).json(result)
-              }
-              else{
-                socket.emit('logs', result)
-              }
-
-            }.bind(this))
-
-          }
-          else{
-            if(resp){
-              resp.status(status).json(result)
-            }
-            else{
-              socket.emit('logs', result)
-            }
-          }
-
-        }.bind(this))
-      }
-      else{
-        if(resp){
-          resp.status(status).json(result)
-        }
-        else{
-          socket.emit('logs', result)
-        }
-      }
-
-
-
-
-
+      debug_internals('registered response', err, result, req.query)
+      this.generic_response({err, result, resp, input: 'logs', format: req.query.format})
     }.bind(this))
 
     this.get_from_input({
