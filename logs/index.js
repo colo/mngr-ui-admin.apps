@@ -1242,21 +1242,22 @@ module.exports = new Class({
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
       debug_internals('logs: send_resp', err, result.logs) //result
-      this.__transform_data('stat', { logs: result.logs } , 'someid', function(value){
-        debug_internals('logs: __transform_data %O', value.stat.logs) //result
+      this.__transform_data('stat', Object.clone({ logs: result.logs }) , 'someid', function(value){
+        debug_internals('logs: __transform_data stat %O', value.stat.logs) //result
         // // result = stat
         // result.stat = value.stat
         // // delete result.data
         //
         // if( format == 'tabular' ){
-        //   this.__transform_data('tabular', Object.merge(result.stat, result.data), host, function(value){
+          this.__transform_data('tabular', value.stat.logs, 'someid', function(value){
+            debug_internals('logs: __transform_data tabular %O', value) //result
         //     // result = tabular
         //     result.tabular = value.tabular
         //     delete result.stat
         //     delete result.data
         //     this.io.to(`${socketId}`).emit(format, result)
         //
-        //   }.bind(this))
+          }.bind(this))
         //
         // }
         // else{
