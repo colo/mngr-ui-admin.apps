@@ -233,7 +233,7 @@ module.exports = new Class({
     * so add it if not found on query
     **/
     if(req.query && req.query.format){
-      if(!req.query.q) req.query.q = []
+      if(!req.query.q || typeof req.query.q === 'string') req.query.q = []
       let metadata = ['timestamp', 'path']
 
       if(!req.query.q.contains('metadata') && !req.query.q.some(function(item){ return item.metadata }))
