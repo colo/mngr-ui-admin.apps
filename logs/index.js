@@ -82,6 +82,8 @@ module.exports = new Class({
   LOGS_TTL: 10000,
 
 	options: {
+    libs: path.join(process.cwd(), '/apps/logs/libs'),
+
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
         require(ETC+'ui.conn.js')(),
