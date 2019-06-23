@@ -173,80 +173,82 @@ module.exports = new Class({
         // }]
 			},
 		},
-    //
-		// io: {
-		// 	// middlewares: [], //namespace.use(fn)
-		// 	// rooms: ['root'], //atomatically join connected sockets to this rooms
-		// 	routes: {
-    //
-    //     'instances': [{
-		// 			// path: ':host/instances/:instances?',
-		// 			// once: true, //socket.once
-		// 			callbacks: ['host_instances'],
-		// 			// middlewares: [], //socket.use(fn)
-		// 		}],
-    //     '/': [{
-		// 			// path: ':param',
-		// 			// once: true, //socket.once
-		// 			callbacks: ['hosts'],
-		// 			// middlewares: [], //socket.use(fn)
-		// 		}],
-    //     'on': [
-    //       {
-  	// 				// path: ':events',
-  	// 				// once: true, //socket.once
-  	// 				callbacks: ['register'],
-  	// 				// middlewares: [], //socket.use(fn)
-  	// 			}
-    //     ],
-    //     'off': [
-    //       {
-  	// 				// path: ':events',
-  	// 				// once: true, //socket.once
-  	// 				callbacks: ['unregister'],
-  	// 				// middlewares: [], //socket.use(fn)
-  	// 			}
-    //     ],
-		// 	}
-		// },
+
+		io: {
+			// middlewares: [], //namespace.use(fn)
+			// rooms: ['root'], //atomatically join connected sockets to this rooms
+			routes: {
+
+        // 'instances': [{
+				// 	// path: ':host/instances/:instances?',
+				// 	// once: true, //socket.once
+				// 	callbacks: ['host_instances'],
+				// 	// middlewares: [], //socket.use(fn)
+				// }],
+        '/': [{
+					// path: ':param',
+					// once: true, //socket.once
+					callbacks: ['all'],
+					// middlewares: [], //socket.use(fn)
+				}],
+        // 'on': [
+        //   {
+  			// 		// path: ':events',
+  			// 		// once: true, //socket.once
+  			// 		callbacks: ['register'],
+  			// 		// middlewares: [], //socket.use(fn)
+  			// 	}
+        // ],
+        // 'off': [
+        //   {
+  			// 		// path: ':events',
+  			// 		// once: true, //socket.once
+  			// 		callbacks: ['unregister'],
+  			// 		// middlewares: [], //socket.use(fn)
+  			// 	}
+        // ],
+			}
+		},
 
     // expire: 1000,//ms
 	},
 
-  all: function(req, resp, next){
-    debug_internals('root: %o %o %o', req.params, req.query, req.body)
-    let params = req.params
+  all: function(){
+    let {req, resp, socket, next, opts} = this._arguments(arguments)
+    debug_internals('root: %o %o %o', opts.params, opts.query, opts.body)
+    // debug_internals('root: %o %o %o', arguments)
+    let params = opts.params
     let range = req.header('range')
-    let query = req.query
+    let query = opts.query
 
-    if(req.body && req.body.q && req.query)
-      req.query.q = req.body.q
+    if(opts.body && opts.body.q && opts.query)
+      opts.query.q = opts.body.q
 
-    if(req.body && req.body.fields && req.query)
-      req.query.fields = req.body.fields
+    if(opts.body && opts.body.fields && opts.query)
+      opts.query.fields = opts.body.fields
 
-    if(req.body && req.body.transformation && req.query)
-      req.query.transformation = req.body.transformation
+    if(opts.body && opts.body.transformation && opts.query)
+      opts.query.transformation = opts.body.transformation
 
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
     **/
-    if(req.query && req.query.format){
-      if(!req.query.q || typeof req.query.q === 'string') req.query.q = []
+    if(opts.query && opts.query.format){
+      if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
 
-      if(!req.query.q.contains('metadata') && !req.query.q.some(function(item){ return item.metadata }))
-        req.query.q.push({metadata: metadata})
+      if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
+        opts.query.q.push({metadata: metadata})
 
-      Object.each(req.query.q, function(item){
+      Object.each(opts.query.q, function(item){
         if(item.metadata){
           item.metadata.combine(metadata)
         }
       })
 
-      if(!req.query.q.contains('data') && !req.query.q.some(function(item){ return item.data }))
-        req.query.q.push('data')
+      if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
+        opts.query.q.push('data')
     }
 
     // let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
@@ -256,13 +258,13 @@ module.exports = new Class({
     //   if(err)
     //     result = Object.merge(err, result)
     //
-    //   else if(req.query.format){
+    //   else if(opts.query.format){
     //     this.__transform_data('stat', Object.clone({ all: result.all }) , 'someid', function(value){
     //       debug_internals('all: __transform_data stat %O', value) //result
     //
     //       result.all = value.stat.all
     //
-    //       if( req.query.format == 'tabular' ){
+    //       if( opts.query.format == 'tabular' ){
     //         this.__transform_data('tabular', value.stat.all, 'someid', function(value){
     //           debug_internals('all: __transform_data tabular %O', value) //result
     //
@@ -304,7 +306,7 @@ module.exports = new Class({
     //
     // }.bind(this))
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      this.generic_response({err, result, resp, input: 'all', format: req.query.format})
+      this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
     }.bind(this))
 
     this.get_from_input({
