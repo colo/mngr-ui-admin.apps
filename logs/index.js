@@ -1244,6 +1244,9 @@ module.exports = new Class({
     if(opts.body && opts.body.transformation && opts.query)
       opts.query.transformation = opts.body.transformation
 
+    if(opts.body && opts.body.aggregation && opts.query)
+      opts.query.aggregation = opts.body.aggregation
+
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
@@ -1266,7 +1269,7 @@ module.exports = new Class({
     }
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      debug_internals('registered response', err, result, opts.query)
+      debug_internals('registered response', err, opts.query)
       this.generic_response({err, result, resp: resp, socket: socket, input: 'logs', format: opts.query.format})
     }.bind(this))
 
