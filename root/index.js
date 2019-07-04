@@ -230,6 +230,9 @@ module.exports = new Class({
     if(opts.body && opts.body.transformation && opts.query)
       opts.query.transformation = opts.body.transformation
 
+    if(opts.body && opts.body.aggregation && opts.query)
+      opts.query.aggregation = opts.body.aggregation
+
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
@@ -306,7 +309,8 @@ module.exports = new Class({
     //
     // }.bind(this))
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-      this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
+      // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
+      this.generic_response({err, result, resp, socket, input: 'all', opts})
     }.bind(this))
 
     this.get_from_input({

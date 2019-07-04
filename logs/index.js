@@ -1229,7 +1229,7 @@ module.exports = new Class({
   // },
   logs: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
-    debug_internals('logs: ', opts)
+    debug_internals('logs: ', opts, opts.body)
     // debug_internals('logs: ', arguments)
     let params = opts.params
     let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
@@ -1270,7 +1270,8 @@ module.exports = new Class({
 
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
       debug_internals('registered response', err, opts.query)
-      this.generic_response({err, result, resp: resp, socket: socket, input: 'logs', format: opts.query.format})
+      // this.generic_response({err, result, resp: resp, socket: socket, input: 'logs', format: opts.query.format})
+      this.generic_response({err, result, resp, socket, input: 'logs', opts})
     }.bind(this))
 
     this.get_from_input({
