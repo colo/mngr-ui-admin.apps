@@ -184,14 +184,14 @@ module.exports = new Class({
 					callbacks: ['logs'],
 					// middlewares: [], //socket.use(fn)
 				}],
-        // 'on': [
-        //   {
-  			// 		// path: ':events',
-  			// 		// once: true, //socket.once
-  			// 		callbacks: ['register'],
-  			// 		// middlewares: [], //socket.use(fn)
-  			// 	}
-        // ],
+        'on': [
+          {
+  					// path: ':events',
+  					// once: true, //socket.once
+  					callbacks: ['register'],
+  					// middlewares: [], //socket.use(fn)
+  				}
+        ],
         // 'off': [
         //   {
   			// 		// path: ':events',
@@ -1227,6 +1227,18 @@ module.exports = new Class({
   //   //   this.response(id, ['some', 'args'])
   //   // }.bind(this))
   // },
+  register: function(){
+    let {req, resp, socket, next, opts} = this._arguments(arguments)
+    let query = opts[0]
+    opts = opts[1]
+    opts.query = { 'register': query }
+
+    debug_internals('register: ', opts)
+
+
+
+
+  },
   logs: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     debug_internals('logs: ', opts, opts.body)

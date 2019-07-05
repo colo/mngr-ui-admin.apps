@@ -254,60 +254,7 @@ module.exports = new Class({
         opts.query.q.push('data')
     }
 
-    // let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
-    //   debug_internals('all: send_resp', err, result) //result
-    //
-    //   let status = (err && err.status) ? err.status : ((err) ? 500 : 200)
-    //   if(err)
-    //     result = Object.merge(err, result)
-    //
-    //   else if(opts.query.format){
-    //     this.__transform_data('stat', Object.clone({ all: result.all }) , 'someid', function(value){
-    //       debug_internals('all: __transform_data stat %O', value) //result
-    //
-    //       result.all = value.stat.all
-    //
-    //       if( opts.query.format == 'tabular' ){
-    //         this.__transform_data('tabular', value.stat.all, 'someid', function(value){
-    //           debug_internals('all: __transform_data tabular %O', value) //result
-    //
-    //           result.all = value
-    //
-    //           if(resp){
-    //             resp.status(status).json(result)
-    //           }
-    //           else{
-    //             socket.emit('all', result)
-    //           }
-    //
-    //         }.bind(this))
-    //
-    //       }
-    //       else{
-    //         if(resp){
-    //           resp.status(status).json(result)
-    //         }
-    //         else{
-    //           socket.emit('all', result)
-    //         }
-    //       }
-    //
-    //     }.bind(this))
-    //   }
-    //   else{
-    //     if(resp){
-    //       resp.status(status).json(result)
-    //     }
-    //     else{
-    //       socket.emit('all', result)
-    //     }
-    //   }
-    //
-    //
-    //
-    //
-    //
-    // }.bind(this))
+    
     let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
       // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
       // opts.response = id
