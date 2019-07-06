@@ -254,27 +254,27 @@ module.exports = new Class({
         opts.query.q.push('data')
     }
 
-    
-    let {id, chain} = this.register_response((req) ? req : socket, function(err, result){
+
+    let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
       // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
       // opts.response = id
       this.generic_response({err, result, resp, socket, input: 'all', opts})
 
-      if(query.register && req){//should happend only on ENV != "production"
-        query.unregister = query.register
-        delete query.register
-        this.get_from_input({
-          response: id,
-          // input: (params.prop) ? 'log' : 'logs',
-          input: 'all',
-          from: 'periodical',
-          params,
-          range,
-          query,
-          // next: (id, err, result) => this.response(id, err, result)
-
-        })
-      }
+      // if(query.register && req){//should happend only on ENV != "production"
+      //   query.unregister = query.register
+      //   delete query.register
+      //   this.get_from_input({
+      //     response: id,
+      //     // input: (params.prop) ? 'log' : 'logs',
+      //     input: 'all',
+      //     from: 'periodical',
+      //     params,
+      //     range,
+      //     query,
+      //     // next: (id, err, result) => this.response(id, err, result)
+      //
+      //   })
+      // }
 
     }.bind(this))
 
