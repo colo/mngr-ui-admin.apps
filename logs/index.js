@@ -80,6 +80,7 @@ module.exports = new Class({
   // session_store: undefined,
 
   LOGS_TTL: 10000,
+  DEFAULT_PERIODICAL_INTERVAL: 1000,
 
 	options: {
     libs: path.join(process.cwd(), '/apps/logs/libs'),
@@ -1254,6 +1255,11 @@ module.exports = new Class({
     if(opts.body && opts.body.aggregation && opts.query)
       opts.query.aggregation = opts.body.aggregation
 
+    if(opts.body && opts.body.interval && opts.query)
+      opts.query.interval = opts.body.interval
+
+    if(opts.body && opts.body.filter && opts.query)
+      opts.query.filter = opts.body.filter
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
@@ -1281,8 +1287,7 @@ module.exports = new Class({
 
     debug_internals('register: ', id, opts)
 
-
-    this.get_from_input({
+    let _params = {
       response: id,
       // input: (params.prop) ? 'log' : 'logs',
       input: 'logs',
@@ -1294,7 +1299,19 @@ module.exports = new Class({
         this.generic_response({err, result, resp: undefined, socket, input: 'logs', opts})
       }.bind(this)
 
-    })
+    }
+
+    if(opts.query.register === 'periodical'){
+      delete opts.query.register
+      let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
+
+      this.register_interval(id, this.get_from_input.bind(this), interval, _params)
+      // setInterval(this.get_from_input.bind(this), interval, _params)
+    }
+    else{
+      this.get_from_input(_params)
+    }
+
 
   },
   logs: function(){
@@ -1317,6 +1334,11 @@ module.exports = new Class({
     if(opts.body && opts.body.aggregation && opts.query)
       opts.query.aggregation = opts.body.aggregation
 
+    if(opts.body && opts.body.interval && opts.query)
+      opts.query.interval = opts.body.interval
+
+    if(opts.body && opts.body.filter && opts.query)
+      opts.query.filter = opts.body.filter
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query

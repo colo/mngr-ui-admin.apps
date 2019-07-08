@@ -191,6 +191,14 @@ module.exports = new Class({
 					callbacks: ['all'],
 					// middlewares: [], //socket.use(fn)
 				}],
+        'on': [
+          {
+            // path: ':events',
+            // once: true, //socket.once
+            callbacks: ['register'],
+            // middlewares: [], //socket.use(fn)
+          }
+        ],
         // 'on': [
         //   {
   			// 		// path: ':events',
@@ -212,7 +220,92 @@ module.exports = new Class({
 
     // expire: 1000,//ms
 	},
+  register: function(){
+    let {req, resp, socket, next, opts} = this._arguments(arguments)
+    let id = this.__get_id_socket_or_req(socket)
 
+    let _query = opts[0]
+    opts = opts[1]
+    opts.query = { 'register': _query }
+
+    /**
+    * refactor: same as "logs" function
+    **/
+    let params = opts.params
+    let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
+    let query = opts.query
+
+    if(opts.body && opts.body.q && opts.query)
+      opts.query.q = opts.body.q
+
+    if(opts.body && opts.body.fields && opts.query)
+      opts.query.fields = opts.body.fields
+
+    if(opts.body && opts.body.transformation && opts.query)
+      opts.query.transformation = opts.body.transformation
+
+    if(opts.body && opts.body.aggregation && opts.query)
+      opts.query.aggregation = opts.body.aggregation
+
+    if(opts.body && opts.body.interval && opts.query)
+      opts.query.interval = opts.body.interval
+
+    if(opts.body && opts.body.filter && opts.query)
+      opts.query.filter = opts.body.filter
+    /**
+    * "format" is for formating data and need at least metadata: [timestamp, path],
+    * so add it if not found on query
+    **/
+    if(opts.query && opts.query.format){
+      if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
+      let metadata = ['timestamp', 'path']
+
+      if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
+        opts.query.q.push({metadata: metadata})
+
+      Object.each(opts.query.q, function(item){
+        if(item.metadata){
+          item.metadata.combine(metadata)
+        }
+      })
+
+      if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
+        opts.query.q.push('data')
+    }
+    /**
+    * refactor: same as "logs" function
+    **/
+
+
+    debug_internals('register: ', id, opts)
+
+    let _params = {
+      response: id,
+      // input: (params.prop) ? 'log' : 'logs',
+      input: 'all',
+      from: 'periodical',
+      params,
+      range,
+      query,
+      next: function(id, err, result){
+        this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+      }.bind(this)
+
+    }
+
+    if(opts.query.register === 'periodical'){
+      delete opts.query.register
+      let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
+
+      this.register_interval(id, this.get_from_input.bind(this), interval, _params)
+      // setInterval(this.get_from_input.bind(this), interval, _params)
+    }
+    else{
+      this.get_from_input(_params)
+    }
+
+
+  },
   all: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     debug_internals('root: %o %o %o', opts.params, opts.query, opts.body)
@@ -233,6 +326,11 @@ module.exports = new Class({
     if(opts.body && opts.body.aggregation && opts.query)
       opts.query.aggregation = opts.body.aggregation
 
+    if(opts.body && opts.body.interval && opts.query)
+      opts.query.interval = opts.body.interval
+
+    if(opts.body && opts.body.filter && opts.query)
+      opts.query.filter = opts.body.filter
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
