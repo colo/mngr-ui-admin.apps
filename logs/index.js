@@ -1239,27 +1239,33 @@ module.exports = new Class({
     /**
     * refactor: same as "logs" function
     **/
+    if(opts.body && opts.query)
+      opts.query = Object.merge(opts.query, opts.body)
+
+    if(opts.body && opts.body.params && opts.params)
+      opts.params = Object.merge(opts.params, opts.body.params)
+
     let params = opts.params
     let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
     let query = opts.query
 
-    if(opts.body && opts.body.q && opts.query)
-      opts.query.q = opts.body.q
-
-    if(opts.body && opts.body.fields && opts.query)
-      opts.query.fields = opts.body.fields
-
-    if(opts.body && opts.body.transformation && opts.query)
-      opts.query.transformation = opts.body.transformation
-
-    if(opts.body && opts.body.aggregation && opts.query)
-      opts.query.aggregation = opts.body.aggregation
-
-    if(opts.body && opts.body.interval && opts.query)
-      opts.query.interval = opts.body.interval
-
-    if(opts.body && opts.body.filter && opts.query)
-      opts.query.filter = opts.body.filter
+    // if(opts.body && opts.body.q && opts.query)
+    //   opts.query.q = opts.body.q
+    //
+    // if(opts.body && opts.body.fields && opts.query)
+    //   opts.query.fields = opts.body.fields
+    //
+    // if(opts.body && opts.body.transformation && opts.query)
+    //   opts.query.transformation = opts.body.transformation
+    //
+    // if(opts.body && opts.body.aggregation && opts.query)
+    //   opts.query.aggregation = opts.body.aggregation
+    //
+    // if(opts.body && opts.body.interval && opts.query)
+    //   opts.query.interval = opts.body.interval
+    //
+    // if(opts.body && opts.body.filter && opts.query)
+    //   opts.query.filter = opts.body.filter
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
@@ -1301,16 +1307,16 @@ module.exports = new Class({
 
     }
 
-    if(opts.query.register === 'periodical'){
-      delete opts.query.register
-      let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
-
-      this.register_interval(id, this.get_from_input.bind(this), interval, _params)
-      // setInterval(this.get_from_input.bind(this), interval, _params)
-    }
-    else{
+    // if(opts.query.register === 'periodical'){
+    //   delete opts.query.register
+    //   let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
+    //
+    //   this.register_interval(id, this.get_from_input.bind(this), interval, _params)
+    //   // setInterval(this.get_from_input.bind(this), interval, _params)
+    // }
+    // else{
       this.get_from_input(_params)
-    }
+    // }
 
 
   },
@@ -1318,27 +1324,33 @@ module.exports = new Class({
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     debug_internals('logs: ', opts, opts.body)
     // debug_internals('logs: ', arguments)
+    if(opts.body && opts.query)
+      opts.query = Object.merge(opts.query, opts.body)
+
+    if(opts.body && opts.body.params && opts.params)
+      opts.params = Object.merge(opts.params, opts.body.params)
+
     let params = opts.params
     let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
     let query = opts.query
-
-    if(opts.body && opts.body.q && opts.query)
-      opts.query.q = opts.body.q
-
-    if(opts.body && opts.body.fields && opts.query)
-      opts.query.fields = opts.body.fields
-
-    if(opts.body && opts.body.transformation && opts.query)
-      opts.query.transformation = opts.body.transformation
-
-    if(opts.body && opts.body.aggregation && opts.query)
-      opts.query.aggregation = opts.body.aggregation
-
-    if(opts.body && opts.body.interval && opts.query)
-      opts.query.interval = opts.body.interval
-
-    if(opts.body && opts.body.filter && opts.query)
-      opts.query.filter = opts.body.filter
+    
+    // if(opts.body && opts.body.q && opts.query)
+    //   opts.query.q = opts.body.q
+    //
+    // if(opts.body && opts.body.fields && opts.query)
+    //   opts.query.fields = opts.body.fields
+    //
+    // if(opts.body && opts.body.transformation && opts.query)
+    //   opts.query.transformation = opts.body.transformation
+    //
+    // if(opts.body && opts.body.aggregation && opts.query)
+    //   opts.query.aggregation = opts.body.aggregation
+    //
+    // if(opts.body && opts.body.interval && opts.query)
+    //   opts.query.interval = opts.body.interval
+    //
+    // if(opts.body && opts.body.filter && opts.query)
+    //   opts.query.filter = opts.body.filter
     /**
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
