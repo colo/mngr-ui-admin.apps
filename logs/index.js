@@ -1298,10 +1298,12 @@ module.exports = new Class({
       // input: (params.prop) ? 'log' : 'logs',
       input: 'logs',
       from: 'periodical',
-      params,
+      // params,
       range,
-      query,
+      // query,
+      opts,
       next: function(id, err, result){
+        debug_internals('SOCKET generic_response ', opts)
         this.generic_response({err, result, resp: undefined, socket, input: 'logs', opts})
       }.bind(this)
 
@@ -1333,7 +1335,7 @@ module.exports = new Class({
     let params = opts.params
     let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
     let query = opts.query
-    
+
     // if(opts.body && opts.body.q && opts.query)
     //   opts.query.q = opts.body.q
     //
@@ -1373,7 +1375,7 @@ module.exports = new Class({
     }
 
     let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
-      debug_internals('registered response', err, opts.query)
+      debug_internals('logs registered response', err, opts)
       // this.generic_response({err, result, resp: resp, socket: socket, input: 'logs', format: opts.query.format})
       // opts.response = id
       this.generic_response({err, result, resp, socket, input: 'logs', opts})
@@ -1400,9 +1402,10 @@ module.exports = new Class({
       // input: (params.prop) ? 'log' : 'logs',
       input: 'logs',
       from: 'periodical',
-      params,
+      // params,
       range,
-      query,
+      // query,
+      opts,
       next: (id, err, result) => this.response(id, err, result)
 
     })

@@ -236,7 +236,7 @@ module.exports = new Class({
 
     if(opts.body && opts.body.params && opts.params)
       opts.params = Object.merge(opts.params, opts.body.params)
-      
+
     let params = opts.params
     let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
     let query = opts.query
@@ -289,9 +289,10 @@ module.exports = new Class({
       // input: (params.prop) ? 'log' : 'logs',
       input: 'all',
       from: 'periodical',
-      params,
+      // params,
       range,
-      query,
+      // query,
+      opts,
       next: function(id, err, result){
         this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
       }.bind(this)
@@ -365,6 +366,7 @@ module.exports = new Class({
 
 
     let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
+      debug_internals('all registered response', err, opts)
       // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
       // opts.response = id
       this.generic_response({err, result, resp, socket, input: 'all', opts})
@@ -392,9 +394,10 @@ module.exports = new Class({
       // input: (params.prop) ? 'log' : 'logs',
       input: (params.path) ? params.path : 'all',
       from: 'periodical',
-      params,
+      // params,
       range,
-      query,
+      // query,
+      opts,
       next: (id, err, result) => this.response(id, err, result)
 
     })
