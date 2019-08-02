@@ -261,7 +261,7 @@ module.exports = new Class({
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
     **/
-    if(opts.query && opts.query.format){
+    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
 
@@ -347,7 +347,7 @@ module.exports = new Class({
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
     **/
-    if(opts.query && opts.query.format){
+    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
 
