@@ -223,10 +223,13 @@ module.exports = new Class({
   register: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     let id = this.__get_id_socket_or_req(socket)
+    debug_internals('register: ', opts)
 
-    let _query = opts[0]
-    opts = opts[1]
-    opts.query = { 'register': _query }
+    if(Array.isArray(opts)){
+      let _query = opts[0]
+      opts = opts[1]
+      opts.query = { 'register': _query }
+    }
 
     /**
     * refactor: same as "logs" function
@@ -314,107 +317,113 @@ module.exports = new Class({
   },
   all: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
-    debug_internals('root: %o %o %o', opts.params, opts.query, opts.body)
-    // debug_internals('root: %o %o %o', arguments)
-    if(opts.body && opts.query)
-      opts.query = Object.merge(opts.query, opts.body)
+    if(opts.query && opts.query.register && socket){
+      this.register.attempt(arguments, this)
+    }
+    else{
+      debug_internals('root: %o %o %o', opts.params, opts.query, opts.body)
+      // debug_internals('root: %o %o %o', arguments)
+      if(opts.body && opts.query)
+        opts.query = Object.merge(opts.query, opts.body)
 
-    if(opts.body && opts.body.params && opts.params)
-      opts.params = Object.merge(opts.params, opts.body.params)
+      if(opts.body && opts.body.params && opts.params)
+        opts.params = Object.merge(opts.params, opts.body.params)
 
-    let params = opts.params
-    let range = req.header('range')
-    let query = opts.query
+      let params = opts.params
+      let range = req.header('range')
+      let query = opts.query
 
-    // if(opts.body && opts.body.q && opts.query)
-    //   opts.query.q = opts.body.q
-    //
-    // if(opts.body && opts.body.fields && opts.query)
-    //   opts.query.fields = opts.body.fields
-    //
-    // if(opts.body && opts.body.transformation && opts.query)
-    //   opts.query.transformation = opts.body.transformation
-    //
-    // if(opts.body && opts.body.aggregation && opts.query)
-    //   opts.query.aggregation = opts.body.aggregation
-    //
-    // if(opts.body && opts.body.interval && opts.query)
-    //   opts.query.interval = opts.body.interval
-    //
-    // if(opts.body && opts.body.filter && opts.query)
-    //   opts.query.filter = opts.body.filter
-    /**
-    * "format" is for formating data and need at least metadata: [timestamp, path],
-    * so add it if not found on query
-    **/
-    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
-      if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
-      let metadata = ['timestamp', 'path']
+      // if(opts.body && opts.body.q && opts.query)
+      //   opts.query.q = opts.body.q
+      //
+      // if(opts.body && opts.body.fields && opts.query)
+      //   opts.query.fields = opts.body.fields
+      //
+      // if(opts.body && opts.body.transformation && opts.query)
+      //   opts.query.transformation = opts.body.transformation
+      //
+      // if(opts.body && opts.body.aggregation && opts.query)
+      //   opts.query.aggregation = opts.body.aggregation
+      //
+      // if(opts.body && opts.body.interval && opts.query)
+      //   opts.query.interval = opts.body.interval
+      //
+      // if(opts.body && opts.body.filter && opts.query)
+      //   opts.query.filter = opts.body.filter
+      /**
+      * "format" is for formating data and need at least metadata: [timestamp, path],
+      * so add it if not found on query
+      **/
+      if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+        if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
+        let metadata = ['timestamp', 'path']
 
-      if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
-        opts.query.q.push({metadata: metadata})
+        if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
+          opts.query.q.push({metadata: metadata})
 
-      Object.each(opts.query.q, function(item){
-        if(item.metadata){
-          item.metadata.combine(metadata)
-        }
+        Object.each(opts.query.q, function(item){
+          if(item.metadata){
+            item.metadata.combine(metadata)
+          }
+        })
+
+        if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
+          opts.query.q.push('data')
+      }
+
+
+      let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
+        debug_internals('all registered response', err, opts)
+        // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
+        // opts.response = id
+        this.generic_response({err, result, resp, socket, input: 'all', opts})
+
+        // if(query.register && req){//should happend only on ENV != "production"
+        //   query.unregister = query.register
+        //   delete query.register
+        //   this.get_from_input({
+        //     response: id,
+        //     // input: (params.prop) ? 'log' : 'logs',
+        //     input: 'all',
+        //     from: 'periodical',
+        //     params,
+        //     range,
+        //     query,
+        //     // next: (id, err, result) => this.response(id, err, result)
+        //
+        //   })
+        // }
+
+      }.bind(this))
+
+      this.get_from_input({
+        response: id,
+        // input: (params.prop) ? 'log' : 'logs',
+        input: (params.path) ? params.path : 'all',
+        from: 'periodical',
+        // params,
+        range,
+        // query,
+        opts,
+        next: (id, err, result) => this.response(id, err, result)
+
       })
-
-      if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
-        opts.query.q.push('data')
+      // // let _recive_pipe = function(pipeline){
+      // //   debug_internals('logs pipeline', pipeline)
+      // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
+      // // }
+      // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
+      // // OR
+      // this.get_pipeline(undefined, function(pipeline){
+      //   debug_internals('logs get_pipeline', pipeline)
+      //
+      //   this.response(id, ['some', 'args'])
+      // }.bind(this))
+      // if(next)
+      //   next()
+      //
     }
 
-
-    let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
-      debug_internals('all registered response', err, opts)
-      // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
-      // opts.response = id
-      this.generic_response({err, result, resp, socket, input: 'all', opts})
-
-      // if(query.register && req){//should happend only on ENV != "production"
-      //   query.unregister = query.register
-      //   delete query.register
-      //   this.get_from_input({
-      //     response: id,
-      //     // input: (params.prop) ? 'log' : 'logs',
-      //     input: 'all',
-      //     from: 'periodical',
-      //     params,
-      //     range,
-      //     query,
-      //     // next: (id, err, result) => this.response(id, err, result)
-      //
-      //   })
-      // }
-
-    }.bind(this))
-
-    this.get_from_input({
-      response: id,
-      // input: (params.prop) ? 'log' : 'logs',
-      input: (params.path) ? params.path : 'all',
-      from: 'periodical',
-      // params,
-      range,
-      // query,
-      opts,
-      next: (id, err, result) => this.response(id, err, result)
-
-    })
-    // // let _recive_pipe = function(pipeline){
-    // //   debug_internals('logs pipeline', pipeline)
-    // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
-    // // }
-    // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
-    // // OR
-    // this.get_pipeline(undefined, function(pipeline){
-    //   debug_internals('logs get_pipeline', pipeline)
-    //
-    //   this.response(id, ['some', 'args'])
-    // }.bind(this))
-    // if(next)
-    //   next()
-    //
   },
 
 });
