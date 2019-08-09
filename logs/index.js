@@ -182,7 +182,7 @@ module.exports = new Class({
         '/': [{
 					// path: ':param',
 					// once: true, //socket.once
-					callbacks: ['logs'],
+					callbacks: ['logs', 'register'],
 					// middlewares: [], //socket.use(fn)
 				}],
         'on': [
@@ -1230,7 +1230,11 @@ module.exports = new Class({
   // },
   register: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
-    let id = this.__get_id_socket_or_req(socket)
+    // debug_internals('register: ', req, resp, socket, next, opts)
+    // process.exit(1)
+
+    // let id = this.__get_id_socket_or_req(socket)
+    let id = this.create_response_id(socket, opts)
     debug_internals('register: ', opts)
 
     if(Array.isArray(opts)){
@@ -1238,7 +1242,7 @@ module.exports = new Class({
       opts = opts[1]
       opts.query = { 'register': _query }
     }
-    
+
     /**
     * refactor: same as "logs" function
     **/
@@ -1305,8 +1309,8 @@ module.exports = new Class({
       range,
       // query,
       opts,
-      next: function(id, err, result){
-        debug_internals('SOCKET generic_response ', opts)
+      next: function(id, err, result, opts){
+        debug_internals('SOCKET generic_response %O', opts)
         this.generic_response({err, result, resp: undefined, socket, input: 'logs', opts})
       }.bind(this)
 
@@ -1328,9 +1332,11 @@ module.exports = new Class({
   logs: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     debug_internals('logs: ', opts, opts.body)
-    // process.exit(1)
+
     if(opts.query && opts.query.register && socket){
-      this.register.attempt(arguments, this)
+      next()
+      // this.register.attempt(arguments, this)
+
     }
     else{
 

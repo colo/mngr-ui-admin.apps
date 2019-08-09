@@ -188,7 +188,7 @@ module.exports = new Class({
         '/': [{
 					// path: ':param',
 					// once: true, //socket.once
-					callbacks: ['all'],
+					callbacks: ['all', 'register'],
 					// middlewares: [], //socket.use(fn)
 				}],
         'on': [
@@ -222,7 +222,8 @@ module.exports = new Class({
 	},
   register: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
-    let id = this.__get_id_socket_or_req(socket)
+    // let id = this.__get_id_socket_or_req(socket)
+    let id = this.create_response_id(socket, opts)
     debug_internals('register: ', opts)
 
     if(Array.isArray(opts)){
@@ -296,7 +297,7 @@ module.exports = new Class({
       range,
       // query,
       opts,
-      next: function(id, err, result){
+      next: function(id, err, result, opts){
         this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
       }.bind(this)
 
@@ -318,7 +319,8 @@ module.exports = new Class({
   all: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     if(opts.query && opts.query.register && socket){
-      this.register.attempt(arguments, this)
+      next()
+      // this.register.attempt(arguments, this)
     }
     else{
       debug_internals('root: %o %o %o', opts.params, opts.query, opts.body)
