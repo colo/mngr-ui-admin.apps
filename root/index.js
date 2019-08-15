@@ -81,10 +81,11 @@ module.exports = new Class({
   ALL_TTL: 60000,
 
 	options: {
+    table: 'os',
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
         require(ETC+'ui.conn.js')(),
-        {db: 'logs', table: 'periodical'}
+        {db: 'devel', table: 'os'}
       )
       // host: this.options.host,
       // cache: this.options.cache_store,
@@ -400,6 +401,7 @@ module.exports = new Class({
 
       this.get_from_input({
         response: id,
+        from: opts.query.from,
         // input: (params.prop) ? 'log' : 'logs',
         // input: (params.path) ? params.path : 'all',
         input: 'all',

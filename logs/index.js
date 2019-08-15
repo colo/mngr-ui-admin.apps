@@ -88,7 +88,7 @@ module.exports = new Class({
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
         require(ETC+'ui.conn.js')(),
-        {db: 'logs', table: 'periodical'}
+        {db: 'devel', table: 'logs'}
       )
       // host: this.options.host,
       // cache: this.options.cache_store,
