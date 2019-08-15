@@ -10,11 +10,11 @@ const InputPollerRethinkDBLogs = require ( './input/rethinkdb.logs.js' )
 
 // const InputPollerRedisDomain = require ( './input/redis.log.js' )
 
-const InputCache = require ( './input/cache.js' )
-
-let PollHttp = require('js-pipeline/input/poller/poll/http')
-
-let UIPollHttp = require('node-app-http-client/load')(PollHttp)
+// const InputCache = require ( './input/cache.js' )
+//
+// let PollHttp = require('js-pipeline/input/poller/poll/http')
+//
+// let UIPollHttp = require('node-app-http-client/load')(PollHttp)
 
 
 let cron = require('node-cron')

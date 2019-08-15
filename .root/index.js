@@ -84,7 +84,7 @@ module.exports = new Class({
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
         require(ETC+'ui.conn.js')(),
-        {db: 'logs', table: 'periodical'}
+        {db: 'logs'}
       )
       // host: this.options.host,
       // cache: this.options.cache_store,
@@ -292,7 +292,7 @@ module.exports = new Class({
       response: id,
       // input: (params.prop) ? 'log' : 'logs',
       input: 'all',
-      // from: 'periodical',
+      from: 'periodical',
       // params,
       range,
       // query,
@@ -401,9 +401,8 @@ module.exports = new Class({
       this.get_from_input({
         response: id,
         // input: (params.prop) ? 'log' : 'logs',
-        // input: (params.path) ? params.path : 'all',
-        input: 'all',
-        // from: 'periodical',
+        input: (params.path) ? params.path : 'all',
+        from: 'periodical',
         // params,
         range,
         // query,
