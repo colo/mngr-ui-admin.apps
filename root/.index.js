@@ -14,8 +14,6 @@ const ETC =  process.env.NODE_ENV === 'production'
 let debug = require('debug')('mngr-ui-admin:apps:root'),
     debug_internals = require('debug')('mngr-ui-admin:apps:root:Internals');
 
-let eachOf = require( 'async' ).eachOf
-
 module.exports = new Class({
   Extends: App,
 
@@ -84,7 +82,6 @@ module.exports = new Class({
 
 	options: {
     table: 'os',
-    tables: ['os', 'logs'],
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
         require(ETC+'ui.conn.js')(),
@@ -302,18 +299,7 @@ module.exports = new Class({
       // query,
       opts,
       next: function(id, err, result, opts){
-        let format = (opts && opts.query) ? opts.query.format : undefined
-
-        this.data_formater(result.data, format, function(data){
-
-          result.data = data
-          // debug('data_formater', data, responses[key])
-          // to_output()
-          this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
-
-        }.bind(this))
-
-
+        this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
       }.bind(this)
 
     }
@@ -388,107 +374,59 @@ module.exports = new Class({
           opts.query.q.push('data')
       }
 
-      // let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
-      //   debug_internals('all registered response', err, opts)
-      //   // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
-      //   // opts.response = id
-      //   this.generic_response({err, result, resp, socket, input: 'all', opts})
-      //
-      //   // if(query.register && req){//should happend only on ENV != "production"
-      //   //   query.unregister = query.register
-      //   //   delete query.register
-      //   //   this.get_from_input({
-      //   //     response: id,
-      //   //     // input: (params.prop) ? 'log' : 'logs',
-      //   //     input: 'all',
-      //   //     from: 'periodical',
-      //   //     params,
-      //   //     range,
-      //   //     query,
-      //   //     // next: (id, err, result) => this.response(id, err, result)
-      //   //
-      //   //   })
-      //   // }
-      //
-      // }.bind(this))
 
-      // let responses = []
-      let responses = {}
-      eachOf(this.options.tables, function (from, key, callback) {
+      let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
+        debug_internals('all registered response', err, opts)
+        // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
+        // opts.response = id
+        this.generic_response({err, result, resp, socket, input: 'all', opts})
 
-
-
-        this.get_from_input({
-          response: this.create_response_id((req) ? req : socket, opts),
-          from: from,
-          // input: (params.prop) ? 'log' : 'logs',
-          // input: (params.path) ? params.path : 'all',
-          input: 'all',
-          // from: 'periodical',
-          // params,
-          range,
-          // query,
-          opts,
-          next: function(id, err, result){
-            debug('NEXT', id, err, result)
-            // responses.push(result)
-            responses[from] = result
-            callback()
-          }.bind(this)
-
-        })
-
-      }.bind(this), function (err) {
-
-        let format = (opts && opts.query) ? opts.query.format : undefined
-        eachOf(responses, function (value, key, to_output) {
-          debug('RESPONSES %s %o', key, value)
-          this.data_formater(value.data, format, function(data){
-
-            value.data = data
-            debug('data_formater', data, responses[key])
-            to_output()
-          }.bind(this))
-
-        }.bind(this), function (err) {
-          debug('OUTPUT %o', responses)
-          // process.exit(1)
-          let result = {id: [], data: {}, metadata: undefined}
-          // result.metadata.from = []
-          Object.each(responses, function(resp, key){
-            result.id.push(resp.id)
-            if(resp.data){
-              result.data[key] = resp.data
-              // result.data.combine(resp.data)
-            }
-            if(!result.metadata){
-              result.metadata = Object.clone(resp.metadata)
-              result.metadata.from = []
-            }
-
-            result.metadata.from.push(resp.metadata.from)
-          }.bind(this))
-
-          debug('RESULT %o', result)
-          this.generic_response({err, result, resp, socket, input: 'all', opts})
-
-        }.bind(this));
-        // let result = {id: [], data: [], metadata: Object.clone(responses[0].metadata)}
-        // result.metadata.from = []
-        // Array.each(responses, function(resp){
-        //   result.id.push(resp.id)
-        //   if(resp.data)
-        //     result.data.combine(resp.data)
-        //   result.metadata.from.push(resp.metadata.from)
-        // }.bind(this))
+        // if(query.register && req){//should happend only on ENV != "production"
+        //   query.unregister = query.register
+        //   delete query.register
+        //   this.get_from_input({
+        //     response: id,
+        //     // input: (params.prop) ? 'log' : 'logs',
+        //     input: 'all',
+        //     from: 'periodical',
+        //     params,
+        //     range,
+        //     query,
+        //     // next: (id, err, result) => this.response(id, err, result)
         //
-        // debug('RESULT %o', result)
-        // this.generic_response({err, result, resp, socket, input: 'all', opts})
+        //   })
+        // }
 
       }.bind(this))
 
+      this.get_from_input({
+        response: id,
+        from: opts.query.from,
+        // input: (params.prop) ? 'log' : 'logs',
+        // input: (params.path) ? params.path : 'all',
+        input: 'all',
+        // from: 'periodical',
+        // params,
+        range,
+        // query,
+        opts,
+        next: (id, err, result) => this.response(id, err, result)
 
-
+      })
+      // // let _recive_pipe = function(pipeline){
+      // //   debug_internals('logs pipeline', pipeline)
+      // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
+      // // }
+      // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
+      // // OR
+      // this.get_pipeline(undefined, function(pipeline){
+      //   debug_internals('logs get_pipeline', pipeline)
+      //
+      //   this.response(id, ['some', 'args'])
+      // }.bind(this))
+      // if(next)
+      //   next()
+      //
     }
 
   },

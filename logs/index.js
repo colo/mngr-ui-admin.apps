@@ -1311,7 +1311,17 @@ module.exports = new Class({
       opts,
       next: function(id, err, result, opts){
         debug_internals('SOCKET generic_response %O', opts)
-        this.generic_response({err, result, resp: undefined, socket, input: 'logs', opts})
+        let format = (opts && opts.query) ? opts.query.format : undefined
+
+        this.data_formater(result.data, format, function(data){
+
+          result.data = data
+
+          this.generic_response({err, result, resp: undefined, socket, input: 'logs', opts})
+
+        }.bind(this))
+
+
       }.bind(this)
 
     }
@@ -1393,7 +1403,17 @@ module.exports = new Class({
         debug_internals('logs registered response', err, opts)
         // this.generic_response({err, result, resp: resp, socket: socket, input: 'logs', format: opts.query.format})
         // opts.response = id
-        this.generic_response({err, result, resp, socket, input: 'logs', opts})
+        let format = (opts && opts.query) ? opts.query.format : undefined
+
+        this.data_formater(result.data, format, function(data){
+
+          result.data = data
+
+          this.generic_response({err, result, resp, socket, input: 'logs', opts})
+
+        }.bind(this))
+
+
 
         // if(query.register && req){//should happend only on ENV != "production"
         //   query.unregister = query.register
