@@ -211,19 +211,131 @@ module.exports = new Class({
   			// 		// middlewares: [], //socket.use(fn)
   			// 	}
         // ],
-        // 'off': [
-        //   {
-  			// 		// path: ':events',
-  			// 		// once: true, //socket.once
-  			// 		callbacks: ['unregister'],
-  			// 		// middlewares: [], //socket.use(fn)
-  			// 	}
-        // ],
+        'off': [
+          {
+  					// path: ':events',
+  					// once: true, //socket.once
+  					callbacks: ['unregister'],
+  					// middlewares: [], //socket.use(fn)
+  				}
+        ],
 			}
 		},
 
     // expire: 1000,//ms
 	},
+  unregister: function(){
+    let {req, resp, socket, next, opts} = this._arguments(arguments)
+    // let id = this.__get_id_socket_or_req(socket)
+    let id = this.create_response_id(socket, opts)
+    debug_internals('UNregister: ', opts)
+    // process.exit(1)
+
+    if(Array.isArray(opts)){
+      let _query = opts[0]
+      opts = opts[1]
+      opts.query = { 'unregister': _query }
+    }
+    else if (!opts.query.unregister){
+      opts.query.unregister = true
+    }
+
+    /**
+    * refactor: same as "logs" function
+    **/
+    if(opts.body && opts.query)
+      opts.query = Object.merge(opts.query, opts.body)
+
+    if(opts.body && opts.body.params && opts.params)
+      opts.params = Object.merge(opts.params, opts.body.params)
+
+    let params = opts.params
+    let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
+    let query = opts.query
+    // if(opts.body && opts.body.q && opts.query)
+    //   opts.query.q = opts.body.q
+    //
+    // if(opts.body && opts.body.fields && opts.query)
+    //   opts.query.fields = opts.body.fields
+    //
+    // if(opts.body && opts.body.transformation && opts.query)
+    //   opts.query.transformation = opts.body.transformation
+    //
+    // if(opts.body && opts.body.aggregation && opts.query)
+    //   opts.query.aggregation = opts.body.aggregation
+    //
+    // if(opts.body && opts.body.interval && opts.query)
+    //   opts.query.interval = opts.body.interval
+    //
+    // if(opts.body && opts.body.filter && opts.query)
+    //   opts.query.filter = opts.body.filter
+    /**
+    * "format" is for formating data and need at least metadata: [timestamp, path],
+    * so add it if not found on query
+    **/
+    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
+      let metadata = ['timestamp', 'path']
+
+      if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
+        opts.query.q.push({metadata: metadata})
+
+      Object.each(opts.query.q, function(item){
+        if(item.metadata){
+          item.metadata.combine(metadata)
+        }
+      })
+
+      if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
+        opts.query.q.push('data')
+    }
+    /**
+    * refactor: same as "logs" function
+    **/
+
+
+    debug_internals('UN register: ', id, opts)
+    // process.exit(1)
+
+    let from = (opts.query && opts.query.from) ? opts.query.from : this.options.table //else -> default table
+
+    let _params = {
+      response: id,
+      // input: (params.prop) ? 'log' : 'logs',
+      input: 'all',
+      from: from,
+      // params,
+      range,
+      // query,
+      opts,
+      // next: function(id, err, result, opts){
+      //   let format = (opts && opts.query) ? opts.query.format : undefined
+      //
+      //   this.data_formater(result.data, format, function(data){
+      //
+      //     result.data = data
+      //     // debug('data_formater', data, responses[key])
+      //     // to_output()
+      //     this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+      //
+      //   }.bind(this))
+      //
+      //
+      // }.bind(this)
+
+    }
+
+    // if(opts.query.register === 'periodical'){
+    //   delete opts.query.register
+    //   let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
+    //
+    //   this.register_interval(id, this.get_from_input.bind(this), interval, _params)
+    //   // setInterval(this.get_from_input.bind(this), interval, _params)
+    // }
+    // else{
+      this.get_from_input(_params)
+    // }
+  },
   register: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     // let id = this.__get_id_socket_or_req(socket)
@@ -291,12 +403,13 @@ module.exports = new Class({
 
 
     debug_internals('register: ', id, opts)
+    let from = (opts.query && opts.query.from) ? opts.query.from : this.options.table //else -> default table
 
     let _params = {
       response: id,
       // input: (params.prop) ? 'log' : 'logs',
       input: 'all',
-      // from: 'periodical',
+      from: from,
       // params,
       range,
       // query,
@@ -347,8 +460,9 @@ module.exports = new Class({
         opts.params = Object.merge(opts.params, opts.body.params)
 
       let params = opts.params
-      let range = req.header('range')
+      let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
       let query = opts.query
+
 
       // if(opts.body && opts.body.q && opts.query)
       //   opts.query.q = opts.body.q
@@ -414,7 +528,11 @@ module.exports = new Class({
 
       // let responses = []
       let responses = {}
-      eachOf(this.options.tables, function (from, key, callback) {
+      let from = (opts.query && opts.query.from) ? opts.query.from : this.options.tables
+      from = (Array.isArray(from)) ? from : [from]
+
+
+      eachOf(from, function (from, key, callback) {
 
 
 

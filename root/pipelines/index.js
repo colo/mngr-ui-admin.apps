@@ -53,7 +53,7 @@ module.exports = function(payload){
   				requests: {
       			periodical: function(dispatch){
   						// //////////console.log('domain periodical running')
-      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      				return cron.schedule('*/10 * * * * *', dispatch);//every 5 sec
       			}
       		},
   			},
