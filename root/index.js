@@ -417,14 +417,21 @@ module.exports = new Class({
       next: function(id, err, result, opts){
         let format = (opts && opts.query) ? opts.query.format : undefined
 
-        this.data_formater(result.data, format, function(data){
+        if(format){
+          this.data_formater(result.data, format, function(data){
 
-          result.data = data
-          // debug('data_formater', data, responses[key])
-          // to_output()
+            result.data = data
+            // debug('data_formater', data, responses[key])
+            // to_output()
+            this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+
+          }.bind(this))
+        }
+        else{
+          // debug('to reponse %o', result)
+          // process.exit(1)
           this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
-
-        }.bind(this))
+        }
 
 
       }.bind(this)
@@ -559,49 +566,67 @@ module.exports = new Class({
       }.bind(this), function (err) {
 
         let format = (opts && opts.query) ? opts.query.format : undefined
-        eachOf(responses, function (value, key, to_output) {
-          debug('RESPONSES %s %o', key, value)
-          this.data_formater(value.data, format, function(data){
+        if(format){
+          eachOf(responses, function (value, key, to_output) {
+            debug('RESPONSES %s %o', key, value)
+            this.data_formater(value.data, format, function(data){
 
-            value.data = data
-            debug('data_formater', data, responses[key])
-            to_output()
-          }.bind(this))
+              value.data = data
+              debug('data_formater', data, responses[key])
+              to_output()
+            }.bind(this))
 
-        }.bind(this), function (err) {
-          debug('OUTPUT %o', responses)
-          // process.exit(1)
+          }.bind(this), function (err) {
+            debug('OUTPUT %o', responses)
+            // process.exit(1)
+            let result = {id: [], data: {}, metadata: undefined}
+            // result.metadata.from = []
+            Object.each(responses, function(resp, key){
+              result.id.push(resp.id)
+              if(resp.data){
+                result.data[key] = resp.data
+                // result.data.combine(resp.data)
+              }
+              if(!result.metadata){
+                result.metadata = Object.clone(resp.metadata)
+                result.metadata.from = []
+              }
+
+              result.metadata.from.push(resp.metadata.from)
+            }.bind(this))
+
+            debug('RESULT %o', result)
+            this.generic_response({err, result, resp, socket, input: 'all', opts})
+
+          }.bind(this));
+        }
+        else{
           let result = {id: [], data: {}, metadata: undefined}
           // result.metadata.from = []
-          Object.each(responses, function(resp, key){
-            result.id.push(resp.id)
-            if(resp.data){
-              result.data[key] = resp.data
-              // result.data.combine(resp.data)
-            }
+          // let counter = 0
+          Object.each(responses, function(value, key){
+            result.id.push(value.id)
+            if(value.data)
+              result.data[key] = value.data
+
             if(!result.metadata){
-              result.metadata = Object.clone(resp.metadata)
+              result.metadata = Object.clone(value.metadata)
               result.metadata.from = []
             }
 
-            result.metadata.from.push(resp.metadata.from)
+            result.metadata.from.push(value.metadata.from)
+
+            // if(counter >= Object.getLength(responses) - 1){
+            //
+            // }
+            //
+            // counter++
           }.bind(this))
 
           debug('RESULT %o', result)
           this.generic_response({err, result, resp, socket, input: 'all', opts})
 
-        }.bind(this));
-        // let result = {id: [], data: [], metadata: Object.clone(responses[0].metadata)}
-        // result.metadata.from = []
-        // Array.each(responses, function(resp){
-        //   result.id.push(resp.id)
-        //   if(resp.data)
-        //     result.data.combine(resp.data)
-        //   result.metadata.from.push(resp.metadata.from)
-        // }.bind(this))
-        //
-        // debug('RESULT %o', result)
-        // this.generic_response({err, result, resp, socket, input: 'all', opts})
+        }
 
       }.bind(this))
 
