@@ -1,11 +1,12 @@
 'use strict'
 
-let debug = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs'),
-    debug_internals = require('debug')('mngr-ui-admin:apps:logs:Pipeline:Logs:Internals');
+let debug = require('debug')('mngr-ui-admin:apps:root:Pipeline'),
+    debug_internals = require('debug')('mngr-ui-admin:apps:root:Pipeline:Internals');
 
 const	path = require('path')
 const InputPollerRethinkDB = require(path.join(process.cwd(), '/libs/pipeline/inputs/rethinkdb'))
 
+const InputPollerRethinkDBTables = require('./input/rethinkdb.tables')
 // const InputPollerRethinkDBLogs = require ( './input/rethinkdb.logs.js' )
 // const InputPollerRethinkDBDomains = require ( './input/rethinkdb.domains.js' )
 // const InputPollerRethinkDBLogsDomain = require ( './input/rethinkdb.logs.domain.js' )
