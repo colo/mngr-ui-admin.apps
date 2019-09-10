@@ -281,6 +281,7 @@ module.exports = new Class({
       this.__resume_pipeline.pass([this.__internal_pipeline, this.__internal_pipeline_cfg, this.ID, function(){
         debug('__resume_pipeline CALLBACK')
         this.__internal_pipeline.fireEvent('onOnce')
+        this.__internal_pipeline.fireEvent('onResume')
       }.bind(this)], this)
     )
   },
