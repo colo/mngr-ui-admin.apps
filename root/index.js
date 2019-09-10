@@ -91,7 +91,7 @@ module.exports = new Class({
     tables: ['os', 'logs', 'munin'],
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
-        require(ETC+'ui.conn.js')(),
+        Object.clone(require(ETC+'ui.conn.js')()),
         {db: 'devel', table: 'os'}
       )
       // host: this.options.host,
@@ -106,7 +106,7 @@ module.exports = new Class({
 
     internal_pipeline: require('./pipelines/internal')({
       conn: Object.merge(
-        require(ETC+'ui.conn.js')(),
+        Object.clone(require(ETC+'ui.conn.js')()),
         {db: 'devel'}
       )
 
@@ -243,7 +243,7 @@ module.exports = new Class({
     this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_SAVE_DOC, function(doc){
       let {id, type} = doc
 
-      debug_internals('onSaveDoc %o', doc)
+      debug_internals('__internal_pipeline onSaveDoc %o', doc)
       // process.exit(1)
       if(id === 'tables' && doc.data.length > 0){
         this.options.tables = doc.data
@@ -259,7 +259,7 @@ module.exports = new Class({
     this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_DOC_ERROR, function(err, resp){
       let {id, type} = resp
 
-      debug_internals('onDocError %o', err, resp)
+      debug_internals('__internal_pipeline onDocError %o', err, resp)
       // if(id)
       //   this.fireEvent(id, [err, resp])
       //
