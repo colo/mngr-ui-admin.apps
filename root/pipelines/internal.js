@@ -22,7 +22,7 @@ module.exports = function(payload){
       {
   			poll: {
   				suspended: true,//start suspended
-  				id: "tables",
+  				id: "input.tables",
   				conn: [
             Object.merge(
               Object.clone(conn),

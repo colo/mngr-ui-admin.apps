@@ -237,38 +237,38 @@ module.exports = new Class({
     // expire: 1000,//ms
 	},
   initialize: function(options){
-    this.parent(options)
+
     this.__internal_pipeline = new Pipeline(this.options.internal_pipeline)
 
-    this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_SAVE_DOC, function(doc){
-      let {id, type} = doc
-
-      debug_internals('__internal_pipeline onSaveDoc %o', doc)
-      // process.exit(1)
-      if(id === 'tables' && doc.data.length > 0){
-        this.options.tables = doc.data
-      }
-      //   this.fireEvent(id, [undefined, doc])
-      //
-      // if(type)
-      //   this.fireEvent(type, [undefined, doc])
-      //
-      // // // this.__emit_stats(host, stats)
-    }.bind(this))
-
-    this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_DOC_ERROR, function(err, resp){
-      let {id, type} = resp
-
-      debug_internals('__internal_pipeline onDocError %o', err, resp)
-      // if(id)
-      //   this.fireEvent(id, [err, resp])
-      //
-      // if(type)
-      //   this.fireEvent(type, [err, resp])
-      //
-      // // // this.__emit_stats(host, stats)
-    }.bind(this))
-
+    // this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_SAVE_DOC, function(doc){
+    //   let {id, type} = doc
+    //
+    //   debug_internals('__internal_pipeline onSaveDoc %o', doc)
+    //   // process.exit(1)
+    //   if(id === 'tables' && doc.data.length > 0){
+    //     this.options.tables = doc.data
+    //   }
+    //   //   this.fireEvent(id, [undefined, doc])
+    //   //
+    //   // if(type)
+    //   //   this.fireEvent(type, [undefined, doc])
+    //   //
+    //   // // // this.__emit_stats(host, stats)
+    // }.bind(this))
+    //
+    // this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_DOC_ERROR, function(err, resp){
+    //   let {id, type} = resp
+    //
+    //   debug_internals('__internal_pipeline onDocError %o', err, resp)
+    //   // if(id)
+    //   //   this.fireEvent(id, [err, resp])
+    //   //
+    //   // if(type)
+    //   //   this.fireEvent(type, [err, resp])
+    //   //
+    //   // // // this.__emit_stats(host, stats)
+    // }.bind(this))
+    //
     this.__internal_pipeline_cfg = {
       ids: [],
       connected: [],
@@ -281,9 +281,13 @@ module.exports = new Class({
       this.__resume_pipeline.pass([this.__internal_pipeline, this.__internal_pipeline_cfg, this.ID, function(){
         debug('__resume_pipeline CALLBACK')
         this.__internal_pipeline.fireEvent('onOnce')
-        this.__internal_pipeline.fireEvent('onResume')
-      }.bind(this)], this)
+        // this.__internal_pipeline.fireEvent('onResume')
+      }.bind(this), false], this)
     )
+
+
+    this.parent(options)
+    debug('end INITIALIZE')
   },
   unregister: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
