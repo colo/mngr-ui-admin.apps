@@ -240,35 +240,35 @@ module.exports = new Class({
 
     this.__internal_pipeline = new Pipeline(this.options.internal_pipeline)
 
-    // this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_SAVE_DOC, function(doc){
-    //   let {id, type} = doc
-    //
-    //   debug_internals('__internal_pipeline onSaveDoc %o', doc)
-    //   // process.exit(1)
-    //   if(id === 'tables' && doc.data.length > 0){
-    //     this.options.tables = doc.data
-    //   }
-    //   //   this.fireEvent(id, [undefined, doc])
-    //   //
-    //   // if(type)
-    //   //   this.fireEvent(type, [undefined, doc])
-    //   //
-    //   // // // this.__emit_stats(host, stats)
-    // }.bind(this))
-    //
-    // this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_DOC_ERROR, function(err, resp){
-    //   let {id, type} = resp
-    //
-    //   debug_internals('__internal_pipeline onDocError %o', err, resp)
-    //   // if(id)
-    //   //   this.fireEvent(id, [err, resp])
-    //   //
-    //   // if(type)
-    //   //   this.fireEvent(type, [err, resp])
-    //   //
-    //   // // // this.__emit_stats(host, stats)
-    // }.bind(this))
-    //
+    this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_SAVE_DOC, function(doc){
+      let {id, type} = doc
+
+      debug_internals('__internal_pipeline onSaveDoc %o', doc)
+      // process.exit(1)
+      if(id === 'tables' && doc.data.length > 0){
+        this.options.tables = doc.data
+      }
+      //   this.fireEvent(id, [undefined, doc])
+      //
+      // if(type)
+      //   this.fireEvent(type, [undefined, doc])
+      //
+      // // // this.__emit_stats(host, stats)
+    }.bind(this))
+
+    this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_DOC_ERROR, function(err, resp){
+      let {id, type} = resp
+
+      debug_internals('__internal_pipeline onDocError %o', err, resp)
+      // if(id)
+      //   this.fireEvent(id, [err, resp])
+      //
+      // if(type)
+      //   this.fireEvent(type, [err, resp])
+      //
+      // // // this.__emit_stats(host, stats)
+    }.bind(this))
+
     this.__internal_pipeline_cfg = {
       ids: [],
       connected: [],
@@ -292,7 +292,7 @@ module.exports = new Class({
   unregister: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     // let id = this.__get_id_socket_or_req(socket)
-    let id = this.create_response_id(socket, opts)
+    let id = this.create_response_id(socket, opts, true)
     debug_internals('UNregister: ', opts)
     // process.exit(1)
 
@@ -404,7 +404,7 @@ module.exports = new Class({
   register: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     // let id = this.__get_id_socket_or_req(socket)
-    let id = this.create_response_id(socket, opts)
+    let id = this.create_response_id(socket, opts, true)
     debug_internals('register: ', opts)
 
     if(Array.isArray(opts)){
@@ -503,16 +503,8 @@ module.exports = new Class({
 
     }
 
-    // if(opts.query.register === 'periodical'){
-    //   delete opts.query.register
-    //   let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
-    //
-    //   this.register_interval(id, this.get_from_input.bind(this), interval, _params)
-    //   // setInterval(this.get_from_input.bind(this), interval, _params)
-    // }
-    // else{
-      this.get_from_input(_params)
-    // }
+    this.get_from_input(_params)
+
 
 
   },
@@ -629,7 +621,8 @@ module.exports = new Class({
         })
 
       }.bind(this), function (err) {
-
+        // debug('eachOf CALLBACK', err)
+        // process.exit(1)
         let format = (opts && opts.query) ? opts.query.format : undefined
         if(format){
           eachOf(responses, function (value, key, to_output) {
