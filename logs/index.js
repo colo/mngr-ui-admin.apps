@@ -1498,6 +1498,11 @@ module.exports = new Class({
       if(opts.body && opts.body.params && opts.params)
         opts.params = Object.merge(opts.params, opts.body.params)
 
+      if(opts.query && opts.query.params && opts.params){
+        opts.params = Object.merge(opts.params, opts.query.params)
+        delete opts.query.params
+      }
+
       let params = opts.params
       let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
       let query = opts.query
