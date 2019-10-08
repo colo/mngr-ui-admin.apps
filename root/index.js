@@ -88,7 +88,7 @@ module.exports = new Class({
 
   options: {
     table: 'os',
-    tables: ['os', 'logs', 'munin'],
+    tables: ['os', 'logs', 'munin', 'vhosts', 'os_historical', 'logs_historical', 'munin_historical'],
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
         Object.clone(require(ETC+'ui.conn.js')()),
