@@ -1231,8 +1231,12 @@ module.exports = new Class({
   unregister: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     // let id = this.__get_id_socket_or_req(socket)
-    let id = this.create_response_id(socket, opts, true)
-    debug_internals('UNregister: ', opts)
+    let filtered_opts = Object.filter(opts, function(value, key){
+        return Object.getLength(value) > 0
+    })
+    filtered_opts = (Object.getLength(filtered_opts) > 0) ? opts : ''
+    let id = this.create_response_id(socket, filtered_opts, true)
+    debug_internals('UNregister: ', filtered_opts)
     // process.exit(1)
 
     if(Array.isArray(opts)){
