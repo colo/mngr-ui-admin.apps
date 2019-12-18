@@ -342,7 +342,8 @@ module.exports = new Class({
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
     **/
-    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    if(opts.query && opts.query.format){//for stat || tabular || merged
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
 
@@ -450,7 +451,8 @@ module.exports = new Class({
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
     **/
-    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    if(opts.query && opts.query.format){//for stat || tabular || merged
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
 
@@ -559,7 +561,8 @@ module.exports = new Class({
       * "format" is for formating data and need at least metadata: [timestamp, path],
       * so add it if not found on query
       **/
-      if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      if(opts.query && opts.query.format){//for stat || tabular || merged
         if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
         let metadata = ['timestamp', 'path']
 
@@ -637,6 +640,7 @@ module.exports = new Class({
         if(format){
           eachOf(responses, function (value, key, to_output) {
             debug('RESPONSES %s %o', key, value)
+            // process.exit(1)
             this.data_formater(value.data, format, function(data){
 
               value.data = data
