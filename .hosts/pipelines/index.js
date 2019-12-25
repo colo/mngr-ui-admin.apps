@@ -5,6 +5,7 @@ let debug = require('debug')('mngr-ui-admin:apps:hosts:Pipeline:Hosts'),
 
 const InputPollerRethinkDBHosts = require ( './input/rethinkdb.hosts.js' )
 // const InputPollerRethinkDBHost = require ( './input/rethinkdb.host.js' )
+const InputPollerRethinkDBHostHistorical = require ( './input/rethinkdb.host.historical.js' )
 
 const InputPollerRedisHost = require ( './input/redis.host.js' )
 
@@ -26,8 +27,9 @@ let os = {
 
 let mount_filter = function(doc, opts, next, pipeline){
 	let data = Array.clone(doc.data)
+  debug_internals('mount_filter', doc.data, doc.metadata)
 	doc.data = data.filter(function(item, index){
-
+    debug_internals('mount_filter', item)
 		return os.mounts.type.test(item.type);
 	});
 
@@ -44,9 +46,9 @@ let blockdevices_filter = function(doc, opts, next, pipeline){
 	return doc
 }
 
-// let paths_whitelist = /^((?!os\.procs|os\.procs\.cmd|os\.procs\.uid).)*$/
-let paths_whitelist = undefined
-let paths_blacklist = /^os\.procs(\.|\.uid|\.cmd)*$/
+// let periodical_paths_whitelist = /^((?!os\.procs|os\.procs\.cmd|os\.procs\.uid).)*$/
+let periodical_paths_whitelist = undefined
+let periodical_paths_blacklist = /^os\.procs(\.|\.uid|\.cmd)*$/
 
 let __white_black_lists_filter = function(whitelist, blacklist, str){
   let filtered = false
@@ -231,13 +233,41 @@ module.exports = function(payload){
       		},
   			},
   		},
+      {
+  			poll: {
+  				suspended: true,//start suspended
+  				id: "input.host.historical",
+  				conn: [
+            Object.merge(
+              Object.clone(conn),
+              {
+                // path_key: 'os',
+                module: InputPollerRethinkDBHostHistorical,
+              }
+            )
+  				],
+  				connect_retry_count: -1,
+  				connect_retry_periodical: 1000,
+  				// requests: {
+  				// 	periodical: 1000,
+  				// },
+  				requests: {
+      			periodical: function(dispatch){
+  						// //////////console.log('host periodical running')
+      				return cron.schedule('* * * * * *', dispatch);//every 5 sec
+      			}
+      		},
+  			},
+  		},
 
   	],
     filters: [
   		// decompress,
   		function(docs, opts, next, pipeline){
         // debug_internals(arguments)
-        let { id, type, input, input_type, app } = opts
+        let { from, id, type, input, input_type, app } = opts
+        from = from || 'periodical'
+
         delete opts.input
         delete opts.input_type
         delete opts.app
@@ -246,13 +276,13 @@ module.exports = function(payload){
 
         out[type] = docs
 
-        debug_internals('docs', type, docs)
+        debug_internals('docs', from, type, docs)
 
         if(out[type] && out[type].paths && out[type].paths.length > 0){
           debug_internals('out[type].paths', type, out[type])
 
           Array.each(out[type].paths, function(row, index){
-            if(__white_black_lists_filter(paths_whitelist, paths_blacklist, row) !== true)
+            if(from === 'periodical' && __white_black_lists_filter(periodical_paths_whitelist, periodical_paths_blacklist, row) !== true)
               out[type].paths= out[type].paths.erase(row)
           })
         }
@@ -272,23 +302,23 @@ module.exports = function(payload){
 
             Array.each(stat, function(row, index){
               if(row && row.metadata && row.metadata.path){
-                switch (row.metadata.path) {
+                switch (row.metadata.path+'.'+from) {
                   // case 'os.procs':
                   // 	// row = mount_filter(row)
                   // 	// delete docs[index]
                   // 	break;
 
-                  case 'os.mounts':
+                  case 'os.mounts.periodical':
                     row = mount_filter(row)
                     break;
 
-                  case 'os.blockdevices':
+                  case 'os.blockdevices.periodical':
                     row = blockdevices_filter(row)
                     break;
 
                 }
 
-                if(__white_black_lists_filter(paths_whitelist, paths_blacklist, row.metadata.path) !== true)
+                if(from === 'periodical' && __white_black_lists_filter(periodical_paths_whitelist, periodical_paths_blacklist, row.metadata.path) !== true)
                   stat[index] = undefined
 
 
@@ -341,6 +371,6 @@ module.exports = function(payload){
 
   if(ui)
     conf.input.push(ui_conf)
-    
+
   return conf
 }
