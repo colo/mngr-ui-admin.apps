@@ -452,9 +452,12 @@ module.exports = new Class({
     * so add it if not found on query
     **/
     // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    let data_formater_full = false
     if(opts.query && opts.query.format){//for stat || tabular || merged
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
+
+      if(opts.query.q.contains('metadata') || opts.query.q.some(function(item){ return item.metadata })) data_formater_full = true
 
       if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
         opts.query.q.push({metadata: metadata})
@@ -489,7 +492,7 @@ module.exports = new Class({
         let format = (opts && opts.query) ? opts.query.format : undefined
 
         if(format){
-          this.data_formater(result.data, format, function(data){
+          this.data_formater(result.data, format, data_formater_full, function(data){
 
             result.data = data
             // debug('data_formater', data, responses[key])
@@ -562,9 +565,12 @@ module.exports = new Class({
       * so add it if not found on query
       **/
       // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      let data_formater_full = false
       if(opts.query && opts.query.format){//for stat || tabular || merged
         if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
         let metadata = ['timestamp', 'path']
+
+        if(opts.query.q.contains('metadata') || opts.query.q.some(function(item){ return item.metadata })) data_formater_full = true
 
         if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
           opts.query.q.push({metadata: metadata})
@@ -578,6 +584,7 @@ module.exports = new Class({
         if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
           opts.query.q.push('data')
       }
+
 
       // let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
       //   debug_internals('all registered response', err, opts)
@@ -641,7 +648,9 @@ module.exports = new Class({
           eachOf(responses, function (value, key, to_output) {
             debug('RESPONSES %s %o', key, value)
             // process.exit(1)
-            this.data_formater(value.data, format, function(data){
+            debug('DATA FORMATER FULL', data_formater_full)
+            // process.exit(1)
+            this.data_formater(value.data, format, data_formater_full, function(data){
 
               value.data = data
               debug('data_formater', data, responses[key])

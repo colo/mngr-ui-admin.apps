@@ -1395,9 +1395,12 @@ module.exports = new Class({
     * so add it if not found on query
     **/
     // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    let data_formater_full = false
     if(opts.query && opts.query.format){//for stat || tabular || merged
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
+
+      if(opts.query.q.contains('metadata') || opts.query.q.some(function(item){ return item.metadata })) data_formater_full = true
 
       if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
         opts.query.q.push({metadata: metadata})
@@ -1463,7 +1466,7 @@ module.exports = new Class({
         let format = (opts && opts.query) ? opts.query.format : undefined
 
         if(format){
-          this.data_formater(result.data, format, function(data){
+          this.data_formater(result.data, format, data_formater_full, function(data){
 
             result.data = data
             // debug('data_formater', data, responses[key])
@@ -1535,9 +1538,12 @@ module.exports = new Class({
       * so add it if not found on query
       **/
       // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      let data_formater_full = false
       if(opts.query && opts.query.format){//for stat || tabular || merged
         if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
         let metadata = ['timestamp', 'path']
+
+        if(opts.query.q.contains('metadata') || opts.query.q.some(function(item){ return item.metadata })) data_formater_full = true
 
         if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
           opts.query.q.push({metadata: metadata})
@@ -1558,7 +1564,7 @@ module.exports = new Class({
         // opts.response = id
         let format = (opts && opts.query) ? opts.query.format : undefined
 
-        this.data_formater(result.data, format, function(data){
+        this.data_formater(result.data, format, data_formater_full, function(data){
 
           result.data = data
 
