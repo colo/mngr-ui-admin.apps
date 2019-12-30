@@ -1466,14 +1466,31 @@ module.exports = new Class({
         let format = (opts && opts.query) ? opts.query.format : undefined
 
         if(format){
-          this.data_formater(result.data, format, data_formater_full, function(data){
+          if(opts.query.index !== false){//data get grouped onto arrays
+            eachOf(result.data, function (grouped_value, grouped_key, to_grouped_output) {
+              this.data_formater(grouped_value, format, data_formater_full, function(data){
 
-            result.data = data
-            // debug('data_formater', data, responses[key])
-            // to_output()
-            this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+                result.data[grouped_key] = data
+                // debug('data_formater', data, responses[key])
+                to_grouped_output()
+              }.bind(this))
 
-          }.bind(this))
+            }.bind(this), function (err) {
+              // debug('PRE OUTPUT %o', responses)
+              // process.exit(1)
+              this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+            }.bind(this));
+          }
+          else{
+            this.data_formater(result.data, format, data_formater_full, function(data){
+
+              result.data = data
+              // debug('data_formater', data, responses[key])
+              // to_output()
+              this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+
+            }.bind(this))
+          }
         }
         else{
           // debug('to reponse %o', result)
@@ -1564,14 +1581,30 @@ module.exports = new Class({
         // opts.response = id
         let format = (opts && opts.query) ? opts.query.format : undefined
 
-        this.data_formater(result.data, format, data_formater_full, function(data){
+        if(opts.query.index !== false){//data get grouped onto arrays
+          eachOf(result.data, function (grouped_value, grouped_key, to_grouped_output) {
+            this.data_formater(grouped_value, format, data_formater_full, function(data){
 
-          result.data = data
+              result.data[grouped_key] = data
+              // debug('data_formater', data, responses[key])
+              to_grouped_output()
+            }.bind(this))
 
-          this.generic_response({err, result, resp, socket, input: 'logs', opts})
+          }.bind(this), function (err) {
+            // debug('PRE OUTPUT %o', responses)
+            // process.exit(1)
+            this.generic_response({err, result, resp, socket, input: 'logs', opts})
+          }.bind(this));
+        }
+        else{
+          this.data_formater(result.data, format, data_formater_full, function(data){
 
-        }.bind(this))
+            result.data = data
 
+            this.generic_response({err, result, resp, socket, input: 'logs', opts})
+
+          }.bind(this))
+        }
 
 
         // if(query.register && req){//should happend only on ENV != "production"

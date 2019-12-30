@@ -492,14 +492,31 @@ module.exports = new Class({
         let format = (opts && opts.query) ? opts.query.format : undefined
 
         if(format){
-          this.data_formater(result.data, format, data_formater_full, function(data){
+          if(opts.query.index !== false){//data get grouped onto arrays
+            eachOf(result.data, function (grouped_value, grouped_key, to_grouped_output) {
+              this.data_formater(grouped_value, format, data_formater_full, function(data){
 
-            result.data = data
-            // debug('data_formater', data, responses[key])
-            // to_output()
-            this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+                result.data[grouped_key] = data
+                // debug('data_formater', data, responses[key])
+                to_grouped_output()
+              }.bind(this))
 
-          }.bind(this))
+            }.bind(this), function (err) {
+              // debug('PRE OUTPUT %o', responses)
+              // process.exit(1)
+              this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+            }.bind(this));
+          }
+          else{
+            this.data_formater(result.data, format, data_formater_full, function(data){
+
+              result.data = data
+              // debug('data_formater', data, responses[key])
+              // to_output()
+              this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+
+            }.bind(this))
+          }
         }
         else{
           // debug('to reponse %o', result)
@@ -645,17 +662,36 @@ module.exports = new Class({
         // process.exit(1)
         let format = (opts && opts.query) ? opts.query.format : undefined
         if(format){
+          // debug('RESPONSES %s %o', responses)
+
           eachOf(responses, function (value, key, to_output) {
-            debug('RESPONSES %s %o', key, value)
+            // debug('RESPONSES %s %o', key, value)
             // process.exit(1)
             debug('DATA FORMATER FULL', data_formater_full)
             // process.exit(1)
-            this.data_formater(value.data, format, data_formater_full, function(data){
+            if(opts.query.index !== false){//data get grouped onto arrays
+              eachOf(value.data, function (grouped_value, grouped_key, to_grouped_output) {
+                this.data_formater(grouped_value, format, data_formater_full, function(data){
 
-              value.data = data
-              debug('data_formater', data, responses[key])
-              to_output()
-            }.bind(this))
+                  value.data[grouped_key] = data
+                  debug('data_formater', data, responses[key])
+                  to_grouped_output()
+                }.bind(this))
+
+              }.bind(this), function (err) {
+                debug('PRE OUTPUT %o', responses)
+                // process.exit(1)
+                to_output()
+              }.bind(this));
+            }
+            else{
+              this.data_formater(value.data, format, data_formater_full, function(data){
+
+                value.data = data
+                debug('data_formater', data, responses[key])
+                to_output()
+              }.bind(this))
+            }
 
           }.bind(this), function (err) {
             debug('OUTPUT %o', responses)
