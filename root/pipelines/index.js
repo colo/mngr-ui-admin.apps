@@ -16,9 +16,9 @@ const InputPollerRethinkDBTables = require('./input/rethinkdb.tables')
 
 // const InputCache = require ( './input/cache.js' )
 
-let PollHttp = require('js-pipeline/input/poller/poll/http')
-
-let UIPollHttp = require('node-app-http-client/load')(PollHttp)
+// let PollHttp = require('js-pipeline/input/poller/poll/http')
+//
+// let UIPollHttp = require('node-app-http-client/load')(PollHttp)
 
 
 let cron = require('node-cron')
