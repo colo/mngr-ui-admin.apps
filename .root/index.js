@@ -14,6 +14,10 @@ const ETC =  process.env.NODE_ENV === 'production'
 let debug = require('debug')('mngr-ui-admin:apps:root'),
     debug_internals = require('debug')('mngr-ui-admin:apps:root:Internals');
 
+let eachOf = require( 'async' ).eachOf
+
+const Pipeline = require('js-pipeline')
+
 module.exports = new Class({
   Extends: App,
 
@@ -79,12 +83,16 @@ module.exports = new Class({
   //
   // session_store: undefined,
   ALL_TTL: 60000,
+  __internal_pipeline: undefined,
+  __internal_pipeline_cfg: {},
 
-	options: {
+  options: {
+    table: 'os',
+    tables: ['os', 'logs', 'munin', 'vhosts', 'os_historical', 'logs_historical', 'munin_historical'],
     pipeline: require('./pipelines/index')({
       conn: Object.merge(
-        require(ETC+'ui.conn.js')(),
-        {db: 'logs'}
+        Object.clone(require(ETC+'ui.conn.js')()),
+        {db: 'devel', table: 'os'}
       )
       // host: this.options.host,
       // cache: this.options.cache_store,
@@ -94,6 +102,14 @@ module.exports = new Class({
       //     load: 'apps/hosts/clients'
       //   }
       // )
+    }),
+
+    internal_pipeline: require('./pipelines/internal')({
+      conn: Object.merge(
+        Object.clone(require(ETC+'ui.conn.js')()),
+        {db: 'devel'}
+      )
+
     }),
 
     // ui_rest_client: undefined,
@@ -207,23 +223,193 @@ module.exports = new Class({
   			// 		// middlewares: [], //socket.use(fn)
   			// 	}
         // ],
-        // 'off': [
-        //   {
-  			// 		// path: ':events',
-  			// 		// once: true, //socket.once
-  			// 		callbacks: ['unregister'],
-  			// 		// middlewares: [], //socket.use(fn)
-  			// 	}
-        // ],
+        'off': [
+          {
+  					// path: ':events',
+  					// once: true, //socket.once
+  					callbacks: ['unregister'],
+  					// middlewares: [], //socket.use(fn)
+  				}
+        ],
 			}
 		},
 
     // expire: 1000,//ms
 	},
+  initialize: function(options){
+
+    this.__internal_pipeline = new Pipeline(this.options.internal_pipeline)
+
+    this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_SAVE_DOC, function(doc){
+      let {id, type} = doc
+
+      debug_internals('__internal_pipeline onSaveDoc %o', doc)
+      // process.exit(1)
+      if(id === 'tables' && doc.data.length > 0){
+        this.options.tables = doc.data
+      }
+      //   this.fireEvent(id, [undefined, doc])
+      //
+      // if(type)
+      //   this.fireEvent(type, [undefined, doc])
+      //
+      // // // this.__emit_stats(host, stats)
+    }.bind(this))
+
+    this.__internal_pipeline.addEvent(this.__internal_pipeline.ON_DOC_ERROR, function(err, resp){
+      let {id, type} = resp
+
+      debug_internals('__internal_pipeline onDocError %o', err, resp)
+      // if(id)
+      //   this.fireEvent(id, [err, resp])
+      //
+      // if(type)
+      //   this.fireEvent(type, [err, resp])
+      //
+      // // // this.__emit_stats(host, stats)
+    }.bind(this))
+
+    this.__internal_pipeline_cfg = {
+      ids: [],
+      connected: [],
+      suspended: this.__internal_pipeline.inputs.every(function(input){ return input.options.suspended }, this)
+    }
+
+    this.__after_connect_inputs(
+      this.__internal_pipeline,
+      this.__internal_pipeline_cfg,
+      this.__resume_pipeline.pass([this.__internal_pipeline, this.__internal_pipeline_cfg, this.ID, function(){
+        debug('__resume_pipeline CALLBACK')
+        this.__internal_pipeline.fireEvent('onOnce')
+        // this.__internal_pipeline.fireEvent('onResume')
+      }.bind(this), false], this)
+    )
+
+
+    this.parent(options)
+    debug('end INITIALIZE')
+  },
+  unregister: function(){
+    let {req, resp, socket, next, opts} = this._arguments(arguments)
+    // let id = this.__get_id_socket_or_req(socket)
+    let filtered_opts = Object.filter(opts, function(value, key){
+        return Object.getLength(value) > 0
+    })
+    filtered_opts = (Object.getLength(filtered_opts) > 0) ? opts : ''
+    let id = this.create_response_id(socket, filtered_opts, true)
+    debug_internals('UNregister: ', filtered_opts)
+    // process.exit(1)
+
+    if(Array.isArray(opts)){
+      let _query = opts[0]
+      opts = opts[1]
+      opts.query = { 'unregister': _query }
+    }
+    else if (!opts.query.unregister){
+      opts.query.unregister = true
+    }
+
+    /**
+    * refactor: same as "logs" function
+    **/
+    if(opts.body && opts.query)
+      opts.query = Object.merge(opts.query, opts.body)
+
+    if(opts.body && opts.body.params && opts.params)
+      opts.params = Object.merge(opts.params, opts.body.params)
+
+    let params = opts.params
+    let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
+    let query = opts.query
+    // if(opts.body && opts.body.q && opts.query)
+    //   opts.query.q = opts.body.q
+    //
+    // if(opts.body && opts.body.fields && opts.query)
+    //   opts.query.fields = opts.body.fields
+    //
+    // if(opts.body && opts.body.transformation && opts.query)
+    //   opts.query.transformation = opts.body.transformation
+    //
+    // if(opts.body && opts.body.aggregation && opts.query)
+    //   opts.query.aggregation = opts.body.aggregation
+    //
+    // if(opts.body && opts.body.interval && opts.query)
+    //   opts.query.interval = opts.body.interval
+    //
+    // if(opts.body && opts.body.filter && opts.query)
+    //   opts.query.filter = opts.body.filter
+    /**
+    * "format" is for formating data and need at least metadata: [timestamp, path],
+    * so add it if not found on query
+    **/
+    // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    if(opts.query && opts.query.format){//for stat || tabular || merged
+      if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
+      let metadata = ['timestamp', 'path']
+
+      if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
+        opts.query.q.push({metadata: metadata})
+
+      Object.each(opts.query.q, function(item){
+        if(item.metadata){
+          item.metadata.combine(metadata)
+        }
+      })
+
+      if(!opts.query.q.contains('data') && !opts.query.q.some(function(item){ return item.data }))
+        opts.query.q.push('data')
+    }
+    /**
+    * refactor: same as "logs" function
+    **/
+
+
+    debug_internals('UN register: ', id, opts)
+    // process.exit(1)
+
+    let from = (opts.query && opts.query.from) ? opts.query.from : this.options.table //else -> default table
+
+    let _params = {
+      response: id,
+      // input: (params.prop) ? 'log' : 'logs',
+      input: 'all',
+      from: from,
+      // params,
+      range,
+      // query,
+      opts,
+      // next: function(id, err, result, opts){
+      //   let format = (opts && opts.query) ? opts.query.format : undefined
+      //
+      //   this.data_formater(result.data, format, function(data){
+      //
+      //     result.data = data
+      //     // debug('data_formater', data, responses[key])
+      //     // to_output()
+      //     this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+      //
+      //   }.bind(this))
+      //
+      //
+      // }.bind(this)
+
+    }
+
+    // if(opts.query.register === 'periodical'){
+    //   delete opts.query.register
+    //   let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
+    //
+    //   this.register_interval(id, this.get_from_input.bind(this), interval, _params)
+    //   // setInterval(this.get_from_input.bind(this), interval, _params)
+    // }
+    // else{
+      this.get_from_input(_params)
+    // }
+  },
   register: function(){
     let {req, resp, socket, next, opts} = this._arguments(arguments)
     // let id = this.__get_id_socket_or_req(socket)
-    let id = this.create_response_id(socket, opts)
+    let id = this.create_response_id(socket, opts, true)
     debug_internals('register: ', opts)
 
     if(Array.isArray(opts)){
@@ -265,9 +451,13 @@ module.exports = new Class({
     * "format" is for formating data and need at least metadata: [timestamp, path],
     * so add it if not found on query
     **/
-    if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+    let data_formater_full = false
+    if(opts.query && opts.query.format){//for stat || tabular || merged
       if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
       let metadata = ['timestamp', 'path']
+
+      if(opts.query.q.contains('metadata') || opts.query.q.some(function(item){ return item.metadata })) data_formater_full = true
 
       if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
         opts.query.q.push({metadata: metadata})
@@ -287,32 +477,60 @@ module.exports = new Class({
 
 
     debug_internals('register: ', id, opts)
+    let from = (opts.query && opts.query.from) ? opts.query.from : this.options.table //else -> default table
 
     let _params = {
       response: id,
       // input: (params.prop) ? 'log' : 'logs',
       input: 'all',
-      from: 'periodical',
+      from: from,
       // params,
       range,
       // query,
       opts,
       next: function(id, err, result, opts){
-        this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+        let format = (opts && opts.query) ? opts.query.format : undefined
+
+        if(format){
+          if(opts.query.index !== false){//data get grouped onto arrays
+            eachOf(result.data, function (grouped_value, grouped_key, to_grouped_output) {
+              this.data_formater(grouped_value, format, data_formater_full, function(data){
+
+                result.data[grouped_key] = data
+                // debug('data_formater', data, responses[key])
+                to_grouped_output()
+              }.bind(this))
+
+            }.bind(this), function (err) {
+              // debug('PRE OUTPUT %o', responses)
+              // process.exit(1)
+              this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+            }.bind(this));
+          }
+          else{
+            this.data_formater(result.data, format, data_formater_full, function(data){
+
+              result.data = data
+              // debug('data_formater', data, responses[key])
+              // to_output()
+              this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+
+            }.bind(this))
+          }
+        }
+        else{
+          // debug('to reponse %o', result)
+          // process.exit(1)
+          this.generic_response({err, result, resp: undefined, socket, input: 'all', opts})
+        }
+
+
       }.bind(this)
 
     }
 
-    // if(opts.query.register === 'periodical'){
-    //   delete opts.query.register
-    //   let interval = opts.query.interval || this.DEFAULT_PERIODICAL_INTERVAL
-    //
-    //   this.register_interval(id, this.get_from_input.bind(this), interval, _params)
-    //   // setInterval(this.get_from_input.bind(this), interval, _params)
-    // }
-    // else{
-      this.get_from_input(_params)
-    // }
+    this.get_from_input(_params)
+
 
 
   },
@@ -331,9 +549,16 @@ module.exports = new Class({
       if(opts.body && opts.body.params && opts.params)
         opts.params = Object.merge(opts.params, opts.body.params)
 
+      if(opts.query && opts.query.params && opts.params){
+        opts.params = Object.merge(opts.params, opts.query.params)
+        delete opts.query.params
+      }
+
+
       let params = opts.params
-      let range = req.header('range')
+      let range = (req) ? req.header('range') : (opts.headers) ?  opts.headers.range : opts.range
       let query = opts.query
+
 
       // if(opts.body && opts.body.q && opts.query)
       //   opts.query.q = opts.body.q
@@ -356,9 +581,13 @@ module.exports = new Class({
       * "format" is for formating data and need at least metadata: [timestamp, path],
       * so add it if not found on query
       **/
-      if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      // if(opts.query && opts.query.format && opts.query.format !== 'merged'){//for stat || tabular
+      let data_formater_full = false
+      if(opts.query && opts.query.format){//for stat || tabular || merged
         if(!opts.query.q || typeof opts.query.q === 'string') opts.query.q = []
         let metadata = ['timestamp', 'path']
+
+        if(opts.query.q.contains('metadata') || opts.query.q.some(function(item){ return item.metadata })) data_formater_full = true
 
         if(!opts.query.q.contains('metadata') && !opts.query.q.some(function(item){ return item.metadata }))
           opts.query.q.push({metadata: metadata})
@@ -374,56 +603,152 @@ module.exports = new Class({
       }
 
 
-      let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
-        debug_internals('all registered response', err, opts)
-        // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
-        // opts.response = id
-        this.generic_response({err, result, resp, socket, input: 'all', opts})
+      // let {id, chain} = this.register_response((req) ? req : socket, opts, function(err, result){
+      //   debug_internals('all registered response', err, opts)
+      //   // this.generic_response({err, result, resp, input: 'all', format: opts.query.format})
+      //   // opts.response = id
+      //   this.generic_response({err, result, resp, socket, input: 'all', opts})
+      //
+      //   // if(query.register && req){//should happend only on ENV != "production"
+      //   //   query.unregister = query.register
+      //   //   delete query.register
+      //   //   this.get_from_input({
+      //   //     response: id,
+      //   //     // input: (params.prop) ? 'log' : 'logs',
+      //   //     input: 'all',
+      //   //     from: 'periodical',
+      //   //     params,
+      //   //     range,
+      //   //     query,
+      //   //     // next: (id, err, result) => this.response(id, err, result)
+      //   //
+      //   //   })
+      //   // }
+      //
+      // }.bind(this))
 
-        // if(query.register && req){//should happend only on ENV != "production"
-        //   query.unregister = query.register
-        //   delete query.register
-        //   this.get_from_input({
-        //     response: id,
-        //     // input: (params.prop) ? 'log' : 'logs',
-        //     input: 'all',
-        //     from: 'periodical',
-        //     params,
-        //     range,
-        //     query,
-        //     // next: (id, err, result) => this.response(id, err, result)
-        //
-        //   })
-        // }
+      // let responses = []
+      let responses = {}
+      let from = (opts.query && opts.query.from) ? opts.query.from : this.options.tables
+      from = (Array.isArray(from)) ? from : [from]
+
+
+      eachOf(from, function (from, key, callback) {
+
+
+
+        this.get_from_input({
+          response: this.create_response_id((req) ? req : socket, opts),
+          from: from,
+          // input: (params.prop) ? 'log' : 'logs',
+          // input: (params.path) ? params.path : 'all',
+          input: 'all',
+          // from: 'periodical',
+          // params,
+          range,
+          // query,
+          opts,
+          next: function(id, err, result){
+            debug('NEXT', id, err, result)
+            // responses.push(result)
+            responses[from] = result
+            callback()
+          }.bind(this)
+
+        })
+
+      }.bind(this), function (err) {
+        // debug('eachOf CALLBACK', err)
+        // process.exit(1)
+        let format = (opts && opts.query) ? opts.query.format : undefined
+        if(format){
+          // debug('RESPONSES %s %o', responses)
+
+          eachOf(responses, function (value, key, to_output) {
+            // debug('RESPONSES %s %o', key, value)
+            // process.exit(1)
+            debug('DATA FORMATER FULL', data_formater_full)
+            // process.exit(1)
+            if(opts.query.index !== false){//data get grouped onto arrays
+              eachOf(value.data, function (grouped_value, grouped_key, to_grouped_output) {
+                this.data_formater(grouped_value, format, data_formater_full, function(data){
+
+                  value.data[grouped_key] = data
+                  debug('data_formater', data, responses[key])
+                  to_grouped_output()
+                }.bind(this))
+
+              }.bind(this), function (err) {
+                debug('PRE OUTPUT %o', responses)
+                // process.exit(1)
+                to_output()
+              }.bind(this));
+            }
+            else{
+              this.data_formater(value.data, format, data_formater_full, function(data){
+
+                value.data = data
+                debug('data_formater', data, responses[key])
+                to_output()
+              }.bind(this))
+            }
+
+          }.bind(this), function (err) {
+            debug('OUTPUT %o', responses)
+            // process.exit(1)
+            let result = {id: [], data: {}, metadata: undefined}
+            // result.metadata.from = []
+            Object.each(responses, function(resp, key){
+              result.id.push(resp.id)
+              if(resp.data){
+                result.data[key] = resp.data
+                // result.data.combine(resp.data)
+              }
+              if(!result.metadata){
+                result.metadata = Object.clone(resp.metadata)
+                result.metadata.from = []
+              }
+
+              result.metadata.from.push(resp.metadata.from)
+            }.bind(this))
+
+            debug('RESULT %o', result)
+            this.generic_response({err, result, resp, socket, input: 'all', opts})
+
+          }.bind(this));
+        }
+        else{
+          let result = {id: [], data: {}, metadata: undefined}
+          // result.metadata.from = []
+          // let counter = 0
+          Object.each(responses, function(value, key){
+            result.id.push(value.id)
+            if(value.data)
+              result.data[key] = value.data
+
+            if(!result.metadata){
+              result.metadata = Object.clone(value.metadata)
+              result.metadata.from = []
+            }
+
+            result.metadata.from.push(value.metadata.from)
+
+            // if(counter >= Object.getLength(responses) - 1){
+            //
+            // }
+            //
+            // counter++
+          }.bind(this))
+
+          debug('RESULT %o', result)
+          this.generic_response({err, result, resp, socket, input: 'all', opts})
+
+        }
 
       }.bind(this))
 
-      this.get_from_input({
-        response: id,
-        // input: (params.prop) ? 'log' : 'logs',
-        input: (params.path) ? params.path : 'all',
-        from: 'periodical',
-        // params,
-        range,
-        // query,
-        opts,
-        next: (id, err, result) => this.response(id, err, result)
 
-      })
-      // // let _recive_pipe = function(pipeline){
-      // //   debug_internals('logs pipeline', pipeline)
-      // //   this.removeEvent(this.ON_PIPELINE_READY, _recive_pipe)
-      // // }
-      // // this.addEvent(this.ON_PIPELINE_READY, _recive_pipe)
-      // // OR
-      // this.get_pipeline(undefined, function(pipeline){
-      //   debug_internals('logs get_pipeline', pipeline)
-      //
-      //   this.response(id, ['some', 'args'])
-      // }.bind(this))
-      // if(next)
-      //   next()
-      //
+
     }
 
   },

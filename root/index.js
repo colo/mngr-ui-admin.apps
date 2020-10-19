@@ -121,7 +121,7 @@ module.exports = new Class({
     //   properties: ['paths', 'data', 'data_range'],//to send to pipelines.input.*.host.js
     // },
 
-    authorization: undefined,
+    // authorization: undefined,
 
     // params: {
 		// 	host: /(.|\s)*\S(.|\s)*/,
@@ -130,6 +130,22 @@ module.exports = new Class({
     //   // stat:
 		// },
 
+    routes: {
+			// get: [
+			// 	{
+			// 		path: '',
+			// 		callbacks: ['get'],
+			// 		version: '',
+			// 	},
+			// ],
+			all: [
+				{
+					path: '',
+					callbacks: ['404'],
+					version: '',
+				},
+			]
+		},
 
     api: {
       path: '',
