@@ -109,7 +109,11 @@ module.exports = new Class({
 		this.profile('logout');//start profiling
 		this.log('logout', 'info', 'logout' + JSON.stringify( req.user ));
 
-		req.logout()
+		// req.logout()
+
+    /**
+    * https://stackoverflow.com/questions/33112299/how-to-delete-cookie-on-logout-in-express-passport-js
+    **/
     req.logOut();
     res.status(200).clearCookie('SID', {
       path: '/',
