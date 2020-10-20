@@ -96,7 +96,7 @@ module.exports = new Class({
     }
     else{
       response = {
-        status: 500,
+        status: 403,
         error: 'No user data on session'
       }
     }

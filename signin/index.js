@@ -35,7 +35,7 @@ module.exports = new Class({
 		params: {
 		},
 
-    content_type: /text\/plain|application\/x-www-form-urlencoded/,
+    // content_type: /text\/plain|application\/x-www-form-urlencoded/,
 
 		routes: {
 
@@ -69,36 +69,36 @@ module.exports = new Class({
 			// ]
 		},
 
-		// api: {
-    //   // content_type: /^application\/(?:x-.*\+json|json)(?:[\s;]|$)/,
-    //
-		// 	version: '1.0.0',
-    //
-		// 	routes: {
-		// 		post: [
-		// 			{
-		// 			path: '',
-		// 			callbacks: ['signin'],
-		// 			version: '',
-		// 			},
-		// 		],
-		// 		get: [
-		// 			{
-		// 			path: '',
-		// 			callbacks: ['get'],
-		// 			version: '',
-		// 			},
-		// 		],
-		// 		all: [
-		// 			{
-		// 			path: '',
-		// 			callbacks: ['501'],
-		// 			version: '',
-		// 			},
-		// 		]
-		// 	},
-    //
-		// },
+		api: {
+      // content_type: /^application\/(?:x-.*\+json|json)(?:[\s;]|$)/,
+
+			version: '1.0.0',
+
+			routes: {
+				post: [
+					{
+					path: '',
+					callbacks: ['signin'],
+					version: '',
+					},
+				],
+				get: [
+					{
+					path: '',
+					callbacks: ['get'],
+					version: '',
+					},
+				],
+				all: [
+					{
+					path: '',
+					callbacks: ['501'],
+					version: '',
+					},
+				]
+			},
+
+		},
   },
 
   signin: function(req, res, next){
@@ -118,8 +118,8 @@ module.exports = new Class({
 				//debug('--err--');
 				//debug(err);
 
-				// res.status(403).json({'error': err});
-        res.redirect(302, 'http://localhost:8083/signin')
+				res.status(403).json({'error': err});
+        // res.redirect(302, 'http://localhost:8083/signin')
 			}
 			else if (!user) {
 
@@ -128,8 +128,8 @@ module.exports = new Class({
 				// res.cookie('signin', false, { maxAge: 99999999, httpOnly: false });
 
 				//req.flash('error', info);
-				// res.status(403).json({'error': info.message});
-        res.redirect(302, 'http://localhost:8083/signin')
+				res.status(403).json({'error': err.message});
+        // res.redirect(302, 'http://localhost:8083/signin')
 
 			}
 			else{
@@ -141,7 +141,8 @@ module.exports = new Class({
 						this.log('signin', 'error', err);
 						// return next(err);
             // res.json(JSON.parse(JSON.stringify(err)));
-            res.redirect(302, 'http://localhost:8083/signin')
+            // res.redirect(302, 'http://localhost:8083/signin')
+            res.status(403).json({'error': err.message});
 					}
 
 					this.log('signin', 'info', 'signin authenticate ' + JSON.stringify(user));
@@ -151,7 +152,8 @@ module.exports = new Class({
 					// res.send({'status': 'ok'});
           debug('login', user)
           req.session.user = user
-          res.redirect(302, 'http://localhost:8083')
+          res.status(200).json({'message': 'success'});
+          // res.redirect(302, 'http://localhost:8083')
           // next()
 
 				}.bind(this));
@@ -195,32 +197,32 @@ module.exports = new Class({
      if(this.options.api && this.options.api.routes)
   		Object.each(this.options.api.routes, function(routes, verb){
 
-  			if(verb != 'all'){
+  			// if(verb != 'all'){
   				Array.each(routes, function(route){
-  					//debug('route: ' + verb);
-  					route.callbacks.erase('check_authorization');
+  					// debug('route: ' + verb);
+  					// route.callbacks.erase('check_authorization');
   					// route.callbacks.erase('check_authentication');
 
   					// if(verb == 'get')//users can "read" info
   						route.roles = ['anonymous']
   				});
-  			}
+  			// }
 
   		});
 
 		if(this.options.io && this.options.io.routes)
       Object.each(this.options.io.routes, function(routes, verb){
 
-  			if(verb != 'all'){
+  			// if(verb != 'all'){
 					Array.each(routes, function(route){
 						//debug('route: ' + verb);
-						route.callbacks.erase('check_authorization');
+						// route.callbacks.erase('check_authorization');
 						// route.callbacks.erase('check_authentication');
 
 						// if(verb == 'get')//users can "read" info
 							route.roles = ['anonymous']
 					});
-  			}
+  			// }
 
   		});
 
